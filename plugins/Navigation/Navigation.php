@@ -1,5 +1,12 @@
 <?php
 
+/**
+ * KamiCore
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ *
+ * @see https://kamicore.org
+ */
 
 namespace Plugins\Navigation;
 
@@ -28,13 +35,11 @@ class Navigation extends \Core\BasePlugin {
 		$cacheKey = $this->menuCacheKey($menuId, $groupId);
 		$cached = \Cache::get($cacheKey);
 		if (is_array($cached) && array_key_exists('html', $cached)) {
-			debug_step('nav end cached');
 			return (string)$cached['html'];
 		}
 
-		debug_step('getmenu_start');
 		$menuItem = \Core\Content::getItem($menuId);
-		debug_step('getmenu_end');
+
 		$menuData = is_array($menuItem['data'] ?? null) ? $menuItem['data'] : [];
 		if (!$menuItem || !$this->isVisibleToGroup($menuData, $groupId)) {
 			\Cache::set($cacheKey, ['html' => '']);
@@ -45,7 +50,6 @@ class Navigation extends \Core\BasePlugin {
 		$menu = $this->render($template, $instance_params);
 		\Cache::set($cacheKey, ['html' => $menu]);
 
-		debug_step('nav end');
 		return $menu;
 	}
 
@@ -493,7 +497,7 @@ class Navigation extends \Core\BasePlugin {
 	}
 
 	private function managerUrl(string $action = 'list', ?int $menuId = null): string {
-		$url = '/' . trim((string)PAGE_NAME, '/');
+		$url = '/' . trim((string)PAGE_SLUG, '/');
 		if ($action !== 'list') {
 			$url .= '/' . $this->prefix . '-action/' . $action;
 		}
@@ -505,7 +509,7 @@ class Navigation extends \Core\BasePlugin {
 
 	private function visibleMenuItemTemplates(int $parentId, int $groupId, string $menuTemplate): array {
 		$templates = [];
-		debug_step('children_start');
+
 		$childIds = \DB::getArr(
 			"SELECT item_id
 			 FROM content_items
@@ -513,7 +517,6 @@ class Navigation extends \Core\BasePlugin {
 			 ORDER BY COALESCE(NULLIF(common_data->>'displayorder', '')::int, 0), item_id",
 			[$parentId, $this->navItemTypeId()]
 		);
-		debug_step('children_end');
 
 		foreach ($childIds as $childId) {
 			$item = \Core\Content::getItem((int)$childId);

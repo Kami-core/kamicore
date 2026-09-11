@@ -1,5 +1,13 @@
 <?php
 
+/**
+ * KamiCore
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ *
+ * @see https://kamicore.org
+ */
+
 if(!IN_KAMI) die();
 
 function getDomainPlugins(?int $domainId=null):array {
@@ -11,7 +19,7 @@ function getDomainPlugins(?int $domainId=null):array {
 		$domain_plugins = [];
 		$dps = DB::query("select * from plugin_domains
 		left join plugins using(plugin_id)
-		where domain_id='$domainId'");
+		where domain_id=$1", [$domainId]);
 		while ($dp = DB::fetchRow($dps)) {
 			$domain_plugins[$dp['system_name']] = [
 				'id' => $dp['plugin_id'],
@@ -34,7 +42,7 @@ function getDomainPages(?int $domainId=null):array {
 
 	if (!$domainPages) {
 		$domainPages = [];
-		$pages = DB::query("select page_id, page_slug from pages where domain_id='{$domainId}'");
+		$pages = DB::query("select page_id, page_slug from pages where domain_id=$1", [$domainId]);
 		while($page = DB::fetchRow($pages)) {
 			$domainPages[$page['page_slug']] = $page['page_id'];
 			$domainPages[$page['page_id']] = $page['page_slug'];
@@ -54,9 +62,7 @@ function generateRandomHash(): string {
 }
 
 function generateSessionId(): string {
-    $raw = uniqid('', true) . bin2hex(random_bytes(8));
-
-    return substr(hash('sha256', $raw), 0, 32);
+    return bin2hex(random_bytes(32));
 }
 
 function normalizeUAgent(?string $ua = null): string {

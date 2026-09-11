@@ -1,6 +1,14 @@
 <?php
 
 /**
+ * KamiCore
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ *
+ * @see https://kamicore.org
+ */
+
+/**
  * Plugin handler ACL is enforced during user action dispatch.
  * Plugin lifecycle and internal method calls are not subject to handler ACL.
  */
@@ -59,13 +67,19 @@ abstract class BasePlugin {
 		$full_data = \Cache::get('d_'.DOMAIN_ID.":plugin:{$this->name}");
 
 		if(!$full_data) {
-			$main_data = \DB::getRow("select * from plugins where system_name='{$this->name}'") ?: null;
+			$main_data = \DB::getRow(
+				'select * from plugins where system_name=$1',
+				[$this->name]
+			) ?: null;
 			if(!$main_data || !$main_data['is_active']) {
 				trigger_error("Plugin is not installed/activated - {$this->name}", E_USER_WARNING);
 				return false;
 			}
 
-			$domain_data = \DB::getRow("select local_settings from plugin_domains where plugin_id='{$main_data['plugin_id']}' and domain_id=".DOMAIN_ID) ?: null;
+			$domain_data = \DB::getRow(
+				'select local_settings from plugin_domains where plugin_id=$1 and domain_id=$2',
+				[(int)$main_data['plugin_id'], DOMAIN_ID]
+			) ?: null;
 			if(!$domain_data) {
 				trigger_error("Plugin is not allowed on this domain", E_USER_WARNING);
 				return false;
@@ -114,7 +128,7 @@ abstract class BasePlugin {
 		$this->active = true;
     }
 
-    public function layoutParams(): array
+    public function getLayoutParams(): array
 	{
 		return $this->layoutParams;
 	}

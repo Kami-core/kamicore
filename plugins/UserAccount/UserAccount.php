@@ -1,5 +1,13 @@
 <?php
 
+/**
+ * KamiCore
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ *
+ * @see https://kamicore.org
+ */
+
 namespace Plugins\UserAccount;
 
 if(!IN_KAMI) die();
@@ -28,12 +36,30 @@ class UserAccount extends \Core\BasePlugin {
     private const PASSWORD_RESET_TTL = 3600;
 
 	public function getAuthUI(array $context_vars = []): string {
+        if (!\Core\User::isGuest()) {
+            $user = \Core\User::getUser();
+            $username = htmlspecialchars(
+                (string)($user['username'] ?? ''),
+                ENT_QUOTES | ENT_SUBSTITUTE,
+                'UTF-8'
+            );
+
+            return $this->render('auth_authorized', [
+                'username' => $username,
+                'logout_url' => '/auth/logout',
+            ]);
+        }
+
         $googleAuth = '';
 
         try {
             $googleConfig = $this->googleConfig();
             $this->assertGoogleRedirectUri($googleConfig);
-            $googleUrl = $this->getProviderStartUrl('google');
+            $googleUrl = $this->getProviderStartUrl(
+                'google',
+                self::OAUTH_PURPOSE_LOGIN,
+                $this->loginReturnUrl($context_vars)
+            );
             $googleAuth = $this->render('google_auth_button', [
                 'google_url' => htmlspecialchars(
                     $googleUrl,
@@ -42,10 +68,10 @@ class UserAccount extends \Core\BasePlugin {
                 ),
             ]);
         } catch (\Throwable $error) {
-            $this->log(
-                'Google authentication is unavailable: ' . $error->getMessage(),
-                'warning'
-            );
+            // $this->log(
+            //     'Google authentication is unavailable: ' . $error->getMessage(),
+            //     'warning'
+            // );
         }
 
 		return $this->render('auth_ui', [
@@ -156,10 +182,8 @@ class UserAccount extends \Core\BasePlugin {
                 ]);
             }
 
-            \Core\User::authorize($userId, false);
-            return $this->render('login_result', [
-                'msg' => $this->phrases['registration_success'],
-            ]);
+            \Core\Session::authorize($userId, false);
+            return $this->renderLoginResult($this->phrases['registration_success']);
         } catch (\Throwable $error) {
             $this->log('Registration failed: ' . $error->getMessage(), 'error');
 
@@ -179,6 +203,10 @@ class UserAccount extends \Core\BasePlugin {
 
 	public function login(?array $data): string
     {
+        if (!\Core\User::isGuest()) {
+            return $this->getAuthUI();
+        }
+
         $login = trim((string)($data['login'] ?? ''));
         $password = (string)($data['password'] ?? '');
         $remember = !empty($data['remember']);
@@ -223,10 +251,8 @@ class UserAccount extends \Core\BasePlugin {
                 ]);
             }
 
-            \Core\User::authorize((int)$userdata['user_id'], $remember);
-            return $this->render('login_result', [
-                'msg' => $this->phrases['login_success'],
-            ]);
+            \Core\Session::authorize((int)$userdata['user_id'], $remember);
+            return $this->renderLoginResult($this->phrases['login_success']);
         }
 
         return $this->render('login_errors', [
@@ -312,7 +338,6 @@ class UserAccount extends \Core\BasePlugin {
             ]);
         }
 
-        $sessions = [];
         try {
             $token = \DB::getRow(
                 'SELECT token_id, user_id, expires_at
@@ -356,13 +381,13 @@ class UserAccount extends \Core\BasePlugin {
                 throw new \RuntimeException('Failed to consume password reset tokens.');
             }
 
-            $sessions = \Core\User::invalidateSessions($userId);
+            \Core\Session::invalidateUserSessions($userId);
 
             if (!\DB::commit()) {
                 throw new \RuntimeException('Failed to commit password reset.');
             }
 
-            $this->clearAuthenticatedNotifications($sessions);
+            $this->clearAuthenticatedNotifications($userId);
 
             return $this->render('password_reset_form_success', [
                 'msg' => $this->phrases['password_reset_success'],
@@ -427,18 +452,16 @@ class UserAccount extends \Core\BasePlugin {
         // Plugin endpoints do not initialize user/session state automatically.
         \Core\User::init();
 
-        $sessionId = \Core\User::getSessionId();
-        $wasAuthenticated = !\Core\User::isGuest();
+        $userId = \Core\User::getId();
+        $wasAuthenticated = $userId > 0;
 
-        if ($sessionId && isset(getDomainPlugins()['Notifications'])) {
+        if (isset(getDomainPlugins()['Notifications'])) {
             try {
                 $notifications = $this->plugins->get('Notifications');
                 if ($notifications) {
-                    $notifications->clearAuthenticated($sessionId);
-
                     if ($wasAuthenticated) {
+                        $notifications->clearCurrentUser($userId);
                         $notifications->store(
-                            $sessionId,
                             null,
                             $this->phrases['logout_success'],
                             'success'
@@ -453,7 +476,7 @@ class UserAccount extends \Core\BasePlugin {
             }
         }
 
-        \Core\User::logout();
+        \Core\Session::logout();
 
         \Core\Response::addHeader('Location: /', true, 302);
         \Core\Response::addHeader('Cache-Control: no-store, no-cache, must-revalidate');
@@ -718,7 +741,7 @@ class UserAccount extends \Core\BasePlugin {
             }
 
             \Core\User::init();
-            \Core\User::authorize($userId, false);
+            \Core\Session::authorize($userId, false);
 
             $this->sendVerificationResult(
                 true,
@@ -767,7 +790,7 @@ class UserAccount extends \Core\BasePlugin {
         );
         \Core\Response::addHeader('Cache-Control: no-store, no-cache, must-revalidate');
         \Core\Response::addHeader('X-Powered-By: Kami');
-        \Core\Response::send($content);
+        \Core\Response::send(\Core\Renderer::finalize($content));
 	}
 
 
@@ -789,7 +812,7 @@ class UserAccount extends \Core\BasePlugin {
         );
         \Core\Response::addHeader('Cache-Control: no-store, no-cache, must-revalidate');
         \Core\Response::addHeader('X-Powered-By: Kami');
-        \Core\Response::send($content);
+        \Core\Response::send(\Core\Renderer::finalize($content));
     }
 
 
@@ -836,7 +859,7 @@ class UserAccount extends \Core\BasePlugin {
         \Core\Response::addHeader('Content-Type: text/html; charset=utf-8', true, 200);
         \Core\Response::addHeader('Cache-Control: no-store, no-cache, must-revalidate');
         \Core\Response::addHeader('X-Powered-By: Kami');
-        \Core\Response::send($content);
+        \Core\Response::send(\Core\Renderer::finalize($content));
     }
 
     private function sendPasswordResetError(int $status): void
@@ -862,18 +885,16 @@ class UserAccount extends \Core\BasePlugin {
         );
         \Core\Response::addHeader('Cache-Control: no-store, no-cache, must-revalidate');
         \Core\Response::addHeader('X-Powered-By: Kami');
-        \Core\Response::send($content);
+        \Core\Response::send(\Core\Renderer::finalize($content));
     }
 
     /**
-     * Remove authenticated notifications associated with sessions invalidated
-     * after a credential reset. Notifications remains an optional service.
-     *
-     * @param list<array{domain_id:int, session_id:string}> $sessions
+     * Remove authenticated notifications for a user after credential reset.
+     * Notifications remains an optional service.
      */
-    private function clearAuthenticatedNotifications(array $sessions): void
+    private function clearAuthenticatedNotifications(int $userId): void
     {
-        if ($sessions === [] || !isset(getDomainPlugins()['Notifications'])) {
+        if ($userId < 1 || !isset(getDomainPlugins()['Notifications'])) {
             return;
         }
 
@@ -883,12 +904,7 @@ class UserAccount extends \Core\BasePlugin {
                 return;
             }
 
-            foreach ($sessions as $session) {
-                $sessionId = trim((string)($session['session_id'] ?? ''));
-                if ($sessionId !== '') {
-                    $notifications->clearAuthenticated($sessionId);
-                }
-            }
+            $notifications->clearUser($userId);
         } catch (\Throwable $error) {
             $this->log(
                 'Failed to clear notifications after password reset: ' . $error->getMessage(),
@@ -1452,7 +1468,7 @@ class UserAccount extends \Core\BasePlugin {
         );
         \Core\Response::addHeader('Cache-Control: no-store, no-cache, must-revalidate');
         \Core\Response::addHeader('X-Powered-By: Kami');
-        \Core\Response::send($content);
+        \Core\Response::send(\Core\Renderer::finalize($content));
     }
 
     private function requireAuthenticatedUserId(): int
@@ -1914,7 +1930,7 @@ class UserAccount extends \Core\BasePlugin {
 
                 // Plugin endpoints do not initialize user/session state automatically.
                 \Core\User::init();
-                \Core\User::authorize($userId, false);
+                \Core\Session::authorize($userId, false);
             } else {
                 $this->linkGoogleUser(
                     (int)$flowUserId,
@@ -1924,8 +1940,8 @@ class UserAccount extends \Core\BasePlugin {
             }
 
             $redirectUrl = $purpose === self::OAUTH_PURPOSE_LOGIN
-                ? $this->loginRedirectUrl()
-                : ($returnUrl ?? $this->loginRedirectUrl());
+                ? $this->loginRedirectUrl($returnUrl)
+                : ($returnUrl ?? '/');
             \Core\Response::addHeader('Location: ' . $redirectUrl, true, 302);
             \Core\Response::send('');
         } catch (\Throwable $error) {
@@ -2440,16 +2456,61 @@ class UserAccount extends \Core\BasePlugin {
         return \Core\Request::scheme() . '://' . DOMAIN_NAME . self::GOOGLE_CALLBACK_PATH;
     }
 
-    private function loginRedirectUrl(): string
+    private function renderLoginResult(string $message): string
     {
-        if ($this->settingValue('login_action', 'reload') === 'redirect') {
+        $action = $this->loginAction();
+        $postLoginAction = match ($action) {
+            'nothing' => '',
+            'redirect' => $this->render('login_redirect', [
+                'redirect_url' => json_encode(
+                    $this->loginRedirectUrl(),
+                    JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES
+                ),
+            ]),
+            default => $this->render('login_reload'),
+        };
+
+        return $this->render('login_result', [
+            'msg' => $message,
+            'post_login_action' => $postLoginAction,
+        ]);
+    }
+
+    private function loginAction(): string
+    {
+        $action = strtolower(trim((string)$this->settingValue('login_action', 'reload')));
+
+        return in_array($action, ['reload', 'redirect', 'nothing'], true)
+            ? $action
+            : 'reload';
+    }
+
+    private function loginRedirectUrl(?string $returnUrl = null): string
+    {
+        if ($this->loginAction() === 'redirect') {
             $url = trim((string)$this->settingValue('redirect_page', '/'));
             if ($url !== '') {
                 return $url;
             }
         }
 
-        return '/';
+        return $this->normalizeLocalReturnUrl($returnUrl) ?? '/';
+    }
+
+    private function loginReturnUrl(array $contextVars = []): ?string
+    {
+        if (isset($contextVars['return_url'])) {
+            $returnUrl = $this->normalizeLocalReturnUrl(
+                (string)$contextVars['return_url']
+            );
+            if ($returnUrl !== null) {
+                return $returnUrl;
+            }
+        }
+
+        return $this->normalizeLocalReturnUrl(
+            (string)($_SERVER['REQUEST_URI'] ?? '/')
+        );
     }
 
     private function httpJson(

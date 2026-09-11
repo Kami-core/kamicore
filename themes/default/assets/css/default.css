@@ -1515,6 +1515,16 @@ pre.ql-syntax {
   margin-bottom: 18px;
 }
 
+/* ------------------------- breadcrumbs */
+.breadcrumb-container {
+	padding: 20px 0;
+}
+
+.breadcrumb-container span {
+	display: inline-block;
+	margin: 0 10px;
+}
+
 
 /* ------------------------- article list */
 

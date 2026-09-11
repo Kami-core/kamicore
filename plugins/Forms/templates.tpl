@@ -121,6 +121,19 @@
 </div>
 <!-- /kami:template -->
 
+<!-- kami:template field-compound -->
+{{field_assets}}
+<div class="form-field form-field-compound"{{compound_attributes}}>
+    <label>{{label}}</label>
+    <div class="form-compound-list" data-repeatable-list>
+{{compound_rows}}
+    </div>
+    <template data-repeatable-template>{{compound_template}}</template>
+    <div class="form-repeatable-footer">{{compound_add_button}}</div>
+    <p class="form-hint">{{description}}</p>
+</div>
+<!-- /kami:template -->
+
 <!-- kami:template field-repeatable -->
 {{field_assets}}
 <div class="form-field form-field-repeatable"

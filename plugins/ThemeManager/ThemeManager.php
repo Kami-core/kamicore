@@ -1,5 +1,13 @@
 <?php
 
+/**
+ * KamiCore
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ *
+ * @see https://kamicore.org
+ */
+
 declare(strict_types=1);
 
 namespace Plugins\ThemeManager;
@@ -262,7 +270,7 @@ final class ThemeManager extends \Core\BasePlugin
 
     private function managerUrl(string $action = 'overview'): string
     {
-        $url = '/' . trim((string)PAGE_NAME, '/');
+        $url = '/' . trim((string)PAGE_SLUG, '/');
         if ($action !== 'overview') {
             $url .= '/' . $this->prefix . '-action/' . rawurlencode($action);
         }

@@ -4,48 +4,33 @@
     "description": "Display article lists and individual articles on the front end."
   },
   "settings": {
-    "result_page": {
-      "title": "Search and tag results page",
-      "description": "Page used to display an article list."
+    "items_count_selector": {
+      "title": "Allow items per page selection",
+      "description": "Can users choose how many articles to display on a page?"
     },
-    "article_page": {
-      "title": "Single article page",
-      "description": "Page used to display an individual article."
+    "items_count_values": {
+      "title": "Items per page options",
+      "description": "Available numbers of articles per page. Use 0 to include an all-articles option."
     },
-    "search_plugin": {
-      "title": "Search and filter plugin",
-      "description": "Plugin that provides filters and search results."
+    "default_count": {
+      "title": "Default items per page",
+      "description": "Default number of articles displayed per page."
     }
   },
   "handlers": {
-    "view": {
-      "title": "Display articles",
+    "list": {
+      "title": "Article list",
       "actions": {
         "list": {
-          "title": "Article list"
-        },
-        "view": {
-          "title": "Single article"
+          "title": "List articles"
         }
       }
     },
-    "manage": {
-      "title": "Manage articles",
+    "view": {
+      "title": "Single article",
       "actions": {
-        "config": {
-          "title": "Article settings"
-        },
-        "list": {
-          "title": "List articles"
-        },
-        "edit": {
-          "title": "Edit article"
-        },
-        "save": {
-          "title": "Save article"
-        },
-        "delete": {
-          "title": "Delete article"
+        "view": {
+          "title": "View article"
         }
       }
     }

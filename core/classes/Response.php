@@ -1,5 +1,13 @@
 <?php
 
+/**
+ * KamiCore
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ *
+ * @see https://kamicore.org
+ */
+
 namespace Core;
 
 if(!IN_KAMI) die();
@@ -24,8 +32,9 @@ class Response {
             throw new \InvalidArgumentException('Invalid SameSite cookie policy.');
         }
 
-        self::$cookies[] = [
-            'name' => Request::cookieName($name),
+        $cookieName = Request::cookieName($name);
+        self::$cookies[$cookieName] = [
+            'name' => $cookieName,
             'value' => $value,
             'options' => [
                 'expires' => $expires,

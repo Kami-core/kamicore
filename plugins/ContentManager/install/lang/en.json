@@ -322,7 +322,16 @@
     "field_attachment_settings": "Content type settings",
     "global_field_settings": "Global field settings",
     "back_to_fields": "Back to fields",
-    "global_field_saved": "Global field saved."
+    "global_field_saved": "Global field saved.",
+    "field_parameter_components": "Components",
+    "field_parameter_components_help": "Define the embedded value components owned by this compound field.",
+    "compound_components": "Components",
+    "compound_add_component": "Add component",
+    "compound_component_name": "Component name",
+    "compound_components_invalid": "Compound components are invalid.",
+    "remove": "Remove",
+    "compound_component_name_duplicate": "Compound component names must be unique.",
+    "compound_select_options_invalid": "Options must be a valid JSON array."
   },
   "fields": {
     "internal_title": {

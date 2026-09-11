@@ -163,6 +163,19 @@
 </div>
 <!-- /kami:template -->
 
+<!-- kami:template auth_authorized -->
+<div class="kc-auth">
+    <div class="kc-notice" role="status">
+        {{phrase.already_signed_in_as}} <strong>{{username}}</strong>.
+    </div>
+    <a class="kc-btn kc-btn-secondary kc-width-full"
+       href="{{logout_url}}"
+       style="margin-top:12px">
+        {{phrase.logout}}
+    </a>
+</div>
+<!-- /kami:template -->
+
 <!-- kami:template google_auth_button -->
 <div class="kc-auth-divider"></div>
 
@@ -195,9 +208,21 @@
 
 <!-- kami:template login_result -->
 <div class="kc-notice kc-notice-success" role="status">{{msg}}</div>
+{{post_login_action}}
+<!-- /kami:template -->
+
+<!-- kami:template login_reload -->
 <script>
     window.setTimeout(function () {
         window.location.reload();
+    }, 2000);
+</script>
+<!-- /kami:template -->
+
+<!-- kami:template login_redirect -->
+<script>
+    window.setTimeout(function () {
+        window.location.assign({{redirect_url}});
     }, 2000);
 </script>
 <!-- /kami:template -->

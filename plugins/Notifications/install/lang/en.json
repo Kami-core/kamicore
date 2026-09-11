@@ -1,7 +1,7 @@
 {
   "plugin": {
     "title": "Notifications",
-    "description": "Transient session notifications delivered through the standard AJAX endpoint."
+    "description": "Transient client-context notifications delivered through the standard AJAX endpoint."
   },
   "handlers": {
     "view": {

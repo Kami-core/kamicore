@@ -318,7 +318,16 @@
     "field_attachment_settings": "Параметри використання",
     "global_field_settings": "Глобальні параметри поля",
     "back_to_fields": "Назад до полів",
-    "global_field_saved": "Глобальне поле збережено."
+    "global_field_saved": "Глобальне поле збережено.",
+    "field_parameter_components": "Компоненти",
+    "field_parameter_components_help": "Визначте вбудовані компоненти значення, які належать лише цьому складеному полю.",
+    "compound_components": "Компоненти",
+    "compound_add_component": "Додати компонент",
+    "compound_component_name": "Системна назва компонента",
+    "compound_components_invalid": "Некоректне визначення компонентів складеного поля.",
+    "remove": "Видалити",
+    "compound_component_name_duplicate": "Системні назви компонентів не можуть повторюватися.",
+    "compound_select_options_invalid": "Опції мають бути коректним JSON-масивом."
   },
   "fields": {
     "internal_title": {

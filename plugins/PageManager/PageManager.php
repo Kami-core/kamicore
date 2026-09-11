@@ -1,5 +1,13 @@
 <?php
 
+/**
+ * KamiCore
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ *
+ * @see https://kamicore.org
+ */
+
 namespace Plugins\PageManager;
 
 if(!IN_KAMI) die();
@@ -405,7 +413,7 @@ class PageManager extends \Core\BasePlugin {
 		\Cache::del('d_' . (int)$page['domain_id'] . ':pages');
 
 		return js_redirect(
-			'/' . PAGE_NAME . '/pgm-action/edit/pgm-pageId/' . $pageId,
+			'/' . PAGE_SLUG . '/pgm-action/edit/pgm-pageId/' . $pageId,
 			$this->phrases['page_saved'] ?? 'Page saved.'
 		);
 	}
@@ -1110,7 +1118,7 @@ class PageManager extends \Core\BasePlugin {
 	}
 
 	private function managerUrl(string $action = 'list', array $params = []): string {
-		$url = '/' . trim((string)PAGE_NAME, '/');
+		$url = '/' . trim((string)PAGE_SLUG, '/');
 		if ($action !== 'list') {
 			$url .= '/' . $this->prefix . '-action/' . rawurlencode($action);
 		}
@@ -1595,14 +1603,16 @@ class PageManager extends \Core\BasePlugin {
 					?? $wrapper['description']
 					?? '',
 				'known' => array_key_exists($wrapperName, $declaredWrappers),
-				'plugins_html' => $pluginsHtml,
+				'plugins_html' => \Core\Renderer::finalize($pluginsHtml),
 			];
 		}
 
 		return json_encode([
 			'status' => 'ok',
 			'layout_id' => $layoutId,
-			'layout_preview' => $this->loadLayoutPreview($layout, $declaredWrappers),
+			'layout_preview' => \Core\Renderer::finalize(
+				$this->loadLayoutPreview($layout, $declaredWrappers)
+			),
 			'wrappers' => $wrappers,
 			'last_instance' => $instanceId - 1,
 		], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
@@ -1618,7 +1628,10 @@ class PageManager extends \Core\BasePlugin {
 		);
 		while($row = \DB::fetchRow($page_rows)) {
 			$translated = getTranslation($row['uuid']);
-			$layout = \DB::getRow("select * from theme_layouts where layout_id='{$row['layout_id']}'");
+			$layout = \DB::getRow(
+				'select * from theme_layouts where layout_id=$1',
+				[(int)$row['layout_id']]
+			);
 			$layout_translated = getTranslation($layout['uuid']);
 			$pages[] = [
 				'id'          => (int)$row['page_id'],
@@ -1644,8 +1657,8 @@ class PageManager extends \Core\BasePlugin {
 		$response = [
 			'status' => 'ok',
 			'pages' => $pages,
-			'layouts' => $layouts_select,
-			'parent_field' => $parent_field,
+			'layouts' => \Core\Renderer::finalize($layouts_select),
+			'parent_field' => \Core\Renderer::finalize($parent_field),
 			'error'  => ''
 		];
 
@@ -1666,13 +1679,22 @@ class PageManager extends \Core\BasePlugin {
 	}
 
 	public function deletePage($data) {
-				$pg = \DB::getRow("select * from pages where page_id = '{$data['pgm-id']}'");
-		\DB::query("delete from pages where  page_id = '{$data['pgm-id']}'");
-		\DB::query("delete from translations where entity_uuid='{$pg['uuid']}'");
+		$pageId = (int)($data['pgm-id'] ?? 0);
+		if ($pageId < 1) {
+			throw new \InvalidArgumentException('Invalid page id.');
+		}
+
+		$pg = \DB::getRow('select uuid from pages where page_id=$1', [$pageId]);
+		if (!$pg) {
+			throw new \OutOfBoundsException('Page not found.');
+		}
+
+		\DB::query('delete from pages where page_id=$1', [$pageId]);
+		\DB::query('delete from translations where entity_uuid=$1', [(string)$pg['uuid']]);
 
 		// page_acl rows are removed by the foreign key ON DELETE CASCADE.
 
-		return("del: {$data['pgm-id']}");
+		return "del: {$pageId}";
 	}
 }
 

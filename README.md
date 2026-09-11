@@ -6,7 +6,7 @@
 
 KamiCore is a modular content management system built with PHP and PostgreSQL. It is designed around structured content, plugins, themes, multilingual data, and a small transparent core that avoids hiding application behavior behind unnecessary abstraction.
 
-> **KamiCore 0.4 Alpha**
+> **KamiCore 0.5 Alpha**
 >
 > This is an early development release intended for testing, evaluation, and experimentation. APIs, database structures, plugin contracts, and other internal interfaces may change before a stable release. Do not treat the current alpha as a drop-in production platform with guaranteed backward compatibility.
 
@@ -25,7 +25,7 @@ KamiCore is a modular content management system built with PHP and PostgreSQL. I
 
 ## Requirements
 
-KamiCore 0.4 Alpha currently requires:
+KamiCore 0.5 Alpha currently requires:
 
 - PHP **8.4 or newer**.
 - PostgreSQL **17 or newer**.
@@ -58,6 +58,19 @@ The PostgreSQL user used for installation must be able to create tables, indexes
 
 If `config/config.php` already exists, the installer refuses to run again.
 
+## Upgrade
+
+For an existing KamiCore installation, update the application files and then run the CLI updater from the project root:
+
+```bash
+git pull
+php utils/update.php
+```
+
+The updater applies any pending, checksummed core database migrations in order and then updates all installed plugins, including their own database migrations. Already applied migrations are not run again.
+
+Create a database backup before upgrading, especially while KamiCore remains in alpha. New plugins included in a release are not installed automatically; plugin installation remains an explicit administrator action.
+
 ### Database snapshot
 
 The distribution contains two installer snapshots:
@@ -82,7 +95,7 @@ In particular, during the alpha cycle:
 - database migrations and structures may change;
 - plugin APIs may change;
 - configuration formats may change;
-- upgrade paths between development snapshots are not guaranteed.
+- release upgrades are supported through `php utils/update.php`, but backward compatibility between arbitrary development snapshots is not guaranteed.
 
 Bug reports and focused feedback are welcome, especially when they include reproducible steps and environment details.
 

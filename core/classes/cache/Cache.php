@@ -1,4 +1,13 @@
 <?php
+
+/**
+ * KamiCore
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ *
+ * @see https://kamicore.org
+ */
+
 /**
  * Unified cache facade for Redis / KeyDB / Memcached
  */

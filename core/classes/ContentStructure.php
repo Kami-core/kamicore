@@ -1,5 +1,13 @@
 <?php
 
+/**
+ * KamiCore
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ *
+ * @see https://kamicore.org
+ */
+
 declare(strict_types=1);
 
 namespace Core;
@@ -176,6 +184,24 @@ final class ContentStructure
                 ? self::normalizeGlobalFieldSettings(self::decodeObject($data['field_settings']))
                 : self::normalizeGlobalFieldSettings(self::decodeObject($existing['field_settings'] ?? null));
             $fieldType = Content::getFieldType($typeId);
+            if ((string)($fieldType['root_type_name'] ?? '') === 'compound') {
+                if (!empty($fieldSettings['translatable'])) {
+                    throw new \DomainException(
+                        'Compound fields define translation per component and cannot be translatable as a whole.'
+                    );
+                }
+                if (!empty($fieldSettings['unique'])) {
+                    throw new \DomainException('Compound fields cannot be unique.');
+                }
+
+                $params = is_array($fieldSettings['params'] ?? null)
+                    ? $fieldSettings['params']
+                    : [];
+                $params['components'] = self::normalizeCompoundComponents(
+                    $params['components'] ?? []
+                );
+                $fieldSettings['params'] = $params;
+            }
             if (!empty($fieldType['type_settings']['requires_indexed'])
                 && empty($fieldSettings['indexed'])) {
                 throw new \DomainException(
@@ -191,6 +217,19 @@ final class ContentStructure
                     self::decodeObject($existing['field_settings'] ?? null)
                 )
                 : [];
+
+            if ($existing && (string)($fieldType['root_type_name'] ?? '') === 'compound') {
+                $oldFieldType = Content::getFieldType((int)$existing['type_id']);
+                if ((string)($oldFieldType['root_type_name'] ?? '') === 'compound') {
+                    self::assertCompoundDefinitionChangeAllowed(
+                        (int)$existing['field_id'],
+                        (string)$existing['system_name'],
+                        $oldFieldSettings,
+                        $fieldSettings
+                    );
+                }
+            }
+
             $translatableChanged = $existing
                 && !empty($oldFieldSettings['translatable']) !== !empty($fieldSettings['translatable']);
             if (
@@ -597,14 +636,14 @@ final class ContentStructure
     {
         if ($items === []) return;
 
-        $ids = array_keys($items);
-        $idList = implode(',', array_map('intval', $ids));
+        $ids = array_map('intval', array_keys($items));
         $languages = [];
         $rows = \DB::query(
             "select i.item_id, t.lang_code "
             . 'from content_items i '
             . 'left join translations t on t.entity_uuid=i.item_uuid '
-            . "where i.item_id in ({$idList})"
+            . 'where i.item_id=ANY($1::bigint[])',
+            ['{' . implode(',', $ids) . '}']
         );
         while ($row = \DB::fetchRow($rows)) {
             if ($row['lang_code'] !== null && $row['lang_code'] !== '') {
@@ -788,6 +827,231 @@ final class ContentStructure
             }
         }
         return $definition;
+    }
+
+    private static function normalizeCompoundComponents(mixed $components): array
+    {
+        if (!is_array($components) || $components === []) {
+            throw new \DomainException('Compound field requires at least one component.');
+        }
+
+        $normalized = [];
+        $displayorder = 0;
+        foreach ($components as $name => $definition) {
+            if (!is_string($name) || !preg_match(self::SYSTEM_NAME_PATTERN, $name)) {
+                throw new \DomainException('Compound component names must use lowercase Latin letters, digits and underscores.');
+            }
+            if (!is_array($definition)) {
+                throw new \DomainException("Invalid compound component: {$name}");
+            }
+
+            $typeName = trim((string)($definition['type'] ?? ''));
+            if ($typeName === '') {
+                throw new \DomainException("Compound component '{$name}' requires a field type.");
+            }
+
+            try {
+                $fieldType = Content::getFieldType($typeName);
+            } catch (\Throwable) {
+                throw new \DomainException("Unknown compound component type: {$typeName}");
+            }
+
+            if (empty($fieldType['type_settings']['compound_component'])) {
+                throw new \DomainException(
+                    "Field type '{$typeName}' cannot be used inside a compound field."
+                );
+            }
+            if ((string)($fieldType['root_type_name'] ?? '') === 'compound') {
+                throw new \DomainException('Nested compound fields are not supported.');
+            }
+
+            $translatable = !empty($definition['translatable']);
+            if ($translatable && (string)($fieldType['root_type_name'] ?? '') !== 'text') {
+                throw new \DomainException(
+                    "Compound component '{$name}' can be translatable only when it uses a text-based type."
+                );
+            }
+
+            $component = [
+                'type' => $typeName,
+                'translatable' => $translatable,
+                'required' => !empty($definition['required']),
+                'displayorder' => ++$displayorder,
+            ];
+
+            $params = self::normalizeCompoundComponentParams(
+                $fieldType,
+                is_array($definition['params'] ?? null) ? $definition['params'] : []
+            );
+            if ($params !== []) {
+                $component['params'] = $params;
+            }
+
+            $normalized[$name] = $component;
+        }
+
+        return $normalized;
+    }
+
+    private static function normalizeCompoundComponentParams(array $fieldType, array $params): array
+    {
+        $definitions = is_array($fieldType['type_settings']['parameters'] ?? null)
+            ? $fieldType['type_settings']['parameters']
+            : [];
+
+        foreach (array_keys($params) as $name) {
+            if (!is_string($name) || !array_key_exists($name, $definitions)) {
+                throw new \DomainException(
+                    "Unsupported parameter '{$name}' for compound component type '{$fieldType['system_name']}'."
+                );
+            }
+        }
+
+        $normalized = [];
+        foreach ($definitions as $name => $definition) {
+            if (!is_string($name) || !is_array($definition)) {
+                continue;
+            }
+            if (!array_key_exists($name, $params)) {
+                if (!empty($definition['required'])) {
+                    throw new \DomainException(
+                        "Compound component parameter '{$name}' is required."
+                    );
+                }
+                continue;
+            }
+
+            $value = $params[$name];
+            if (!empty($definition['multiple'])) {
+                $value = is_array($value) ? array_values($value) : [$value];
+                $value = array_values(array_filter(
+                    $value,
+                    static fn(mixed $item): bool => is_scalar($item) && trim((string)$item) !== ''
+                ));
+            } elseif (($definition['format'] ?? null) === 'json') {
+                if (!is_array($value)) {
+                    throw new \DomainException(
+                        "Compound component parameter '{$name}' must be structured data."
+                    );
+                }
+            } elseif (is_scalar($value)) {
+                $value = trim((string)$value);
+            } elseif ($value !== null) {
+                throw new \DomainException(
+                    "Invalid compound component parameter '{$name}'."
+                );
+            }
+
+            if ($value === null || $value === '' || $value === []) {
+                if (!empty($definition['required'])) {
+                    throw new \DomainException(
+                        "Compound component parameter '{$name}' is required."
+                    );
+                }
+                continue;
+            }
+
+            if (($definition['type'] ?? null) === 'field_id') {
+                foreach ((array)$value as $fieldName) {
+                    $column = ($definition['value'] ?? null) === 'system_name'
+                        ? 'system_name'
+                        : 'field_id';
+                    if (!\DB::getOne("select 1 from fields where {$column}=$1", [$fieldName])) {
+                        throw new \DomainException(
+                            "Unknown field '{$fieldName}' in compound component parameter '{$name}'."
+                        );
+                    }
+                }
+            }
+
+            $normalized[$name] = $value;
+        }
+
+        if ((string)($fieldType['system_name'] ?? '') === 'autocomplete') {
+            $sources = $normalized['source_fields'] ?? [];
+            if (!is_array($sources) || $sources === []) {
+                throw new \DomainException(
+                    'Autocomplete compound components require at least one source field.'
+                );
+            }
+            foreach ($sources as $source) {
+                $field = Content::getField((string)$source);
+                $settings = array_replace(
+                    is_array($field['type_settings'] ?? null) ? $field['type_settings'] : [],
+                    is_array($field['field_settings'] ?? null) ? $field['field_settings'] : []
+                );
+                if (empty($settings['indexed']) || (string)($field['root_type_name'] ?? '') !== 'text') {
+                    throw new \DomainException(
+                        'Autocomplete source fields must be indexed text fields.'
+                    );
+                }
+            }
+        }
+
+        return $normalized;
+    }
+
+    private static function assertCompoundDefinitionChangeAllowed(
+        int $fieldId,
+        string $fieldName,
+        array $oldSettings,
+        array $newSettings
+    ): void {
+        if (!self::fieldHasValues($fieldId, $fieldName)) {
+            return;
+        }
+
+        $oldParams = is_array($oldSettings['params'] ?? null)
+            ? $oldSettings['params']
+            : [];
+        $newParams = is_array($newSettings['params'] ?? null)
+            ? $newSettings['params']
+            : [];
+        $oldComponents = is_array($oldParams['components'] ?? null)
+            ? $oldParams['components']
+            : [];
+        $newComponents = is_array($newParams['components'] ?? null)
+            ? $newParams['components']
+            : [];
+
+        foreach ($oldComponents as $name => $oldComponent) {
+            if (!is_string($name) || !is_array($oldComponent)) {
+                continue;
+            }
+            if (!isset($newComponents[$name]) || !is_array($newComponents[$name])) {
+                throw new \DomainException(
+                    "Compound component '{$name}' cannot be removed while field '{$fieldName}' contains values."
+                );
+            }
+
+            $newComponent = $newComponents[$name];
+            if ((string)($oldComponent['type'] ?? '') !== (string)($newComponent['type'] ?? '')) {
+                throw new \DomainException(
+                    "Compound component '{$name}' cannot change type while field '{$fieldName}' contains values."
+                );
+            }
+            if (!empty($oldComponent['translatable']) !== !empty($newComponent['translatable'])) {
+                throw new \DomainException(
+                    "Compound component '{$name}' cannot change translatable mode while field '{$fieldName}' contains values."
+                );
+            }
+            if (empty($oldComponent['required']) && !empty($newComponent['required'])) {
+                throw new \DomainException(
+                    "Compound component '{$name}' cannot become required while field '{$fieldName}' contains values."
+                );
+            }
+        }
+
+        foreach ($newComponents as $name => $newComponent) {
+            if (!is_string($name) || !is_array($newComponent) || isset($oldComponents[$name])) {
+                continue;
+            }
+            if (!empty($newComponent['required'])) {
+                throw new \DomainException(
+                    "New compound component '{$name}' must be optional while field '{$fieldName}' contains values."
+                );
+            }
+        }
     }
 
     private static function syncFieldIndexSemantics(

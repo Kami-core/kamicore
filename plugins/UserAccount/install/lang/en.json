@@ -81,6 +81,7 @@
     "login": "Sign in",
     "register": "Register",
     "logout": "Log out",
+    "already_signed_in_as": "You are already signed in as",
     "remember_me": "Remember me",
     "forgot_password": "Forgot password?",
     "reset_password": "Reset password",

@@ -1,5 +1,13 @@
 <?php
 
+/**
+ * KamiCore
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ *
+ * @see https://kamicore.org
+ */
+
 namespace Plugins\UserProfile;
 
 if (!IN_KAMI) die();
@@ -45,7 +53,7 @@ class UserProfile extends \Core\BasePlugin
     public function sidebarMenu(array $context_vars = []): string
     {
         return $this->render('sidebar_menu', [
-            'profile_page' => defined('PAGE_NAME') ? PAGE_NAME : '',
+            'profile_page' => defined('PAGE_SLUG') ? PAGE_SLUG : '',
         ]);
     }
 

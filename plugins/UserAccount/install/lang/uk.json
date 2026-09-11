@@ -81,6 +81,7 @@
     "login": "Увійти",
     "register": "Зареєструватися",
     "logout": "Вийти",
+    "already_signed_in_as": "Ви вже авторизовані як",
     "remember_me": "Запам’ятати мене",
     "forgot_password": "Забули пароль?",
     "reset_password": "Відновити пароль",

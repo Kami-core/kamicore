@@ -1,0 +1,27 @@
+{
+  "plugin": {
+    "title": "Breadcrumbs",
+    "description": "Build and render breadcrumb navigation for the current page and routed content."
+  },
+  "settings": {
+    "separator": {
+      "title": "Breadcrumb separator",
+      "description": "Text displayed between breadcrumb items."
+    }
+  },
+  "handlers": {
+    "view": {
+      "title": "Breadcrumbs",
+      "description": "Render breadcrumb navigation in a page wrapper.",
+      "actions": {
+        "renderPlaceholder": {
+          "title": "Render placeholder",
+          "description": "Insert a placeholder that is resolved after breadcrumb finalization."
+        }
+      }
+    }
+  },
+  "phrases": {
+    "home": "Home"
+  }
+}

@@ -229,12 +229,6 @@
     <td class="admin-actions-cell">
         <div class="admin-actions">
             <a class="admin-action-button"
-               href="/admin-translations"
-               title="{{phrase.translations}}"
-               aria-label="{{phrase.translations}}">
-                <svg class="icon icon-globe icon-sm"></svg>
-            </a>
-            <a class="admin-action-button"
                href="{{edit_link}}"
                title="{{phrase.edit}}"
                aria-label="{{phrase.edit}}">

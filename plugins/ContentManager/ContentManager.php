@@ -1,5 +1,13 @@
 <?php
 
+/**
+ * KamiCore
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ *
+ * @see https://kamicore.org
+ */
+
 namespace Plugins\ContentManager;
 
 if(!IN_KAMI) die();
@@ -25,15 +33,18 @@ class ContentManager extends \Core\BasePlugin {
 			[$this->id]
 		);
 		while ($row = \DB::fetchRow($rows)) {
-			$items_count = \DB::getOne("select count(*) from content_items where ct_id='{$row['ct_id']}'");
+			$items_count = \DB::getOne(
+				'select count(*) from content_items where ct_id=$1',
+				[(int)$row['ct_id']]
+			);
 			$translation = getTranslation($row['uuid']) ?? [];
 			$types[] = [
 				"type_id" => $row['ct_id'],
 				"title" => $translation['title'] ?? ucwords(str_replace(['_', '-'], ' ', $row['system_name'])),
 				"description" => $translation['description'] ?? null,
 				"items_count" => $items_count,
-				"url_items" => PAGE_NAME."/cm-action/itemList/cm-type/{$row['ct_id']}",
-				"url_edit" => PAGE_NAME."/cm-action/typeEdit/cm-type/{$row['ct_id']}",
+				"url_items" => PAGE_SLUG."/cm-action/itemList/cm-type/{$row['ct_id']}",
+				"url_edit" => PAGE_SLUG."/cm-action/typeEdit/cm-type/{$row['ct_id']}",
 			];
 		}
 		$types = \Core\Translation::sortByTitle($types, 'title', null);
@@ -64,7 +75,7 @@ class ContentManager extends \Core\BasePlugin {
 		$managerTools = '';
 		if ($this->isRoot()) {
 			$managerTools = '<a class="admin-button admin-button-secondary" href="/'
-				. PAGE_NAME . '/cm-action/fieldList">'
+				. PAGE_SLUG . '/cm-action/fieldList">'
 				. '<svg class="icon icon-menu icon-sm"></svg>'
 				. '<span>'
 				. htmlspecialchars(
@@ -74,7 +85,7 @@ class ContentManager extends \Core\BasePlugin {
 				)
 				. '</span></a>'
 				. '<a class="admin-button admin-button-secondary" href="/'
-				. PAGE_NAME . '/cm-action/typeManagerList">'
+				. PAGE_SLUG . '/cm-action/typeManagerList">'
 				. '<svg class="icon icon-settings icon-sm"></svg>'
 				. '<span>'
 				. htmlspecialchars(
@@ -89,7 +100,7 @@ class ContentManager extends \Core\BasePlugin {
 			'types_json' => $typesJson,
 			'ui_text' => $uiText,
 			'manager_tools' => $managerTools,
-			'create_link' => '/' . PAGE_NAME . '/cm-action/typeEdit',
+			'create_link' => '/' . PAGE_SLUG . '/cm-action/typeEdit',
 			'delete_endpoint' => '/ajax/ContentManager/typeDelete',
 		]);
 	}
@@ -154,7 +165,7 @@ class ContentManager extends \Core\BasePlugin {
 				'usage_count' => $usageCount,
 				'has_values' => $hasValues,
 				'deletable' => $usage === [],
-				'edit_url' => '/' . PAGE_NAME
+				'edit_url' => '/' . PAGE_SLUG
 					. '/cm-action/globalFieldEdit/cm-field/' . (int)$field['field_id'],
 			];
 		}
@@ -184,7 +195,7 @@ class ContentManager extends \Core\BasePlugin {
 				'usedLock' => $this->phrases['field_used_lock']
 					?? 'Detach this field from all content types before deleting it.',
 			]),
-			'back_link' => '/' . PAGE_NAME . '/cm-action/typeList',
+			'back_link' => '/' . PAGE_SLUG . '/cm-action/typeList',
 			'delete_endpoint' => '/ajax/ContentManager/fieldDelete',
 		]);
 	}
@@ -314,7 +325,7 @@ class ContentManager extends \Core\BasePlugin {
 
 		return $this->render('type-managers', [
 			'manager_rows' => $rows,
-			'back_link' => '/' . PAGE_NAME . '/cm-action/typeList',
+			'back_link' => '/' . PAGE_SLUG . '/cm-action/typeList',
 			'ui_text' => $uiText,
 		]);
 	}
@@ -457,7 +468,7 @@ class ContentManager extends \Core\BasePlugin {
 					'field_description' => $this->escape((string)($resolvedField['description'] ?? '')),
 					'field_type' => $this->escape((string)$field['type_name']),
 					'field_order' => (int)($fieldConfig['displayorder'] ?? 0),
-					'edit_link' => '/' . PAGE_NAME
+					'edit_link' => '/' . PAGE_SLUG
 						. "/cm-action/fieldEdit/cm-type/{$typeId}/cm-field/{$field['field_id']}",
 				],
 			];
@@ -545,9 +556,9 @@ class ContentManager extends \Core\BasePlugin {
 			'field_rows' => $fieldRows,
 			'fields_hidden' => $typeId > 0 ? '' : ' hidden',
 			'available_field_options' => $availableOptions,
-			'new_field_link' => '/' . PAGE_NAME . "/cm-action/fieldEdit/cm-type/{$typeId}",
-			'back_link' => '/' . PAGE_NAME . '/cm-action/typeList',
-			'save_action' => '/' . PAGE_NAME . '/cm-action/typeSave',
+			'new_field_link' => '/' . PAGE_SLUG . "/cm-action/fieldEdit/cm-type/{$typeId}",
+			'back_link' => '/' . PAGE_SLUG . '/cm-action/typeList',
+			'save_action' => '/' . PAGE_SLUG . '/cm-action/typeSave',
 			'declarative_notice' => $declarativeNotice,
 			'ui_text' => $this->json([
 				'confirmDetach' => $this->phrases['confirm_detach_field']
@@ -621,7 +632,7 @@ class ContentManager extends \Core\BasePlugin {
 		}
 
 		return js_redirect(
-			'/' . PAGE_NAME . "/cm-action/typeEdit/cm-type/{$typeId}",
+			'/' . PAGE_SLUG . "/cm-action/typeEdit/cm-type/{$typeId}",
 			$this->phrases['content_type_saved'] ?? 'Content type saved.'
 		);
 	}
@@ -659,7 +670,7 @@ class ContentManager extends \Core\BasePlugin {
 		$data = $this->params(['field'], \Core\Request::getPrefixedParams($this->prefix));
 		$fieldId = (int)($data['field'] ?? 0);
 		$field = $fieldId > 0
-			? \DB::getRow('select * from fields where field_id=$1', [$fieldId])
+			? \Core\Content::getField($fieldId)
 			: null;
 		if (!$field) {
 			return $this->notice($this->phrases['field_not_found'] ?? 'Field not found.', 'error');
@@ -687,6 +698,7 @@ class ContentManager extends \Core\BasePlugin {
 				? ' selected'
 				: '';
 			$typeOptions .= '<option value="' . (int)$fieldType['type_id'] . '"'
+				. ' data-type-name="' . $this->escape((string)$fieldType['system_name']) . '"'
 				. $selected . '>' . $this->escape((string)$fieldType['title'])
 				. ' (' . $this->escape((string)$fieldType['system_name']) . ')</option>';
 			$fieldTypes[] = \Core\Content::getFieldType((int)$fieldType['type_id']);
@@ -720,8 +732,8 @@ class ContentManager extends \Core\BasePlugin {
 				(string)$uses,
 				$this->phrases['field_usage_count'] ?? 'Used in {count} content types.'
 			)),
-			'save_action' => '/' . PAGE_NAME . '/cm-action/globalFieldSave',
-			'back_link' => '/' . PAGE_NAME . '/cm-action/fieldList',
+			'save_action' => '/' . PAGE_SLUG . '/cm-action/globalFieldSave',
+			'back_link' => '/' . PAGE_SLUG . '/cm-action/fieldList',
 		]);
 	}
 
@@ -802,7 +814,7 @@ class ContentManager extends \Core\BasePlugin {
 		}
 
 		return js_redirect(
-			'/' . PAGE_NAME . '/cm-action/fieldList',
+			'/' . PAGE_SLUG . '/cm-action/fieldList',
 			$this->phrases['global_field_saved'] ?? 'Global field saved.'
 		);
 	}
@@ -869,8 +881,8 @@ class ContentManager extends \Core\BasePlugin {
 				'multiple_checked' => !empty($localSettings['multiple']) ? ' checked' : '',
 				'hidden_checked' => !empty($localSettings['hidden']) ? ' checked' : '',
 				'readonly_checked' => !empty($localSettings['readonly']) ? ' checked' : '',
-				'save_action' => '/' . PAGE_NAME . '/cm-action/fieldSave',
-				'back_link' => '/' . PAGE_NAME . "/cm-action/typeEdit/cm-type/{$typeId}",
+				'save_action' => '/' . PAGE_SLUG . '/cm-action/fieldSave',
+				'back_link' => '/' . PAGE_SLUG . "/cm-action/typeEdit/cm-type/{$typeId}",
 			]);
 		}
 
@@ -885,7 +897,8 @@ class ContentManager extends \Core\BasePlugin {
 		}
 		$fieldTypeRows = \Core\Translation::sortByTitle($fieldTypeRows);
 		foreach ($fieldTypeRows as $fieldType) {
-			$typeOptions .= '<option value="' . (int)$fieldType['type_id'] . '">'
+			$typeOptions .= '<option value="' . (int)$fieldType['type_id'] . '"'
+				. ' data-type-name="' . $this->escape((string)$fieldType['system_name']) . '">'
 				. $this->escape((string)$fieldType['title'])
 				. ' (' . $this->escape((string)$fieldType['system_name']) . ')</option>';
 			$fieldTypes[] = \Core\Content::getFieldType((int)$fieldType['type_id']);
@@ -916,8 +929,8 @@ class ContentManager extends \Core\BasePlugin {
 			'hidden_checked' => '',
 			'readonly_checked' => '',
 			'usage_notice' => '',
-			'save_action' => '/' . PAGE_NAME . '/cm-action/fieldSave',
-			'back_link' => '/' . PAGE_NAME . "/cm-action/typeEdit/cm-type/{$typeId}",
+			'save_action' => '/' . PAGE_SLUG . '/cm-action/fieldSave',
+			'back_link' => '/' . PAGE_SLUG . "/cm-action/typeEdit/cm-type/{$typeId}",
 		]);
 	}
 
@@ -1000,7 +1013,7 @@ class ContentManager extends \Core\BasePlugin {
 			}
 
 			return js_redirect(
-				'/' . PAGE_NAME . "/cm-action/typeEdit/cm-type/{$typeId}",
+				'/' . PAGE_SLUG . "/cm-action/typeEdit/cm-type/{$typeId}",
 				$this->phrases['field_saved'] ?? 'Field saved.'
 			);
 		}
@@ -1091,7 +1104,7 @@ class ContentManager extends \Core\BasePlugin {
 		}
 
 		return js_redirect(
-			'/' . PAGE_NAME . "/cm-action/typeEdit/cm-type/{$typeId}",
+			'/' . PAGE_SLUG . "/cm-action/typeEdit/cm-type/{$typeId}",
 			$this->phrases['field_saved'] ?? 'Field saved.'
 		);
 	}
@@ -1209,7 +1222,7 @@ class ContentManager extends \Core\BasePlugin {
 					'item_id' => (int)$row['item_id'],
 					'title' => htmlspecialchars($title, ENT_QUOTES, 'UTF-8'),
 					'title_attribute' => htmlspecialchars($title, ENT_QUOTES, 'UTF-8'),
-					'edit_link' => "/" . PAGE_NAME
+					'edit_link' => "/" . PAGE_SLUG
 						. "/cm-action/itemEdit/cm-type/{$data['type']}/cm-id/{$row['item_id']}",
 					'delete_link' => "/ajax/ContentManager/itemDelete/cm-id/{$row['item_id']}",
 				],
@@ -1227,7 +1240,7 @@ class ContentManager extends \Core\BasePlugin {
 			page: $page,
 			perPage: 20,
 			total: $totals,
-			base_url: "/".PAGE_NAME."/cm-action/itemList/cm-type/{$data['type']}",
+			base_url: "/".PAGE_SLUG."/cm-action/itemList/cm-type/{$data['type']}",
 			options: ['page_param' => $this->prefix . '-page']
 		);
 
@@ -1249,11 +1262,11 @@ class ContentManager extends \Core\BasePlugin {
 			'UTF-8'
 		);
 
-		$params['create_link'] = "/" . PAGE_NAME
+		$params['create_link'] = "/" . PAGE_SLUG
 			. "/cm-action/itemEdit/cm-type/{$data['type']}";
-		$params['search_link'] = "/" . PAGE_NAME
+		$params['search_link'] = "/" . PAGE_SLUG
 			. "/cm-action/itemList/cm-type/{$data['type']}";
-		$params['types_link'] = "/" . PAGE_NAME . '/cm-action/typeList';
+		$params['types_link'] = "/" . PAGE_SLUG . '/cm-action/typeList';
 		$params['q'] = htmlspecialchars($query, ENT_QUOTES, 'UTF-8');
 		$params['ui_text'] = json_encode([
 			'itemCount' => $this->phrases['item_count'] ?? '{count} items',
@@ -1289,13 +1302,13 @@ class ContentManager extends \Core\BasePlugin {
 					. '</div>';
 			}
 			$item_title = (string)($item['title'] ?? "Item #{$id}");
-			$action = "/" . PAGE_NAME
+			$action = "/" . PAGE_SLUG
 				. "/cm-action/itemSave/cm-type/{$data['type']}/cm-id/{$id}";
 		} else {
 			$id = 0;
 			$item = [];
 			$item_title = $this->phrases['new_item'] ?? 'New item';
-			$action = "/" . PAGE_NAME
+			$action = "/" . PAGE_SLUG
 				. "/cm-action/itemSave/cm-type/{$data['type']}";
 		}
 
@@ -1319,7 +1332,7 @@ class ContentManager extends \Core\BasePlugin {
 				ENT_QUOTES,
 				'UTF-8'
 			),
-			'back_link' => "/" . PAGE_NAME
+			'back_link' => "/" . PAGE_SLUG
 				. "/cm-action/itemList/cm-type/{$data['type']}",
 		];
 
@@ -1536,6 +1549,14 @@ class ContentManager extends \Core\BasePlugin {
 
 		$type = (string)($definition['type'] ?? 'string');
 		$format = (string)($definition['format'] ?? '');
+		if ($type === 'compound_components') {
+			return $this->renderCompoundComponentsControl(
+				$typeId,
+				$name,
+				$definition,
+				is_array($value) ? $value : []
+			);
+		}
 		if ($format === 'json') {
 			$attributes['rows'] = $attributes['rows'] ?? 8;
 			$attributes['class'] .= ' cm-code-input';
@@ -1577,6 +1598,300 @@ class ContentManager extends \Core\BasePlugin {
 			: '';
 		return '<label class="cm-field"><span>' . $this->escape($title)
 			. ($required ? ' *' : '') . '</span>' . $control . $help . '</label>';
+	}
+
+	private function renderCompoundComponentsControl(
+		int $typeId,
+		string $name,
+		array $definition,
+		array $components
+	): string {
+		$typeOptions = [];
+		$result = \DB::query('select type_id, uuid, system_name from field_types order by type_id');
+		while ($row = \DB::fetchRow($result)) {
+			$fieldType = \Core\Content::getFieldType((int)$row['type_id']);
+			if (empty($fieldType['type_settings']['compound_component'])) continue;
+			$translation = getTranslation((string)$row['uuid']) ?? [];
+			$typeOptions[] = [
+				'value' => (string)$row['system_name'],
+				'label' => (string)($translation['title'] ?? $row['system_name']),
+				'root' => (string)($fieldType['root_type_name'] ?? ''),
+			];
+		}
+		$typeOptions = \Core\Translation::sortByTitle($typeOptions, 'label', null);
+
+		$sourceOptions = [];
+		$fieldRows = \DB::query('select field_id, uuid, system_name from fields order by system_name');
+		while ($row = \DB::fetchRow($fieldRows)) {
+			$field = \Core\Content::getField((int)$row['field_id']);
+			$settings = array_replace(
+				is_array($field['type_settings'] ?? null) ? $field['type_settings'] : [],
+				is_array($field['field_settings'] ?? null) ? $field['field_settings'] : []
+			);
+			if (empty($settings['indexed']) || (string)($field['root_type_name'] ?? '') !== 'text') {
+				continue;
+			}
+			$translation = getTranslation((string)$row['uuid']) ?? [];
+			$sourceOptions[] = [
+				'value' => (string)$row['system_name'],
+				'label' => (string)($translation['title'] ?? $row['system_name'])
+					. ' (' . $row['system_name'] . ')',
+			];
+		}
+		$sourceOptions = \Core\Translation::sortByTitle($sourceOptions, 'label', null);
+
+		$rows = '';
+		foreach ($components as $componentName => $component) {
+			if (!is_string($componentName) || !is_array($component)) continue;
+			$rows .= $this->renderCompoundComponentRow(
+				$componentName,
+				$component,
+				$typeOptions,
+				$sourceOptions
+			);
+		}
+		$template = $this->renderCompoundComponentRow('', [], $typeOptions, $sourceOptions);
+		$hiddenValue = $this->escape(json_encode(
+			$components,
+			JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES
+		) ?: '{}');
+		$inputName = 'params[' . $name . ']';
+		$title = $this->fieldParameterText(
+			(string)($definition['title'] ?? ''),
+			$this->phrases['compound_components'] ?? 'Components'
+		);
+		$description = $this->fieldParameterText(
+			(string)($definition['description'] ?? ''),
+			''
+		);
+
+		return '<fieldset class="cm-field cm-field-wide cm-compound-builder" data-compound-builder'
+			. ' data-duplicate-name-message="' . $this->escape(
+				$this->phrases['compound_component_name_duplicate']
+					?? 'Compound component names must be unique.'
+			) . '"'
+			. ' data-invalid-options-message="' . $this->escape(
+				$this->phrases['compound_select_options_invalid']
+					?? 'Options must be a valid JSON array.'
+			) . '">'
+			. '<legend>' . $this->escape($title) . '</legend>'
+			. '<input type="hidden" name="' . $this->escape($inputName)
+			. '" value="' . $hiddenValue . '" data-compound-value>'
+			. '<div class="cm-compound-components" data-compound-components>' . $rows . '</div>'
+			. '<template data-compound-template>' . $template . '</template>'
+			. '<button class="admin-button admin-button-secondary admin-button-small" '
+			. 'type="button" data-compound-add>'
+			. $this->escape($this->phrases['compound_add_component'] ?? 'Add component')
+			. '</button>'
+			. ($description !== '' ? '<small>' . $this->escape($description) . '</small>' : '')
+			. $this->compoundBuilderScript()
+			. '</fieldset>';
+	}
+
+	private function renderCompoundComponentRow(
+		string $name,
+		array $component,
+		array $typeOptions,
+		array $sourceOptions
+	): string {
+		$type = (string)($component['type'] ?? 'string');
+		$params = is_array($component['params'] ?? null) ? $component['params'] : [];
+		$optionsHtml = '';
+		foreach ($typeOptions as $option) {
+			$selected = $option['value'] === $type ? ' selected' : '';
+			$optionsHtml .= '<option value="' . $this->escape((string)$option['value']) . '"'
+				. ' data-root="' . $this->escape((string)$option['root']) . '"'
+				. $selected . '>' . $this->escape((string)$option['label']) . '</option>';
+		}
+
+		$sources = array_map('strval', is_array($params['source_fields'] ?? null)
+			? $params['source_fields'] : []);
+		$sourceHtml = '';
+		foreach ($sourceOptions as $option) {
+			$selected = in_array((string)$option['value'], $sources, true) ? ' selected' : '';
+			$sourceHtml .= '<option value="' . $this->escape((string)$option['value']) . '"'
+				. $selected . '>' . $this->escape((string)$option['label']) . '</option>';
+		}
+
+		$selectOptions = is_array($params['options'] ?? null)
+			? json_encode(
+				$params['options'],
+				JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT
+			) ?: ''
+			: '';
+
+		return '<div class="cm-compound-component" data-compound-component>'
+			. '<div class="cm-form-grid">'
+			. '<label class="cm-field"><span>'
+			. $this->escape($this->phrases['compound_component_name'] ?? 'Component name')
+			. '</span><input class="admin-input" type="text" data-component-name '
+			. 'pattern="[a-z][a-z0-9_]*" value="' . $this->escape($name) . '" required></label>'
+			. '<label class="cm-field"><span>'
+			. $this->escape($this->phrases['field_type'] ?? 'Field type')
+			. '</span><select class="admin-input" data-component-type>' . $optionsHtml . '</select></label>'
+			. '</div>'
+			. '<div class="cm-settings-grid">'
+			. '<label><input type="checkbox" data-component-translatable'
+			. (!empty($component['translatable']) ? ' checked' : '') . '> '
+			. $this->escape($this->phrases['translatable'] ?? 'Translatable') . '</label>'
+			. '<label><input type="checkbox" data-component-required'
+			. (!empty($component['required']) ? ' checked' : '') . '> '
+			. $this->escape($this->phrases['required'] ?? 'Required') . '</label>'
+			. '</div>'
+			. '<div data-component-special="autocomplete">'
+			. '<label class="cm-field"><span>'
+			. $this->escape($this->phrases['field_parameter_source_fields'] ?? 'Suggestion source fields')
+			. '</span><select class="admin-input" multiple data-component-source-fields>'
+			. $sourceHtml . '</select></label></div>'
+			. '<div data-component-special="select">'
+			. '<label class="cm-field"><span>'
+			. $this->escape($this->phrases['field_parameter_options'] ?? 'Options (JSON)')
+			. '</span><textarea class="admin-input cm-code-input" rows="5" data-component-options>'
+			. $this->escape($selectOptions) . '</textarea></label></div>'
+			. '<div data-component-special="media" class="cm-form-grid">'
+			. '<label class="cm-field"><span>'
+			. $this->escape($this->phrases['field_parameter_media_root'] ?? 'Media root')
+			. '</span><input class="admin-input" type="text" data-component-media-root value="'
+			. $this->escape((string)($params['root'] ?? '')) . '"></label>'
+			. '<label class="cm-field"><span>'
+			. $this->escape($this->phrases['field_parameter_media_accept'] ?? 'Accepted media')
+			. '</span><input class="admin-input" type="text" data-component-media-accept value="'
+			. $this->escape((string)($params['accept'] ?? '')) . '"></label></div>'
+			. '<div class="admin-actions">'
+			. '<button class="admin-action-button" type="button" data-compound-up title="'
+			. $this->escape($this->phrases['move_up'] ?? 'Move up') . '">↑</button>'
+			. '<button class="admin-action-button" type="button" data-compound-down title="'
+			. $this->escape($this->phrases['move_down'] ?? 'Move down') . '">↓</button>'
+			. '<button class="admin-action-button" type="button" data-compound-remove title="'
+			. $this->escape($this->phrases['remove'] ?? 'Remove') . '">×</button>'
+			. '</div></div>';
+	}
+
+	private function compoundBuilderScript(): string {
+		return <<<'HTML'
+<script>
+(() => {
+    document.querySelectorAll('[data-compound-builder]').forEach(builder => {
+        if (builder.dataset.initialized === '1') return;
+        builder.dataset.initialized = '1';
+        const list = builder.querySelector('[data-compound-components]');
+        const template = builder.querySelector('template[data-compound-template]');
+        const hidden = builder.querySelector('[data-compound-value]');
+        if (!list || !template || !hidden) return;
+
+        const syncRow = row => {
+            const type = row.querySelector('[data-component-type]')?.value || '';
+            const selected = row.querySelector('[data-component-type] option:checked');
+            const root = selected?.dataset.root || '';
+            const translatable = row.querySelector('[data-component-translatable]');
+            if (translatable) {
+                translatable.disabled = root !== 'text';
+                if (translatable.disabled) translatable.checked = false;
+            }
+            row.querySelectorAll('[data-component-special]').forEach(group => {
+                group.hidden = group.dataset.componentSpecial !== type;
+            });
+        };
+
+        const serialize = () => {
+            const components = {};
+            const seenNames = new Map();
+            const rows = [...list.querySelectorAll(':scope > [data-compound-component]')];
+            rows.forEach(row => row.querySelector('[data-component-name]')?.setCustomValidity(''));
+
+            rows.forEach(row => {
+                const nameInput = row.querySelector('[data-component-name]');
+                const name = (nameInput?.value || '').trim();
+                const type = row.querySelector('[data-component-type]')?.value || '';
+                if (name) {
+                    const previous = seenNames.get(name);
+                    if (previous) {
+                        const message = builder.dataset.duplicateNameMessage
+                            || 'Compound component names must be unique.';
+                        previous.setCustomValidity(message);
+                        nameInput?.setCustomValidity(message);
+                    } else if (nameInput) {
+                        seenNames.set(name, nameInput);
+                    }
+                }
+                if (!name || !type) return;
+                const component = {
+                    type,
+                    translatable: !!row.querySelector('[data-component-translatable]')?.checked,
+                    required: !!row.querySelector('[data-component-required]')?.checked
+                };
+                const params = {};
+                if (type === 'autocomplete') {
+                    const select = row.querySelector('[data-component-source-fields]');
+                    params.source_fields = select
+                        ? Array.from(select.selectedOptions).map(option => option.value).filter(Boolean)
+                        : [];
+                } else if (type === 'select') {
+                    const textarea = row.querySelector('[data-component-options]');
+                    const raw = (textarea?.value || '').trim();
+                    if (textarea) textarea.setCustomValidity('');
+                    if (raw) {
+                        try {
+                            const options = JSON.parse(raw);
+                            if (!Array.isArray(options)) throw new Error('array required');
+                            params.options = options;
+                        } catch (_) {
+                            textarea?.setCustomValidity(builder.dataset.invalidOptionsMessage || 'Options must be a valid JSON array.');
+                        }
+                    }
+                } else if (type === 'media') {
+                    const root = (row.querySelector('[data-component-media-root]')?.value || '').trim();
+                    const accept = (row.querySelector('[data-component-media-accept]')?.value || '').trim();
+                    if (root) params.root = root;
+                    if (accept) params.accept = accept;
+                }
+                if (Object.keys(params).length) component.params = params;
+                components[name] = component;
+            });
+            hidden.value = JSON.stringify(components);
+        };
+
+        const bind = row => {
+            syncRow(row);
+            row.addEventListener('change', () => { syncRow(row); serialize(); });
+            row.addEventListener('input', serialize);
+        };
+        list.querySelectorAll(':scope > [data-compound-component]').forEach(bind);
+
+        builder.querySelector('[data-compound-add]')?.addEventListener('click', () => {
+            const fragment = template.content.cloneNode(true);
+            const row = fragment.querySelector('[data-compound-component]');
+            list.append(fragment);
+            if (row) {
+                bind(row);
+                row.querySelector('[data-component-name]')?.focus();
+            }
+            serialize();
+        });
+
+        list.addEventListener('click', event => {
+            const button = event.target.closest('button');
+            const row = button?.closest('[data-compound-component]');
+            if (!button || !row) return;
+            if (button.matches('[data-compound-remove]')) row.remove();
+            else if (button.matches('[data-compound-up]') && row.previousElementSibling) {
+                list.insertBefore(row, row.previousElementSibling);
+            } else if (button.matches('[data-compound-down]') && row.nextElementSibling) {
+                list.insertBefore(row.nextElementSibling, row);
+            }
+            serialize();
+        });
+
+        builder.closest('form')?.addEventListener('submit', () => {
+            serialize();
+            const invalid = builder.querySelector(':invalid');
+            if (invalid) invalid.reportValidity();
+        });
+        serialize();
+    });
+})();
+</script>
+HTML;
 	}
 
 	private function renderFieldParameterOptions(array $definition, mixed $value): string {
@@ -1682,7 +1997,16 @@ class ContentManager extends \Core\BasePlugin {
 			$multiple = !empty($definition['multiple']);
 			$format = (string)($definition['format'] ?? '');
 
-			if ($format === 'json') {
+			if (($definition['type'] ?? null) === 'compound_components') {
+				$raw = trim((string)$raw);
+				$value = $raw === '' ? [] : json_decode($raw, true);
+				if (!is_array($value) || ($raw !== '' && json_last_error() !== JSON_ERROR_NONE)) {
+					throw new \InvalidArgumentException(
+						$this->phrases['compound_components_invalid']
+							?? 'Compound components are invalid.'
+					);
+				}
+			} elseif ($format === 'json') {
 				$raw = trim((string)$raw);
 				if ($raw === '') {
 					$value = [];
@@ -2040,7 +2364,7 @@ class ContentManager extends \Core\BasePlugin {
 		\Core\Content::update($item_id, $form_data);
 
 		return js_redirect(
-			"/".PAGE_NAME
+			"/".PAGE_SLUG
 			. "/{$this->prefix}-action/itemList"
 			. "/{$this->prefix}-type/{$type['ct_id']}"
 		);

@@ -1,0 +1,44 @@
+{
+  "schema_version": "1.0",
+  "type": "plugin",
+  "data": {
+    "info": {
+      "uuid": "10ac77fc-162f-40b5-b82a-bfcda3b9a3c0",
+      "name": "Breadcrumbs",
+      "title": "Breadcrumbs",
+      "description": "Build and render breadcrumb navigation for the current page and routed content.",
+      "origin_type": "local",
+      "origin_ref": null,
+      "author": "Kami team"
+    },
+    "prefix": "bc",
+    "version": "1.0.0",
+    "dependencies": [],
+    "config": {
+      "handlers": {
+        "view": {
+          "title": "Breadcrumbs",
+          "description": "Render breadcrumb navigation in a page wrapper.",
+          "actions": {
+            "renderPlaceholder": {
+              "title": "Render placeholder",
+              "description": "Insert a placeholder that is resolved after breadcrumb finalization."
+            }
+          },
+          "default_action": "renderPlaceholder",
+          "instance_params": {}
+        }
+      },
+      "default_handler": "view",
+      "default_language": "en"
+    },
+    "settings": {
+      "separator": {
+        "title": "Breadcrumb separator",
+        "description": "Text displayed between breadcrumb items.",
+        "type": "string",
+        "default": "›"
+      }
+    }
+  }
+}

@@ -1,4 +1,13 @@
 <?php
+
+/**
+ * KamiCore
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ *
+ * @see https://kamicore.org
+ */
+
 define('IN_KAMI', true);
 define('KAMI_API', true);
 // Supports web-server configs that route this endpoint directly.
@@ -64,6 +73,7 @@ debug_step("URL parsed");
 Core\Request::init();
 $data = Core\Request::all();
 debug_step("Request processed");
+Core\Session::init();
 Core\User::init();
 $userdata = Core\User::getUser();
 

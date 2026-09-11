@@ -1,12 +1,21 @@
 <?php
 
+/**
+ * KamiCore
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ *
+ * @see https://kamicore.org
+ */
+
 if(!IN_KAMI) die();
 
 require_once ROOT_PATH . 'core/autoload.php';
 
 // Use a deterministic timezone until installation-wide settings are loaded.
-date_default_timezone_set('UTC');
+define('CORE_VERSION', '0.5.0');
 
+date_default_timezone_set('UTC');
 define('TIME_NOW', time());
 
 $configFile = ROOT_PATH . 'config/config.php';
@@ -27,7 +36,6 @@ if (file_exists(ROOT_PATH.'config/config.domain.php')) {
 // Enable timing diagnostics for frontend requests in debug mode.
 if (DEBUG_MODE && defined('KAMI_FRONT')) {
     require_once ROOT_PATH . 'core/debug.php';
-	debug_step("Start");
 } elseif(DEBUG_MODE) {
 	error_reporting(E_ALL);
 	function debug_step(string $name) {
@@ -41,7 +49,6 @@ if (DEBUG_MODE && defined('KAMI_FRONT')) {
 }
 
 require_once ROOT_PATH . 'core/functions.php';
-debug_step("Before connections");
 
 require_once ROOT_PATH . 'core/classes/Pgsql.php';
 DB::connect($db_config['host'], $db_config['user'], $db_config['password'], $db_config['name'], 'utf8', $db_config['port']);
@@ -49,8 +56,6 @@ DB::connect($db_config['host'], $db_config['user'], $db_config['password'], $db_
 	require_once ROOT_PATH . 'core/classes/cache/Cache.php';
 	Cache::configure($redis_config);
 	Cache::connect();
-
-debug_step("Connected");
 
 // Load installation-wide settings.
 $global_settings = Cache::get("globals:settings");
@@ -88,20 +93,19 @@ if($all_domains) {
 
 // Rebuild the domain cache when the current domain config is missing.
 if(!$domain_config) {
-	debug_step('domain q');
 
 	$domain_name_orig = $alias_name = $_SERVER['HTTP_HOST'];
 	$is_alias = false;
 
 	$domain = DB::getRow("select * from domains
 	left join themes using(theme_id)
-	where domain_name='{$_SERVER['HTTP_HOST']}'");
-	debug_step('domain q END');
+	where domain_name=$1", [$_SERVER['HTTP_HOST']]);
+
 	if(!$domain) {
 		$domain = DB::getRow("select * from domain_aliases
 		LEFT JOIN domains using(domain_id)
 		LEFT JOIN themes using(theme_id)
-		where alias_name='{$_SERVER['HTTP_HOST']}'");
+		where alias_name=$1", [$_SERVER['HTTP_HOST']]);
 		$domain_name_orig = $domain['domain_name'];
 		$alias_name = $_SERVER['HTTP_HOST'];
 		$is_alias = true;
@@ -138,11 +142,6 @@ if(!$domain_config) {
 
 }
 
-debug_step("Domain prepared");
-
 define('DOMAIN_ID', (int)$domain_id);
 define('DOMAIN_NAME', $domain_config['name']);
 define('DOMAIN_CONFIG', $domain_config);
-
-debug_step("init finished");
-

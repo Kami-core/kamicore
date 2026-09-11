@@ -1,4 +1,13 @@
 <?php
+
+/**
+ * KamiCore
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ *
+ * @see https://kamicore.org
+ */
+
 /**
  * Simple form generator for KamiCore
  * Supports template-based rendering (.tpl files with {{variable}} placeholders)
@@ -74,7 +83,10 @@ final class Form
 		if(isset($field['variant']) && !empty($field['variant'])) {
 			$field_settings_variant = \Cache::get("globals:field_settings:{$field['variant']}");
 			if(!$field_settings_variant) {
-				$row = \DB::getRow("select * from field_variants where variant_name='{$field['variant']}'");
+				$row = \DB::getRow(
+					'select * from field_variants where variant_name=$1',
+					[(string)$field['variant']]
+				);
 				$field_settings_variant = json_decode($row['variant_settings'] ?? "", true) ?? [];
 			}
 		}
@@ -82,7 +94,10 @@ final class Form
 		$type = $field['type'] ?? 'text';
 		$field_settings_type = \Cache::get("globals:field_settings:{$type}");
 		if(!$field_settings_type) {
-			$row = \DB::getRow("select * from field_types where system_name='{$type}'");
+			$row = \DB::getRow(
+				'select * from field_types where system_name=$1',
+				[$type]
+			);
 			$field_settings_type = json_decode($row['type_settings'] ?? '', true) ?? [];
 			\Cache::set("globals:field_settings:{$type}", $field_settings_type);
 		}

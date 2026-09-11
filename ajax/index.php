@@ -1,4 +1,13 @@
 <?php
+
+/**
+ * KamiCore
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ *
+ * @see https://kamicore.org
+ */
+
 define('IN_KAMI', true);
 define('KAMI_AJAX', true);
 // Supports web-server configs that route this endpoint directly.
@@ -6,10 +15,10 @@ if(!defined('ROOT_PATH')) define('ROOT_PATH', '../');
 
 require_once ROOT_PATH . 'core/init.php';
 
-error_reporting(E_ALL);
-	@ini_set('display_startup_errors', 1);
-	@ini_set('display_errors', 1);
-	@ini_set('log_errors', 1);
+// error_reporting(E_ALL);
+// 	@ini_set('display_startup_errors', 1);
+// 	@ini_set('display_errors', 1);
+// 	@ini_set('log_errors', 1);
 
 
 $parts = parse_url($_SERVER['REQUEST_URI']);
@@ -64,6 +73,8 @@ debug_step("URL parsed");
 Core\Request::init();
 $data = Core\Request::all();
 debug_step("Request processed");
+Core\ClientContext::init();
+Core\Session::init();
 Core\User::init();
 $userdata = Core\User::getUser();
 
@@ -108,5 +119,11 @@ try {
 }
 
 Core\Response::addHeader("X-Powered-By: Kami");
+
+// Ajax actions may return either final HTML fragments or structured JSON.
+// Only HTML-like responses belong to the Renderer finalization lifecycle.
+if (!json_validate($content)) {
+	$content = Core\Renderer::finalize($content);
+}
 
 Core\Response::send($content);

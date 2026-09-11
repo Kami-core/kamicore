@@ -1,5 +1,13 @@
 <?php
 
+/**
+ * KamiCore
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ *
+ * @see https://kamicore.org
+ */
+
 declare(strict_types=1);
 
 namespace Plugins\Forms;
@@ -208,6 +216,20 @@ final class Forms extends \Core\BasePlugin
         $explicitTemplate = isset($field['template']) && is_string($field['template'])
             ? trim($field['template'])
             : '';
+
+        if ($type === 'compound' && $explicitTemplate === '') {
+            return $this->renderCompoundField(
+                $field,
+                $name,
+                $id,
+                $value,
+                $label,
+                $settings,
+                $params,
+                $attributes,
+                $multiple
+            );
+        }
 
         if ($multiple && self::isTypeOrDescendant($type, 'checkbox')) {
             throw new \InvalidArgumentException('Checkbox fields do not support multiple values.');
@@ -904,6 +926,8 @@ HTML;
         }
 
         $whereSql = $where !== [] ? ' WHERE ' . implode(' AND ', $where) : '';
+        $bind[] = $limit;
+        $limitParam = '$' . count($bind);
         $result = \DB::query(
             'SELECT ' . $config['id'] . ' AS value, '
                 . $label . ' AS label, '
@@ -911,7 +935,7 @@ HTML;
                 . 'FROM ' . $config['from']
                 . $translationJoin
                 . $whereSql
-                . ' ORDER BY label, value LIMIT ' . $limit,
+                . ' ORDER BY label, value LIMIT ' . $limitParam . '::int',
             $bind
         );
 
@@ -1018,11 +1042,13 @@ HTML;
                 . " ELSE 2 END, count(*) DESC, idx.value";
         }
 
+        $bind[] = $limit;
+        $limitParam = '$' . count($bind);
         $result = \DB::query(
             'SELECT idx.value, count(*) AS uses '
                 . 'FROM item_texts idx WHERE ' . $where
                 . ' GROUP BY idx.value ORDER BY ' . $order
-                . ' LIMIT ' . $limit,
+                . ' LIMIT ' . $limitParam . '::int',
             $bind
         );
 
@@ -1112,6 +1138,141 @@ HTML;
             'plugin_id' => $pluginId,
             'can_manage' => \Core\User::canPlugin($pluginId, 'manage'),
         ];
+    }
+
+    private function renderCompoundField(
+        array $field,
+        string $name,
+        string $id,
+        mixed $value,
+        string $label,
+        array $settings,
+        array $params,
+        array $attributes,
+        bool $multiple
+    ): string {
+        $components = is_array($params['components'] ?? null)
+            ? $params['components']
+            : [];
+        if ($components === []) {
+            throw new \InvalidArgumentException('Compound field requires components.');
+        }
+
+        $description = (string)($field['description'] ?? '');
+        $required = !empty($field['required'] ?? $settings['required'] ?? false);
+        $rowsHtml = '';
+        $rowTemplate = '';
+        $addButton = '';
+        $containerAttributes = '';
+        $fieldAssets = '';
+
+        if ($multiple) {
+            $fieldAssets = $this->fieldAssets();
+            $containerAttributes = ' data-repeatable data-repeatable-required="'
+                . ($required ? '1' : '0') . '"';
+            $rows = is_array($value) ? array_values($value) : [];
+            if ($rows === [] && $required) {
+                $rows = [['_key' => 'tmp-1']];
+            }
+
+            foreach ($rows as $index => $row) {
+                if (!is_array($row)) continue;
+                $key = trim((string)($row['_key'] ?? ''));
+                if ($key === '') $key = 'tmp-' . ($index + 1);
+                $rowsHtml .= $this->compoundRow(
+                    $name,
+                    $id,
+                    $key,
+                    $components,
+                    $row,
+                    true,
+                    $attributes
+                );
+            }
+
+            $rowTemplate = $this->compoundRow(
+                $name,
+                $id,
+                'tmp-__INDEX__',
+                $components,
+                [],
+                true,
+                $attributes
+            );
+            if (empty($attributes['disabled']) && empty($attributes['readonly'])) {
+                $addButton = '<button class="admin-button admin-button-secondary admin-button-small" '
+                    . 'type="button" data-repeatable-add>'
+                    . self::escape($this->phrase('add_value', 'Add value'))
+                    . '</button>';
+            }
+        } else {
+            $rowsHtml = $this->compoundRow(
+                $name,
+                $id,
+                '',
+                $components,
+                is_array($value) ? $value : [],
+                false,
+                $attributes
+            );
+        }
+
+        return \Core\Renderer::render('field-compound', $this->name, [
+            'field_assets' => $fieldAssets,
+            'compound_attributes' => $containerAttributes,
+            'label' => self::escape($label),
+            'description' => self::escape($description),
+            'compound_rows' => $rowsHtml,
+            'compound_template' => $rowTemplate,
+            'compound_add_button' => $addButton,
+        ]);
+    }
+
+    private function compoundRow(
+        string $name,
+        string $id,
+        string $key,
+        array $components,
+        array $value,
+        bool $multiple,
+        array $attributes
+    ): string {
+        $fields = '';
+        foreach ($components as $componentName => $component) {
+            if (!is_string($componentName) || !is_array($component)) continue;
+
+            $childName = $multiple
+                ? $name . '[' . $key . '][' . $componentName . ']'
+                : $name . '[' . $componentName . ']';
+            $childId = $id . ($key !== '' ? '-' . $key : '') . '-' . $componentName;
+            $childSettings = [
+                'required' => !empty($component['required']),
+            ];
+            if (!empty($attributes['disabled'])) $childSettings['disabled'] = true;
+            if (!empty($attributes['readonly'])) $childSettings['readonly'] = true;
+
+            $fields .= $this->renderField([
+                'name' => $childName,
+                'id' => $childId,
+                'type' => (string)($component['type'] ?? 'string'),
+                'title' => self::humanizeName($componentName),
+                'value' => $value[$componentName] ?? null,
+                'settings' => $childSettings,
+                'params' => is_array($component['params'] ?? null)
+                    ? $component['params']
+                    : [],
+            ]);
+        }
+
+        $controls = $multiple ? $this->repeatableControls($attributes) : '';
+        return '<div class="form-compound-row" data-repeatable-row>'
+            . '<div class="form-compound-fields">' . $fields . '</div>'
+            . $controls . '</div>';
+    }
+
+    private static function humanizeName(string $name): string
+    {
+        return ucwords(str_replace(['_', '-'], ' ', $name));
     }
 
     private function repeatableRow(

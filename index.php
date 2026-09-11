@@ -1,5 +1,13 @@
 <?php
 
+/**
+ * KamiCore
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ *
+ * @see https://kamicore.org
+ */
+
 const ROOT_PATH = './';
 
 $requestPath = parse_url((string)($_SERVER['REQUEST_URI'] ?? '/'), PHP_URL_PATH);
@@ -27,6 +35,8 @@ const KAMI_FRONT = true;
 
 require_once ROOT_PATH . 'core/init.php';
 
+debug_step("INIT finished");
+
 // Plugin-owned virtual endpoints bypass normal page, language, user and ACL routing.
 // After dispatch, request handling and response output are entirely the plugin's responsibility.
 if ($requestRoot !== null) {
@@ -36,6 +46,7 @@ if ($requestRoot !== null) {
 			define('KAMI_ENDPOINT', true);
 		}
 		\Core\Request::init();
+		\Core\ClientContext::init();
 		\Core\EndpointRegistry::dispatch($pluginEndpoint, new \Core\Request());
 		exit;
 	}
@@ -53,7 +64,7 @@ $path = trim($parts['path'], '/');
 $segments = $path !== '' ? explode('/', $path) : [];
 
 $page_id = 0;
-$page_name = '/';
+$page_slug = '/';
 $item_id = 0;
 $uri_lang = null;
 $route_error = null;
@@ -72,7 +83,7 @@ if (!empty($segments)) {
 	if(isset($domain_pages[$first])) {
 		// The first segment is a page slug.
 		$page_id = $domain_pages[$first];
-		$page_name = $first;
+		$page_slug = $first;
 	} else {
 		// Domain home: the first segment may be an item slug.
 		$page_id = $domain_pages['/'];
@@ -128,7 +139,7 @@ if (!empty($segments)) {
 
 } else {
 	$page_id = $domain_pages["/"];
-	$page_name = "/";
+	$page_slug = "/";
 }
 
 // 3. Merge ordinary query-string parameters into GET input.
@@ -137,7 +148,7 @@ if (!empty($parts['query'])) {
 	$_GET = array_merge($_GET, $queryVars);
 }
 
-debug_step("URL parsed");
+debug_step("URL parsing finished");
 
 \Core\Request::setPathParams($path_params);
 \Core\Request::setRoutedItemId($item_id > 0 ? (int)$item_id : null);
@@ -148,6 +159,9 @@ $q = \Core\Request::init();
 $data = \Core\Request::all();
 
 debug_step("Request processed");
+
+Core\Session::init();
+debug_step('Session init');
 
 // Detecting language: 1 - from cookies (if available), 2 - search available from browser, 3 - domain default.
 
@@ -202,11 +216,13 @@ if($uri_lang) {
 define('LANG', $lang);
 Core\Response::addCookie('lang', $lang);
 
-debug_step("Language ($lang) - done");
-
-
 $system_lang = getTranslation(\Core\Translation::SYSTEM_ENTITY_UUID) ?? [];
 define('SYSTEM_DICTIONARY', $system_lang);
+
+debug_step("Language ($lang) prepared");
+
+Core\ClientContext::init();
+debug_step('Client context init');
 
 // User identity is initialized only after the language context exists.
 Core\User::init();
@@ -219,19 +235,19 @@ debug_step('User processed');
 if ($route_error !== null || $page_id < 1) {
 	Core\Response::addHeader('HTTP/1.1 404 Not Found', true, 404);
 	Core\Response::addHeader('X-Powered-By: Kami');
-	Core\Response::send(Core\Renderer::renderError(404));
+	Core\Response::send(Core\Renderer::finalize(Core\Renderer::renderError(404)));
 	exit;
 }
 
 if (!Core\User::canPage($page_id)) {
 	Core\Response::addHeader('HTTP/1.1 403 Forbidden', true, 403);
 	Core\Response::addHeader('X-Powered-By: Kami');
-	Core\Response::send(Core\Renderer::renderError(403));
+	Core\Response::send(Core\Renderer::finalize(Core\Renderer::renderError(403)));
 	exit;
 }
 
 define('PAGE_ID', $page_id);
-define('PAGE_NAME', $page_name);
+define('PAGE_SLUG', $page_slug);
 
 $content = "";
 
@@ -329,11 +345,9 @@ foreach ($page_data['plugins'] as $wrapper_name => $wrapper_plugins) {
 
 			$layout_params = array_replace(
 				$layout_params,
-				$instance->layoutParams()
+				$instance->getLayoutParams()
 			);
         }
-
-        debug_step("PLUGIN $plugin_name");
     }
 }
 
@@ -342,9 +356,11 @@ foreach ($plugins->instances() as $instance) {
 	$instance->finalize($layout_params);
 	$layout_params = array_replace(
 		$layout_params,
-		$instance->layoutParams()
+		$instance->getLayoutParams()
 	);
 }
+
+debug_step("plugins finalized");
 
 $layout_params = array_replace(
     $layout_params,
@@ -357,20 +373,24 @@ if (
 ) {
 	Core\Response::addHeader('HTTP/1.1 404 Not Found', true, 404);
 	Core\Response::addHeader('X-Powered-By: Kami');
-	Core\Response::send(Core\Renderer::renderError(404));
+	Core\Response::send(Core\Renderer::finalize(Core\Renderer::renderError(404)));
 	exit;
 }
 
-debug_step("plugins init");
 
-$page = \Core\Renderer::render($page_data['layout_filename'], null, array_replace($wrappers, $layout_params));
 
-debug_step("home render");
+$page = \Core\Renderer::finalize(
+	\Core\Renderer::render(
+		$page_data['layout_filename'],
+		null,
+		array_replace($wrappers, $layout_params)
+	)
+);
+
+debug_step("Page rendered");
 
 Core\Response::addHeader("X-Powered-By: Kami");
-
-debug_step("Prepared, sending");
 Core\Response::send($page);
 
-debug_step("done");
+debug_step("Done");
 

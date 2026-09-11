@@ -952,11 +952,19 @@
 
     function syncParameterGroup() {
         const selectedType = typeSelect.value;
+        const selectedName = typeSelect.selectedOptions[0]?.dataset.typeName || '';
         groups.forEach(group => {
             const active = group.dataset.fieldParameters === selectedType;
             group.hidden = !active;
             group.disabled = !active;
         });
+
+        for (const name of ['unique', 'translatable']) {
+            const input = editor.querySelector(`input[name="${name}"]`);
+            if (!input) continue;
+            input.disabled = selectedName === 'compound';
+            if (input.disabled) input.checked = false;
+        }
     }
 
     typeSelect.addEventListener('change', syncParameterGroup);
@@ -1092,11 +1100,19 @@
 
     function syncParameterGroup() {
         const selectedType = typeSelect.value;
+        const selectedName = typeSelect.selectedOptions[0]?.dataset.typeName || '';
         groups.forEach(group => {
             const active = group.dataset.fieldParameters === selectedType;
             group.hidden = !active;
             group.disabled = !active;
         });
+
+        for (const name of ['unique', 'translatable']) {
+            const input = editor.querySelector(`input[name="${name}"]`);
+            if (!input) continue;
+            input.disabled = selectedName === 'compound';
+            if (input.disabled) input.checked = false;
+        }
     }
 
     typeSelect.addEventListener('change', syncParameterGroup);

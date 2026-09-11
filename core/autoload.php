@@ -1,5 +1,13 @@
 <?php
 
+/**
+ * KamiCore
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ *
+ * @see https://kamicore.org
+ */
+
 declare(strict_types=1);
 
 if(!defined('IN_KAMI')) die();
@@ -48,7 +56,7 @@ spl_autoload_register(function ($class) {
         if (is_file($path)) {
             require $path;
         } else {
-        	echo "NOT FOUND: $path";
+	    // echo "NOT FOUND: $path";
         }
 
     }

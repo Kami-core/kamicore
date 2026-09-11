@@ -12,24 +12,48 @@
       "author": "Kami team"
     },
     "prefix": "sm",
-    "version": "0.1.0",
-    "dependencies": ["Forms"],
+    "version": "0.2.0",
+    "dependencies": [
+      "Forms"
+    ],
     "config": {
       "handlers": {
         "manage": {
           "title": "Manage",
           "actions": {
-            "overview": {"title": "System"},
-            "settings": {"title": "System settings"},
-            "settingsSave": {"title": "Save system settings"},
-            "languages": {"title": "Languages"},
-            "languagesSave": {"title": "Save languages"},
-            "domains": {"title": "Domains"},
-            "domainEdit": {"title": "Edit domain"},
-            "domainSave": {"title": "Save domain"},
-            "secrets": {"title": "Secrets"},
-            "secretSave": {"title": "Save secret"},
-            "secretDelete": {"title": "Delete secret"}
+            "overview": {
+              "title": "System"
+            },
+            "settings": {
+              "title": "System settings"
+            },
+            "settingsSave": {
+              "title": "Save system settings"
+            },
+            "languages": {
+              "title": "Languages"
+            },
+            "languagesSave": {
+              "title": "Save languages"
+            },
+            "domains": {
+              "title": "Domains"
+            },
+            "domainEdit": {
+              "title": "Edit domain"
+            },
+            "domainSave": {
+              "title": "Save domain"
+            },
+            "secrets": {
+              "title": "Secrets"
+            },
+            "secretSave": {
+              "title": "Save secret"
+            },
+            "secretDelete": {
+              "title": "Delete secret"
+            }
           },
           "default_action": "overview"
         }

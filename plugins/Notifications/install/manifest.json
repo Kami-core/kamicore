@@ -6,13 +6,13 @@
       "uuid": "7a0c0b7b-e5de-4422-acd6-7d145dcfac73",
       "name": "Notifications",
       "title": "Notifications",
-      "description": "Transient session notifications delivered through the standard AJAX endpoint.",
+      "description": "Transient client-context notifications delivered through the standard AJAX endpoint.",
       "origin_type": "local",
       "origin_ref": null,
       "author": "Kami team"
     },
     "prefix": "notify",
-    "version": "1.0.1",
+    "version": "1.1.0",
     "dependencies": [],
     "config": {
       "handlers": {

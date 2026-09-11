@@ -1,5 +1,13 @@
 <?php
 
+/**
+ * KamiCore
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ *
+ * @see https://kamicore.org
+ */
+
 declare(strict_types=1);
 
 namespace Plugins\UserManager;
@@ -910,7 +918,7 @@ final class UserManager extends \Core\BasePlugin
 
     private function url(string $action, array $params = []): string
     {
-        $url = '/' . PAGE_NAME . '/' . $this->prefix . '-action/' . $action;
+        $url = '/' . PAGE_SLUG . '/' . $this->prefix . '-action/' . $action;
         foreach ($params as $key => $value) {
             $url .= '/' . $this->prefix . '-' . $key . '/' . rawurlencode((string)$value);
         }

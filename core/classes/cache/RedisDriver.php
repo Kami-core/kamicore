@@ -1,4 +1,13 @@
 <?php
+
+/**
+ * KamiCore
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ *
+ * @see https://kamicore.org
+ */
+
 /**
  * Redis / KeyDB cache driver (unified serialization)
  * Simplified version: all values are serialized (igbinary if available)

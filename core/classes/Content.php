@@ -1,4 +1,13 @@
 <?php
+
+/**
+ * KamiCore
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ *
+ * @see https://kamicore.org
+ */
+
 declare(strict_types=1);
 
 namespace Core;
@@ -96,6 +105,8 @@ class Content
                 'item_dates' => [],
             ];
             $translationChanged = false;
+            $compoundReindex = [];
+            $compoundPrune = [];
 
             foreach ($structure as $fieldName => $schemaField) {
                 if (!array_key_exists($fieldName, $data)) {
@@ -110,6 +121,38 @@ class Content
                 );
                 $multiple = !empty($settings['multiple']);
                 $translatable = !empty($settings['translatable']);
+
+                if (self::isCompoundField($field)) {
+                    $normalized = self::normalizeCompoundForUpdate(
+                        $field,
+                        $data[$fieldName],
+                        $multiple,
+                        $commonData[$fieldName] ?? null,
+                        !empty($settings['required'])
+                    );
+                    self::storeJsonValue($commonData, $fieldName, $normalized['common']);
+
+                    if (self::compoundHasTranslatableComponents($field)) {
+                        self::storeJsonValue(
+                            $translatedData,
+                            $fieldName,
+                            $normalized['translated']
+                        );
+                        $translationChanged = true;
+                        if ($multiple) {
+                            $compoundPrune[$fieldName] = $normalized['keys'];
+                        }
+                    }
+
+                    if (!empty($settings['indexed'])) {
+                        $compoundReindex[$fieldName] = [
+                            'field' => $field,
+                            'multiple' => $multiple,
+                        ];
+                    }
+                    continue;
+                }
+
                 $value = self::normalizeStoredValue($data[$fieldName], $multiple);
 
                 if ($field['root_type_name'] === 'boolean') {
@@ -195,6 +238,15 @@ class Content
                 self::saveExactTranslation($item['item_uuid'], $lang, $translatedData);
             }
 
+            foreach ($compoundPrune as $fieldName => $validKeys) {
+                self::pruneCompoundTranslationKeys(
+                    (string)$item['item_uuid'],
+                    (string)$fieldName,
+                    $validKeys,
+                    $lang
+                );
+            }
+
             if ($syncLanguages !== []) {
                 \DB::query(
                     'UPDATE translations
@@ -208,6 +260,16 @@ class Content
                 if ($rows !== []) {
                     \DB::bulk_insert($table, $rows);
                 }
+            }
+
+            foreach ($compoundReindex as $fieldName => $compound) {
+                self::reindexCompoundField(
+                    $id,
+                    (string)$item['item_uuid'],
+                    $compound['field'],
+                    $commonData[$fieldName] ?? null,
+                    !empty($compound['multiple'])
+                );
             }
 
             \DB::commit();
@@ -252,6 +314,7 @@ class Content
 
             $contentType = self::getContentType((int) $item['ct_id'], $lang);
             $structure = $contentType['schema']['fields'] ?? [];
+            $commonData = self::decodeJson($item['common_data'] ?? null);
             $translatedData = self::loadExactTranslation($item['item_uuid'], $lang);
             unset($translatedData['title']);
 
@@ -270,11 +333,49 @@ class Content
                     $schemaField['settings'] ?? []
                 );
 
+                $multiple = !empty($settings['multiple']);
+
+                if (self::isCompoundField($field)) {
+                    if (!self::compoundHasTranslatableComponents($field)) {
+                        continue;
+                    }
+
+                    $value = self::normalizeCompoundTranslationPatch(
+                        $field,
+                        $data[$fieldName],
+                        $multiple,
+                        $commonData[$fieldName] ?? null
+                    );
+                    self::storeJsonValue($translatedData, $fieldName, $value);
+                    $changed = true;
+
+                    if (!empty($settings['indexed'])) {
+                        self::clearFieldIndex(
+                            'item_texts',
+                            $id,
+                            (int)$field['field_id'],
+                            $lang
+                        );
+                        $projection = self::compoundIndexRows(
+                            $id,
+                            $field,
+                            $commonData[$fieldName] ?? null,
+                            [$lang => [$fieldName => $value]],
+                            $multiple
+                        );
+                        foreach ($projection['item_texts'] as $row) {
+                            if (($row['lang_code'] ?? null) === $lang) {
+                                $indexRows[] = $row;
+                            }
+                        }
+                    }
+                    continue;
+                }
+
                 if (empty($settings['translatable'])) {
                     continue;
                 }
 
-                $multiple = !empty($settings['multiple']);
                 $value = self::normalizeStoredValue($data[$fieldName], $multiple);
 
                 if (!empty($settings['unique'])) {
@@ -395,8 +496,28 @@ class Content
                     continue;
                 }
 
-                $table = self::indexTable($field['root_type_name']);
                 $multiple = !empty($settings['multiple']);
+
+                if (self::isCompoundField($field)) {
+                    $projection = self::compoundIndexRows(
+                        $itemId,
+                        $field,
+                        $commonData[$fieldName] ?? null,
+                        $translations,
+                        $multiple
+                    );
+                    foreach ($projection as $projectionTable => $rows) {
+                        if ($rows !== []) {
+                            $indexRows[$projectionTable] = array_merge(
+                                $indexRows[$projectionTable],
+                                $rows
+                            );
+                        }
+                    }
+                    continue;
+                }
+
+                $table = self::indexTable($field['root_type_name']);
                 $translatable = !empty($settings['translatable']);
 
                 if ($translatable && $table !== 'item_texts') {
@@ -541,11 +662,24 @@ class Content
         }
 
         if (isset(self::$known_fields[$fieldId])) {
-            return self::$known_fields[$fieldId];
+            $known = self::$known_fields[$fieldId];
+            if ((string)($known['root_type_name'] ?? '') === 'compound') {
+                $known['field_settings'] = self::sortCompoundComponents(
+                    is_array($known['field_settings'] ?? null) ? $known['field_settings'] : []
+                );
+                self::$known_fields[$fieldId] = $known;
+                self::$known_fields[$known['system_name']] = $known;
+            }
+            return $known;
         }
 
         $cached = \Cache::get("globals:fields:f_{$fieldId}");
         if (is_array($cached)) {
+            if ((string)($cached['root_type_name'] ?? '') === 'compound') {
+                $cached['field_settings'] = self::sortCompoundComponents(
+                    is_array($cached['field_settings'] ?? null) ? $cached['field_settings'] : []
+                );
+            }
             self::$known_fields[$fieldId] = $cached;
             self::$known_fields[$cached['system_name']] = $cached;
             return $cached;
@@ -563,6 +697,9 @@ class Content
         $row['type_settings'] = $fieldType['type_settings'];
         $row['root_type_id'] = $fieldType['root_type_id'];
         $row['root_type_name'] = $fieldType['root_type_name'];
+        if ($row['root_type_name'] === 'compound') {
+            $row['field_settings'] = self::sortCompoundComponents($row['field_settings']);
+        }
 
         self::$known_fields[$fieldId] = $row;
         self::$known_fields[$row['system_name']] = $row;
@@ -645,15 +782,41 @@ class Content
     public static function findByField(
         int|string $field,
         mixed $value,
-        int|string|array|null $contentTypes = null,
-        ?string $lang = null
+        int|string|array|null $contentTypes = null
     ): array {
-        $lang ??= LANG;
         $definition = self::getField($field);
         $settings = array_replace($definition['type_settings'], $definition['field_settings']);
 
         if (empty($settings['indexed'])) {
             throw new \RuntimeException('Field is not indexed: ' . $definition['system_name']);
+        }
+
+        $contentTypeIds = self::resolveContentTypeIds($contentTypes);
+
+        if (self::isCompoundField($definition)) {
+            $ids = [];
+            foreach (self::compoundLookupTargets($value) as [$table, $lookupValue]) {
+                $params = [(int)$definition['field_id'], $lookupValue];
+                $where = ['idx.field_id=$1', 'idx.value=$2'];
+                if ($table === 'item_texts') {
+                    $where[] = 'md5(idx.value)=md5($2::text)';
+                }
+                if ($contentTypeIds !== []) {
+                    $params[] = self::pgIntArray($contentTypeIds);
+                    $where[] = 'ci.ct_id=ANY($' . count($params) . '::int[])';
+                }
+                foreach (\DB::getArr(
+                    'SELECT DISTINCT idx.item_id FROM ' . $table . ' idx '
+                    . 'JOIN content_items ci USING(item_id) WHERE '
+                    . implode(' AND ', $where),
+                    $params
+                ) as $itemId) {
+                    $ids[(int)$itemId] = true;
+                }
+            }
+            $result = array_keys($ids);
+            sort($result, SORT_NUMERIC);
+            return $result;
         }
 
         $table = self::indexTable($definition['root_type_name']);
@@ -666,16 +829,8 @@ class Content
 
         if ($table === 'item_texts') {
             $where[] = 'md5(idx.value)=md5($2::text)';
-
-            if (!empty($settings['translatable'])) {
-                $params[] = $lang;
-                $where[] = 'idx.lang_code=$3';
-            } else {
-                $where[] = 'idx.lang_code IS NULL';
-            }
         }
 
-        $contentTypeIds = self::resolveContentTypeIds($contentTypes);
         if ($contentTypeIds !== []) {
             $params[] = self::pgIntArray($contentTypeIds);
             $where[] = 'ci.ct_id=ANY($' . count($params) . '::int[])';
@@ -684,7 +839,7 @@ class Content
         return array_map(
             'intval',
             \DB::getArr(
-                'SELECT idx.item_id
+                'SELECT DISTINCT idx.item_id
                  FROM ' . $table . ' idx
                  JOIN content_items ci USING(item_id)
                  WHERE ' . implode(' AND ', $where) . '
@@ -697,10 +852,9 @@ class Content
     public static function exists(
         int|string $contentType,
         int|string $field,
-        mixed $value,
-        ?string $lang = null
+        mixed $value
     ): ?int {
-        $ids = self::findByField($field, $value, $contentType, $lang);
+        $ids = self::findByField($field, $value, $contentType);
         return $ids[0] ?? null;
     }
 
@@ -775,17 +929,21 @@ class Content
                 $translatedData = [];
 
                 foreach ($translation as $fieldName => $value) {
+                    if (!isset($structure[$fieldName])) {
+                        continue;
+                    }
                     if (
-                        isset($structure[$fieldName])
-                        && !empty($structure[$fieldName]['settings']['translatable'])
+                        !empty($structure[$fieldName]['settings']['translatable'])
+                        || (string)($structure[$fieldName]['type'] ?? '') === 'compound'
                     ) {
                         $translatedData[$fieldName] = $value;
                     }
                 }
 
-                $item['data'] = array_replace(
+                $item['data'] = self::mergeItemData(
                     self::decodeJson($item['common_data'] ?? null),
-                    $translatedData
+                    $translatedData,
+                    $structure
                 );
                 $item = self::addDisplayFields($item, $lang);
                 \Cache::set("globals:content_items:{$id}_{$lang}", $item);
@@ -805,7 +963,6 @@ class Content
     ): array {
         $lang ??= LANG;
         $contentTypeIds = self::resolveContentTypeIds($contentTypes);
-        $params = [$lang, $exact ? $title : "%{$title}%"];
         if ($contentTypeIds !== []) {
             $titleFields = [];
 
@@ -843,34 +1000,43 @@ class Content
         }
 
         $operator = $exact ? '=' : 'ILIKE';
+        $params = [$exact ? $title : "%{$title}%"];
+        $titleParam = '$1';
         $typeSql = '';
 
         if ($contentTypeIds !== []) {
             $params[] = self::pgIntArray($contentTypeIds);
-            $typeSql = 'AND ci.ct_id=ANY($3::int[])';
+            $typeSql = 'AND ci.ct_id=ANY($2::int[])';
         }
 
-        $limitSql = $limit > 0 ? 'LIMIT ' . $limit : '';
         $idValue = ltrim($title, '#');
         $params[] = $exact ? $idValue : "%{$idValue}%";
         $idParam = '$' . count($params);
+        $limitSql = '';
+        if ($limit > 0) {
+            $params[] = $limit;
+            $limitSql = 'LIMIT $' . count($params) . '::int';
+        }
 
         $sql = "SELECT DISTINCT ci.item_id
                 FROM content_items ci
                 JOIN content_types content_type USING(ct_id)
-                LEFT JOIN translations translation
-                  ON translation.entity_uuid=ci.item_uuid
-                 AND translation.lang_code=$1
                 WHERE (
-                    COALESCE(
-                        translation.translated_data->>(content_type.schema->>'title_field'),
-                        ci.common_data->>(content_type.schema->>'title_field')
-                    ) {$operator} $2
+                    (
+                        ci.common_data->>(content_type.schema->>'title_field') {$operator} {$titleParam}
+                        OR EXISTS (
+                            SELECT 1
+                            FROM translations translation
+                            WHERE translation.entity_uuid=ci.item_uuid
+                              AND translation.translated_data->>(content_type.schema->>'title_field')
+                                  {$operator} {$titleParam}
+                        )
+                    )
                     OR (
                         content_type.schema->>'title_field' IS NULL
                         AND (
                             ci.item_id::text {$operator} {$idParam}
-                            OR COALESCE(ci.item_slug, '') {$operator} $2
+                            OR COALESCE(ci.item_slug, '') {$operator} {$titleParam}
                         )
                     )
                 )
@@ -898,16 +1064,23 @@ class Content
             return ['ids' => [], 'totals' => 0];
         }
 
-        $limitSql = $limit > 0 ? 'LIMIT ' . $limit : '';
         $offset = max(0, $offset);
+        $searchParams = $plan['params'];
+        $searchParams[] = $offset;
+        $offsetSql = '$' . count($searchParams) . '::int';
+        $limitSql = '';
+        if ($limit > 0) {
+            $searchParams[] = $limit;
+            $limitSql = 'LIMIT $' . count($searchParams) . '::int';
+        }
         $ids = \DB::getArr(
             'SELECT ci.item_id' . $plan['select'] . '
              FROM content_items ci
              ' . $plan['joins'] . '
              WHERE ' . $plan['where'] . '
              ' . $plan['order'] . '
-             OFFSET ' . $offset . ' ' . $limitSql,
-            $plan['params']
+             OFFSET ' . $offsetSql . ' ' . $limitSql,
+            $searchParams
         );
 
         $totals = \DB::getOne(
@@ -969,12 +1142,17 @@ class Content
 
     public static function prepareItem(array $item, ?string $lang = null): array
     {
-        $item['data'] = array_replace(
+        $language = $lang ?? LANG;
+        $structure = isset($item['ct_id'])
+            ? self::getContentType((int)$item['ct_id'], $language)['schema']['fields'] ?? []
+            : [];
+        $item['data'] = self::mergeItemData(
             self::decodeJson($item['common_data'] ?? null),
-            self::decodeJson($item['translated_data'] ?? null)
+            self::decodeJson($item['translated_data'] ?? null),
+            $structure
         );
 
-        return self::addDisplayFields($item, $lang ?? LANG);
+        return self::addDisplayFields($item, $language);
     }
 
     private static function buildSearchPlan(
@@ -1011,26 +1189,44 @@ class Content
             }
 
             $fields = array_map(static fn($field): array => self::getField($field), $fieldKeys);
-            $tables = array_unique(array_map(
-                static fn(array $field): string => self::indexTable($field['root_type_name']),
-                $fields
-            ));
-
-            if (count($tables) !== 1) {
-                throw new \InvalidArgumentException("Search filter {$filterIndex} mixes incompatible field types.");
-            }
-
             $hasValue = array_key_exists('value', $part);
             $hasValues = array_key_exists('values', $part);
             if (!$hasValue && !$hasValues) {
                 continue;
             }
+            $filterMode = strtolower((string) ($part['mode'] ?? ($hasValues ? 'in' : 'eq')));
+            $compoundModes = array_values(array_unique(array_map(
+                static fn(array $field): bool => self::isCompoundField($field),
+                $fields
+            )));
+            if (count($compoundModes) !== 1) {
+                throw new \InvalidArgumentException(
+                    "Search filter {$filterIndex} mixes compound and scalar fields."
+                );
+            }
+
+            $fieldIds = array_map(static fn(array $field): int => (int) $field['field_id'], $fields);
+            if ($compoundModes === [true]) {
+                $where[] = self::buildCompoundFilterCondition(
+                    $fieldIds,
+                    $filterMode,
+                    $part,
+                    $addParam
+                );
+                continue;
+            }
+
+            $tables = array_unique(array_map(
+                static fn(array $field): string => self::indexTable($field['root_type_name']),
+                $fields
+            ));
+            if (count($tables) !== 1) {
+                throw new \InvalidArgumentException("Search filter {$filterIndex} mixes incompatible field types.");
+            }
 
             $table = reset($tables);
-            $fieldIds = array_map(static fn(array $field): int => (int) $field['field_id'], $fields);
             $fieldParam = $addParam(self::pgIntArray($fieldIds));
             $conditions = ["idx.field_id=ANY({$fieldParam}::int[])"];
-            $filterMode = strtolower((string) ($part['mode'] ?? ($hasValues ? 'in' : 'eq')));
 
             if ($filterMode === 'in') {
                 $values = array_values(array_filter(
@@ -1093,26 +1289,6 @@ class Content
                 }
             }
 
-            if ($table === 'item_texts') {
-                $translationModes = array_values(array_unique(array_map(
-                    static fn(array $field): bool => !empty(array_replace(
-                        $field['type_settings'],
-                        $field['field_settings']
-                    )['translatable']),
-                    $fields
-                )));
-
-                if ($translationModes === [true]) {
-                    $langParam = $addParam($lang);
-                    $conditions[] = "idx.lang_code={$langParam}";
-                } elseif ($translationModes === [false]) {
-                    $conditions[] = 'idx.lang_code IS NULL';
-                } else {
-                    $langParam = $addParam($lang);
-                    $conditions[] = "(idx.lang_code={$langParam} OR idx.lang_code IS NULL)";
-                }
-            }
-
             $where[] = 'EXISTS (
                 SELECT 1 FROM ' . $table . ' idx
                 WHERE idx.item_id=ci.item_id
@@ -1122,21 +1298,47 @@ class Content
 
         if ($query !== null && $query !== '') {
             $queryParam = $addParam($mode === 'substr' ? "%{$query}%" : $query);
-            $langParam = $addParam($lang);
 
             if ($mode === 'fulltext') {
-                $config = \DB::getOne(
-                    "SELECT COALESCE(cfg_name, 'simple') FROM languages WHERE lang_code=$1",
-                    [$lang]
-                ) ?? 'simple';
-                $configParam = $addParam($config);
-                $queryCondition = "(
-                    (search_text.lang_code={$langParam}
-                     AND search_text.tsv @@ websearch_to_tsquery({$configParam}::regconfig, {$queryParam}))
-                    OR
-                    (search_text.lang_code IS NULL
-                     AND search_text.tsv @@ websearch_to_tsquery('simple', {$queryParam}))
+                $fulltextConditions = [
+                    "(search_text.lang_code IS NULL
+                      AND search_text.tsv @@ websearch_to_tsquery('simple', {$queryParam}))",
+                ];
+                $languageGroups = \DB::query(
+                    "SELECT COALESCE(cfg_name, 'simple') AS cfg_name,
+                            json_agg(lang_code ORDER BY lang_code)::text AS lang_codes
+                     FROM languages
+                     GROUP BY COALESCE(cfg_name, 'simple')
+                     ORDER BY COALESCE(cfg_name, 'simple')"
+                );
+
+                while ($group = \DB::fetchRow($languageGroups)) {
+                    $languageCodes = self::decodeJson($group['lang_codes'] ?? null);
+                    if ($languageCodes === []) {
+                        continue;
+                    }
+
+                    $languageParam = $addParam(self::pgTextArray($languageCodes));
+                    $configParam = $addParam((string) ($group['cfg_name'] ?? 'simple'));
+                    $fulltextConditions[] = "(
+                        search_text.lang_code=ANY({$languageParam}::text[])
+                        AND search_text.tsv @@ websearch_to_tsquery(
+                            {$configParam}::regconfig,
+                            {$queryParam}
+                        )
+                    )";
+                }
+
+                $fulltextConditions[] = "(
+                    search_text.lang_code IS NOT NULL
+                    AND NOT EXISTS (
+                        SELECT 1
+                        FROM languages search_language
+                        WHERE search_language.lang_code=search_text.lang_code
+                    )
+                    AND search_text.tsv @@ websearch_to_tsquery('simple', {$queryParam})
                 )";
+                $queryCondition = '(' . implode(' OR ', $fulltextConditions) . ')';
             } elseif ($mode === 'substr') {
                 $queryCondition = "search_text.value ILIKE {$queryParam}";
             } else {
@@ -1146,7 +1348,6 @@ class Content
             $where[] = "EXISTS (
                 SELECT 1 FROM item_texts search_text
                 WHERE search_text.item_id=ci.item_id
-                  AND (search_text.lang_code={$langParam} OR search_text.lang_code IS NULL)
                   AND {$queryCondition}
             )";
         }
@@ -1163,6 +1364,9 @@ class Content
             }
 
             $field = self::getField($fieldKey);
+            if (self::isCompoundField($field)) {
+                throw new \InvalidArgumentException('Compound fields cannot be used for sorting.');
+            }
             $table = self::indexTable($field['root_type_name']);
             $direction = strtolower((string) ($part['direction'] ?? 'asc')) === 'desc' ? 'DESC' : 'ASC';
             $aggregate = $direction === 'DESC' ? 'MAX' : 'MIN';
@@ -1706,6 +1910,693 @@ class Content
         unset($option);
 
         return $options;
+    }
+
+    private static function compoundLookupTargets(mixed $value): array
+    {
+        if (is_bool($value)) {
+            return [['item_bools', $value]];
+        }
+        if (is_int($value) || is_float($value)) {
+            return [['item_nums', $value]];
+        }
+        if (!is_scalar($value)) {
+            return [];
+        }
+
+        $text = (string)$value;
+        $targets = [['item_texts', $text]];
+        if (is_numeric($text)) {
+            $targets[] = ['item_nums', $text];
+        }
+        $lower = strtolower(trim($text));
+        if (in_array($lower, ['true', 't', 'yes', 'y', 'on'], true)) {
+            $targets[] = ['item_bools', true];
+        } elseif (in_array($lower, ['false', 'f', 'no', 'n', 'off'], true)) {
+            $targets[] = ['item_bools', false];
+        }
+        if (preg_match('/^\d{4}-\d{2}-\d{2}(?:[ T].*)?$/', trim($text))) {
+            $targets[] = ['item_dates', $text];
+        }
+        return $targets;
+    }
+
+    private static function buildCompoundFilterCondition(
+        array $fieldIds,
+        string $mode,
+        array $part,
+        callable $addParam
+    ): string {
+        $fieldParam = $addParam(self::pgIntArray($fieldIds));
+        $exists = static function (string $table, string $condition) use ($fieldParam): string {
+            return "EXISTS (\n"
+                . "    SELECT 1 FROM {$table} compound_idx\n"
+                . "    WHERE compound_idx.item_id=ci.item_id\n"
+                . "      AND compound_idx.field_id=ANY({$fieldParam}::int[])\n"
+                . "      AND {$condition}\n"
+                . ')';
+        };
+
+        if ($mode === 'substr') {
+            $value = $part['value'] ?? null;
+            if (!is_scalar($value)) {
+                throw new \InvalidArgumentException('Compound substring filter requires a scalar value.');
+            }
+            $valueParam = $addParam('%' . (string)$value . '%');
+            return $exists('item_texts', "compound_idx.value ILIKE {$valueParam}");
+        }
+
+        if ($mode === 'in') {
+            $values = array_values(array_filter(
+                (array)($part['values'] ?? $part['value'] ?? []),
+                static fn(mixed $value): bool => $value !== null && $value !== ''
+            ));
+            if ($values === []) {
+                return 'false';
+            }
+
+            $grouped = [];
+            foreach ($values as $value) {
+                foreach (self::compoundLookupTargets($value) as [$table, $lookupValue]) {
+                    $grouped[$table][] = $lookupValue;
+                }
+            }
+
+            $conditions = [];
+            foreach ($grouped as $table => $tableValues) {
+                $tableValues = array_values(array_unique($tableValues, SORT_REGULAR));
+                if ($table === 'item_bools') {
+                    $tableValues = array_map([self::class, 'normalizeBooleanScalar'], $tableValues);
+                    $valueParam = $addParam(self::pgBoolArray($tableValues));
+                    $conditions[] = $exists(
+                        $table,
+                        "compound_idx.value=ANY({$valueParam}::boolean[])"
+                    );
+                    continue;
+                }
+
+                $cast = match ($table) {
+                    'item_nums' => 'numeric[]',
+                    'item_dates' => 'timestamptz[]',
+                    default => 'text[]',
+                };
+                $valueParam = $addParam(self::pgTextArray($tableValues));
+                $condition = "compound_idx.value=ANY({$valueParam}::{$cast})";
+                $conditions[] = $exists($table, $condition);
+            }
+
+            return $conditions === [] ? 'false' : '(' . implode(' OR ', $conditions) . ')';
+        }
+
+        if (in_array($mode, ['eq', 'neq'], true)) {
+            $value = $part['value'] ?? null;
+            $targets = self::compoundLookupTargets($value);
+            if ($targets === []) {
+                return $mode === 'eq' ? 'false' : 'true';
+            }
+
+            $operator = $mode === 'eq' ? '=' : '<>';
+            $conditions = [];
+            foreach ($targets as [$table, $lookupValue]) {
+                $valueParam = $addParam($lookupValue);
+                $condition = "compound_idx.value {$operator} {$valueParam}";
+                if ($table === 'item_texts' && $mode === 'eq') {
+                    $condition .= " AND md5(compound_idx.value)=md5({$valueParam}::text)";
+                }
+                $conditions[] = $exists($table, $condition);
+            }
+            return '(' . implode(' OR ', $conditions) . ')';
+        }
+
+        if (!in_array($mode, ['gt', 'gte', 'lt', 'lte'], true)) {
+            throw new \InvalidArgumentException("Unsupported search mode: {$mode}");
+        }
+
+        $value = $part['value'] ?? null;
+        if (is_bool($value) || !is_scalar($value)) {
+            throw new \InvalidArgumentException(
+                'Compound comparison filter requires a text, number or date value.'
+            );
+        }
+
+        if (is_int($value) || is_float($value) || (is_string($value) && is_numeric(trim($value)))) {
+            $table = 'item_nums';
+        } elseif (
+            is_string($value)
+            && preg_match('/^\d{4}-\d{2}-\d{2}(?:[ T].*)?$/', trim($value))
+        ) {
+            $table = 'item_dates';
+        } else {
+            $table = 'item_texts';
+        }
+
+        $operator = match ($mode) {
+            'gt' => '>',
+            'gte' => '>=',
+            'lt' => '<',
+            'lte' => '<=',
+        };
+        $valueParam = $addParam($value);
+        return $exists($table, "compound_idx.value {$operator} {$valueParam}");
+    }
+
+    private static function isCompoundField(array $field): bool
+    {
+        return (string)($field['root_type_name'] ?? '') === 'compound';
+    }
+
+    private static function sortCompoundComponents(array $settings): array
+    {
+        $params = is_array($settings['params'] ?? null) ? $settings['params'] : [];
+        $components = is_array($params['components'] ?? null) ? $params['components'] : [];
+        if ($components === []) {
+            return $settings;
+        }
+
+        $position = 0;
+        $ordered = [];
+        foreach ($components as $name => $component) {
+            if (!is_string($name) || !is_array($component)) {
+                continue;
+            }
+            $ordered[] = [
+                'name' => $name,
+                'component' => $component,
+                'order' => isset($component['displayorder'])
+                    ? (int)$component['displayorder']
+                    : PHP_INT_MAX,
+                'position' => $position++,
+            ];
+        }
+
+        usort($ordered, static function (array $left, array $right): int {
+            $comparison = $left['order'] <=> $right['order'];
+            return $comparison !== 0
+                ? $comparison
+                : $left['position'] <=> $right['position'];
+        });
+
+        $params['components'] = [];
+        foreach ($ordered as $entry) {
+            $params['components'][$entry['name']] = $entry['component'];
+        }
+        $settings['params'] = $params;
+
+        return $settings;
+    }
+
+    private static function compoundComponents(array $field): array
+    {
+        $settings = is_array($field['field_settings'] ?? null)
+            ? $field['field_settings']
+            : [];
+        $params = is_array($settings['params'] ?? null) ? $settings['params'] : [];
+        return is_array($params['components'] ?? null) ? $params['components'] : [];
+    }
+
+    private static function compoundHasTranslatableComponents(array $field): bool
+    {
+        foreach (self::compoundComponents($field) as $component) {
+            if (is_array($component) && !empty($component['translatable'])) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static function normalizeCompoundForUpdate(
+        array $field,
+        mixed $value,
+        bool $multiple,
+        mixed $existingCommon,
+        bool $required
+    ): array {
+        $components = self::compoundComponents($field);
+        if ($components === []) {
+            throw new \LogicException(
+                "Compound field '{$field['system_name']}' has no components."
+            );
+        }
+
+        if (!$multiple) {
+            $row = is_array($value) ? $value : [];
+            [$common, $translated, $hasValue] = self::normalizeCompoundRow(
+                $components,
+                $row,
+                (string)$field['system_name']
+            );
+            if (!$hasValue) {
+                if ($required) {
+                    throw new \DomainException(
+                        "Compound field '{$field['system_name']}' is required."
+                    );
+                }
+                return ['common' => [], 'translated' => [], 'keys' => []];
+            }
+            return ['common' => $common, 'translated' => $translated, 'keys' => []];
+        }
+
+        $existingKeys = [];
+        foreach (is_array($existingCommon) ? $existingCommon : [] as $row) {
+            if (!is_array($row)) continue;
+            $key = trim((string)($row['_key'] ?? ''));
+            if ($key !== '') $existingKeys[$key] = true;
+        }
+
+        $rows = is_array($value) ? $value : [];
+        $commonRows = [];
+        $translatedRows = [];
+        $usedKeys = [];
+
+        foreach ($rows as $inputKey => $row) {
+            if (!is_array($row)) continue;
+
+            $candidate = trim((string)($row['_key'] ?? ''));
+            if ($candidate === '' && is_string($inputKey)) {
+                $candidate = trim($inputKey);
+            }
+
+            if ($candidate !== '' && !str_starts_with($candidate, 'tmp-')) {
+                if (!isset($existingKeys[$candidate])) {
+                    throw new \DomainException(
+                        "Unknown compound row key '{$candidate}' in field '{$field['system_name']}'."
+                    );
+                }
+                if (isset($usedKeys[$candidate])) {
+                    throw new \DomainException(
+                        "Duplicate compound row key '{$candidate}' in field '{$field['system_name']}'."
+                    );
+                }
+                $key = $candidate;
+            } else {
+                $key = self::generateCompoundKey();
+                while (isset($usedKeys[$key]) || isset($existingKeys[$key])) {
+                    $key = self::generateCompoundKey();
+                }
+            }
+
+            [$common, $translated, $hasValue] = self::normalizeCompoundRow(
+                $components,
+                $row,
+                (string)$field['system_name']
+            );
+            if (!$hasValue) continue;
+
+            $usedKeys[$key] = true;
+            $commonRows[] = ['_key' => $key] + $common;
+            if ($translated !== []) {
+                $translatedRows[$key] = $translated;
+            }
+        }
+
+        if ($required && $commonRows === []) {
+            throw new \DomainException(
+                "Compound field '{$field['system_name']}' requires at least one row."
+            );
+        }
+
+        return [
+            'common' => $commonRows,
+            'translated' => $translatedRows,
+            'keys' => array_keys($usedKeys),
+        ];
+    }
+
+    private static function normalizeCompoundRow(
+        array $components,
+        array $row,
+        string $fieldName
+    ): array {
+        $common = [];
+        $translated = [];
+        $hasValue = false;
+
+        foreach ($components as $name => $component) {
+            if (!is_string($name) || !is_array($component)) continue;
+
+            $raw = $row[$name] ?? null;
+            $typeName = (string)($component['type'] ?? 'string');
+            $fieldType = self::getFieldType($typeName);
+            $value = self::normalizeCompoundScalar($raw, $fieldType, $fieldName, $name);
+            $empty = self::compoundScalarIsEmpty($value);
+
+            if (!empty($component['required']) && $empty) {
+                throw new \DomainException(
+                    "Compound component '{$fieldName}.{$name}' is required."
+                );
+            }
+            if ($empty) continue;
+
+            $hasValue = true;
+            if (!empty($component['translatable'])) {
+                $translated[$name] = $value;
+            } else {
+                $common[$name] = $value;
+            }
+        }
+
+        return [$common, $translated, $hasValue];
+    }
+
+    private static function normalizeCompoundScalar(
+        mixed $value,
+        array $fieldType,
+        string $fieldName,
+        string $componentName
+    ): mixed {
+        if ($value === null) return null;
+        if (is_array($value) || is_object($value)) {
+            throw new \InvalidArgumentException(
+                "Compound component '{$fieldName}.{$componentName}' must contain one scalar value."
+            );
+        }
+
+        $rootType = (string)($fieldType['root_type_name'] ?? 'text');
+        if ($rootType === 'boolean') {
+            return self::normalizeBooleanScalar($value);
+        }
+
+        if (is_string($value)) {
+            $value = trim($value);
+            if ($value === '') return null;
+        }
+
+        if ($rootType === 'number') {
+            if (!is_numeric($value)) {
+                throw new \InvalidArgumentException(
+                    "Compound component '{$fieldName}.{$componentName}' requires a numeric value."
+                );
+            }
+            $normalizer = (string)($fieldType['type_settings']['storage']['normalizer'] ?? 'number');
+            return $normalizer === 'integer' ? (int)$value : (float)$value;
+        }
+
+        return is_bool($value) ? ($value ? '1' : '0') : (string)$value;
+    }
+
+    private static function compoundScalarIsEmpty(mixed $value): bool
+    {
+        return $value === null || $value === '';
+    }
+
+    private static function generateCompoundKey(): string
+    {
+        return bin2hex(random_bytes(8));
+    }
+
+    private static function normalizeCompoundTranslationPatch(
+        array $field,
+        mixed $value,
+        bool $multiple,
+        mixed $commonValue
+    ): array {
+        $components = self::compoundComponents($field);
+        $translatable = array_filter(
+            $components,
+            static fn(mixed $component): bool => is_array($component) && !empty($component['translatable'])
+        );
+        if ($translatable === []) return [];
+
+        if (!$multiple) {
+            $row = is_array($value) ? $value : [];
+            $translated = [];
+            foreach ($translatable as $name => $component) {
+                $fieldType = self::getFieldType((string)$component['type']);
+                $normalized = self::normalizeCompoundScalar(
+                    $row[$name] ?? null,
+                    $fieldType,
+                    (string)$field['system_name'],
+                    (string)$name
+                );
+                if (!empty($component['required']) && self::compoundScalarIsEmpty($normalized)) {
+                    throw new \DomainException(
+                        "Compound component '{$field['system_name']}.{$name}' is required."
+                    );
+                }
+                if (!self::compoundScalarIsEmpty($normalized)) {
+                    $translated[$name] = $normalized;
+                }
+            }
+            return $translated;
+        }
+
+        $commonRows = is_array($commonValue) ? array_values($commonValue) : [];
+        $validKeys = [];
+        foreach ($commonRows as $index => $commonRow) {
+            if (!is_array($commonRow)) continue;
+            $key = trim((string)($commonRow['_key'] ?? ''));
+            if ($key !== '') $validKeys[$key] = $index;
+        }
+
+        $translatedRows = [];
+        $rows = is_array($value) ? $value : [];
+        foreach ($rows as $inputKey => $row) {
+            if (!is_array($row)) continue;
+            $key = trim((string)($row['_key'] ?? ''));
+            if ($key === '' && is_string($inputKey) && isset($validKeys[$inputKey])) {
+                $key = $inputKey;
+            }
+            if ($key === '' && is_int($inputKey) && isset($commonRows[$inputKey]['_key'])) {
+                $key = (string)$commonRows[$inputKey]['_key'];
+            }
+            if ($key === '' || !isset($validKeys[$key])) {
+                throw new \DomainException(
+                    "Unknown compound row key in field '{$field['system_name']}'."
+                );
+            }
+
+            $translated = [];
+            foreach ($translatable as $name => $component) {
+                $fieldType = self::getFieldType((string)$component['type']);
+                $normalized = self::normalizeCompoundScalar(
+                    $row[$name] ?? null,
+                    $fieldType,
+                    (string)$field['system_name'],
+                    (string)$name
+                );
+                if (!empty($component['required']) && self::compoundScalarIsEmpty($normalized)) {
+                    throw new \DomainException(
+                        "Compound component '{$field['system_name']}.{$name}' is required."
+                    );
+                }
+                if (!self::compoundScalarIsEmpty($normalized)) {
+                    $translated[$name] = $normalized;
+                }
+            }
+            if ($translated !== []) $translatedRows[$key] = $translated;
+        }
+
+        return $translatedRows;
+    }
+
+    private static function mergeItemData(
+        array $commonData,
+        array $translatedData,
+        array $structure
+    ): array {
+        $data = $commonData;
+
+        foreach ($structure as $fieldName => $schemaField) {
+            if (!is_string($fieldName) || !is_array($schemaField)) continue;
+            $field = self::getField($fieldName);
+            $settings = array_replace(
+                is_array($field['type_settings'] ?? null) ? $field['type_settings'] : [],
+                is_array($field['field_settings'] ?? null) ? $field['field_settings'] : [],
+                is_array($schemaField['settings'] ?? null) ? $schemaField['settings'] : []
+            );
+
+            if (self::isCompoundField($field)) {
+                $common = $commonData[$fieldName] ?? null;
+                $translated = $translatedData[$fieldName] ?? null;
+                $merged = self::mergeCompoundValue(
+                    $field,
+                    $common,
+                    $translated,
+                    !empty($settings['multiple'])
+                );
+                if ($merged === null || $merged === []) unset($data[$fieldName]);
+                else $data[$fieldName] = $merged;
+                continue;
+            }
+
+            if (!empty($settings['translatable']) && array_key_exists($fieldName, $translatedData)) {
+                $data[$fieldName] = $translatedData[$fieldName];
+            }
+        }
+
+        return $data;
+    }
+
+    private static function mergeCompoundValue(
+        array $field,
+        mixed $commonValue,
+        mixed $translatedValue,
+        bool $multiple
+    ): mixed {
+        if (!$multiple) {
+            $common = is_array($commonValue) ? $commonValue : [];
+            $translated = is_array($translatedValue) ? $translatedValue : [];
+            $merged = array_replace($common, $translated);
+            return $merged === [] ? null : $merged;
+        }
+
+        $translatedRows = is_array($translatedValue) ? $translatedValue : [];
+        $result = [];
+        foreach (is_array($commonValue) ? $commonValue : [] as $commonRow) {
+            if (!is_array($commonRow)) continue;
+            $key = trim((string)($commonRow['_key'] ?? ''));
+            if ($key === '') continue;
+            $translated = is_array($translatedRows[$key] ?? null)
+                ? $translatedRows[$key]
+                : [];
+            $result[] = array_replace($commonRow, $translated);
+        }
+        return $result;
+    }
+
+    private static function pruneCompoundTranslationKeys(
+        string $uuid,
+        string $fieldName,
+        array $validKeys,
+        string $skipLang
+    ): void {
+        $valid = array_fill_keys($validKeys, true);
+        $rows = \DB::query(
+            'SELECT lang_code, translated_data FROM translations '
+            . 'WHERE entity_uuid=$1 AND lang_code<>$2',
+            [$uuid, $skipLang]
+        );
+        while ($row = \DB::fetchRow($rows)) {
+            $data = self::decodeJson($row['translated_data'] ?? null);
+            $compound = $data[$fieldName] ?? null;
+            if (!is_array($compound)) continue;
+
+            $pruned = [];
+            foreach ($compound as $key => $value) {
+                if (is_string($key) && isset($valid[$key]) && is_array($value)) {
+                    $pruned[$key] = $value;
+                }
+            }
+            if ($pruned === $compound) continue;
+
+            self::storeJsonValue($data, $fieldName, $pruned);
+            self::saveExactTranslation($uuid, (string)$row['lang_code'], $data);
+        }
+    }
+
+    private static function compoundIndexRows(
+        int $itemId,
+        array $field,
+        mixed $commonValue,
+        array $translations,
+        bool $multiple
+    ): array {
+        $rows = [
+            'item_texts' => [],
+            'item_nums' => [],
+            'item_bools' => [],
+            'item_dates' => [],
+        ];
+        $components = self::compoundComponents($field);
+        $fieldId = (int)$field['field_id'];
+
+        $commonRows = $multiple
+            ? (is_array($commonValue) ? array_values($commonValue) : [])
+            : [is_array($commonValue) ? $commonValue : []];
+        $validKeys = [];
+        if ($multiple) {
+            foreach ($commonRows as $commonRow) {
+                if (!is_array($commonRow)) continue;
+                $key = trim((string)($commonRow['_key'] ?? ''));
+                if ($key !== '') $validKeys[$key] = true;
+            }
+        }
+
+        foreach ($components as $name => $component) {
+            if (!is_string($name) || !is_array($component)) continue;
+            $fieldType = self::getFieldType((string)($component['type'] ?? 'string'));
+            $table = self::indexTable((string)$fieldType['root_type_name']);
+
+            if (empty($component['translatable'])) {
+                foreach ($commonRows as $commonRow) {
+                    if (!is_array($commonRow) || !array_key_exists($name, $commonRow)) continue;
+                    $row = self::makeIndexRow(
+                        $table,
+                        $itemId,
+                        $fieldId,
+                        $commonRow[$name],
+                        null
+                    );
+                    if ($row !== null) $rows[$table][] = $row;
+                }
+                continue;
+            }
+
+            foreach ($translations as $lang => $translationData) {
+                if (!is_array($translationData)) continue;
+                $translatedCompound = $translationData[$field['system_name']] ?? null;
+                if (!is_array($translatedCompound)) continue;
+
+                if (!$multiple) {
+                    if (!array_key_exists($name, $translatedCompound)) continue;
+                    $row = self::makeIndexRow(
+                        $table,
+                        $itemId,
+                        $fieldId,
+                        $translatedCompound[$name],
+                        (string)$lang
+                    );
+                    if ($row !== null) $rows[$table][] = $row;
+                    continue;
+                }
+
+                foreach ($translatedCompound as $key => $translatedRow) {
+                    if (!is_string($key) || !isset($validKeys[$key]) || !is_array($translatedRow)) continue;
+                    if (!array_key_exists($name, $translatedRow)) continue;
+                    $row = self::makeIndexRow(
+                        $table,
+                        $itemId,
+                        $fieldId,
+                        $translatedRow[$name],
+                        (string)$lang
+                    );
+                    if ($row !== null) $rows[$table][] = $row;
+                }
+            }
+        }
+
+        return $rows;
+    }
+
+    private static function reindexCompoundField(
+        int $itemId,
+        string $uuid,
+        array $field,
+        mixed $commonValue,
+        bool $multiple
+    ): void {
+        $translations = [];
+        $result = \DB::query(
+            'SELECT lang_code, translated_data FROM translations WHERE entity_uuid=$1',
+            [$uuid]
+        );
+        while ($row = \DB::fetchRow($result)) {
+            $translations[(string)$row['lang_code']] = self::decodeJson($row['translated_data'] ?? null);
+        }
+
+        foreach (['item_texts', 'item_nums', 'item_bools', 'item_dates'] as $table) {
+            \DB::delete($table, 'item_id=$1 AND field_id=$2', [$itemId, (int)$field['field_id']]);
+        }
+
+        foreach (self::compoundIndexRows(
+            $itemId,
+            $field,
+            $commonValue,
+            $translations,
+            $multiple
+        ) as $table => $rows) {
+            if ($rows !== []) \DB::bulk_insert($table, $rows);
+        }
     }
 
     private static function nullablePositiveInt(mixed $value): ?int

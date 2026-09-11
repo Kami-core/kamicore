@@ -1,9 +1,18 @@
 <?php
 
+/**
+ * KamiCore
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ *
+ * @see https://kamicore.org
+ */
+
 declare(strict_types=1);
 
 namespace Plugins\Notifications;
 
+use Core\ClientContext;
 use Core\User;
 
 if (!defined('IN_KAMI')) die();
@@ -28,18 +37,14 @@ final class Notifications extends \Core\BasePlugin
     }
 
     public function store(
-        string $sessionId,
         ?int $userId,
         string $text,
         string $style = 'default'
     ): void {
-        $sessionId = trim($sessionId);
+        $contextId = ClientContext::id();
         $text = trim($text);
         $style = strtolower(trim($style));
 
-        if ($sessionId === '') {
-            throw new \InvalidArgumentException('Notification session ID cannot be empty.');
-        }
         if ($userId !== null && $userId < 1) {
             throw new \InvalidArgumentException('Notification user ID must be positive or null.');
         }
@@ -54,7 +59,7 @@ final class Notifications extends \Core\BasePlugin
 
         $result = \DB::query(
             "INSERT INTO notification_messages (
-                session_id,
+                context_id,
                 user_id,
                 text,
                 style,
@@ -70,7 +75,7 @@ final class Notifications extends \Core\BasePlugin
                     ELSE NULL
                 END
              )",
-            [$sessionId, $userId, $text, $style, $expire]
+            [$contextId, $userId, $text, $style, $expire]
         );
 
         if ($result === false) {
@@ -83,15 +88,16 @@ final class Notifications extends \Core\BasePlugin
         \Core\Response::addHeader('Content-Type: application/json; charset=utf-8');
         \Core\Response::addHeader('Cache-Control: no-store, no-cache, must-revalidate');
 
-        $sessionId = User::getSessionId();
-        if (!$sessionId) {
-            return $this->jsonResponse([]);
-        }
+        $contextId = ClientContext::id();
+        $userId = User::getId();
 
-        $guestOnly = User::isGuest();
-        $where = $guestOnly
-            ? 'session_id=$1 AND user_id IS NULL'
-            : 'session_id=$1';
+        if ($userId < 1) {
+            $where = 'context_id=$1 AND user_id IS NULL';
+            $params = [$contextId];
+        } else {
+            $where = 'context_id=$1 AND (user_id IS NULL OR user_id=$2)';
+            $params = [$contextId, $userId];
+        }
 
         $result = \DB::query(
             "WITH consumed AS (
@@ -103,7 +109,7 @@ final class Notifications extends \Core\BasePlugin
              FROM consumed
              WHERE expires_at IS NULL OR expires_at > CURRENT_TIMESTAMP
              ORDER BY created_at, notification_id",
-            [$sessionId]
+            $params
         );
 
         if ($result === false) {
@@ -125,22 +131,37 @@ final class Notifications extends \Core\BasePlugin
         return $this->jsonResponse($messages);
     }
 
-    public function clearAuthenticated(string $sessionId): void
+    public function clearCurrentUser(int $userId): void
     {
-        $sessionId = trim($sessionId);
-        if ($sessionId === '') {
+        if ($userId < 1) {
             return;
         }
 
         $result = \DB::query(
             'DELETE FROM notification_messages
-             WHERE session_id=$1
-               AND user_id IS NOT NULL',
-            [$sessionId]
+             WHERE context_id=$1
+               AND user_id=$2',
+            [ClientContext::id(), $userId]
         );
 
         if ($result === false) {
-            throw new \RuntimeException('Failed to clear authenticated notifications.');
+            throw new \RuntimeException('Failed to clear current-context notifications.');
+        }
+    }
+
+    public function clearUser(int $userId): void
+    {
+        if ($userId < 1) {
+            return;
+        }
+
+        $result = \DB::query(
+            'DELETE FROM notification_messages WHERE user_id=$1',
+            [$userId]
+        );
+
+        if ($result === false) {
+            throw new \RuntimeException('Failed to clear user notifications.');
         }
     }
 

@@ -1,5 +1,13 @@
 <?php
 
+/**
+ * KamiCore
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ *
+ * @see https://kamicore.org
+ */
+
 declare(strict_types=1);
 
 namespace Plugins\PluginManager;
@@ -269,7 +277,10 @@ class PluginManager extends \Core\BasePlugin
             );
         }
 
-        return $this->jsonResponse(['status' => 'ok', 'html' => $html]);
+        return $this->jsonResponse([
+            'status' => 'ok',
+            'html' => \Core\Renderer::finalize($html),
+        ]);
     }
 
     public function setup(array $contextVars = []): string
@@ -1654,7 +1665,7 @@ class PluginManager extends \Core\BasePlugin
 
     private function managerUrl(string $action = 'list', array $params = []): string
     {
-        $url = '/' . trim((string)PAGE_NAME, '/');
+        $url = '/' . trim((string)PAGE_SLUG, '/');
         if ($action !== 'list') {
             $url .= '/' . $this->prefix . '-action/' . rawurlencode($action);
         }

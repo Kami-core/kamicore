@@ -1,5 +1,13 @@
 <?php
 
+/**
+ * KamiCore
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ *
+ * @see https://kamicore.org
+ */
+
 declare(strict_types=1);
 
 namespace Plugins\TranslationManager;
@@ -440,8 +448,8 @@ final class TranslationManager extends \Core\BasePlugin
                ON t.entity_uuid=i.item_uuid AND t.lang_code=$2
              WHERE i.ct_id=$1
              ORDER BY i.item_id DESC
-             LIMIT ' . $perPage . ' OFFSET ' . $offset,
-            [$typeId, $sourceLanguage]
+             LIMIT $3::int OFFSET $4::int',
+            [$typeId, $sourceLanguage, $perPage, $offset]
         );
 
         $pageItems = \DB::fetchAll($rows);
@@ -1984,7 +1992,7 @@ final class TranslationManager extends \Core\BasePlugin
 
     private function url(string $action, array $params = []): string
     {
-        $url = '/' . PAGE_NAME . '/' . $this->prefix . '-action/' . $action;
+        $url = '/' . PAGE_SLUG . '/' . $this->prefix . '-action/' . $action;
         foreach ($params as $key => $value) {
             $url .= '/' . $this->prefix . '-' . $key . '/' . rawurlencode((string) $value);
         }

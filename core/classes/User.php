@@ -1,5 +1,13 @@
 <?php
 
+/**
+ * KamiCore
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ *
+ * @see https://kamicore.org
+ */
+
 declare(strict_types=1);
 
 namespace Core;
@@ -8,10 +16,6 @@ if (!defined('IN_KAMI')) die();
 
 final class User
 {
-    private static ?string $sessionId = null;
-    private static ?string $uahash = null;
-
-    public static ?array $session = null;
     public static ?array $user = null;
     public static ?array $group = null;
 
@@ -20,170 +24,30 @@ final class User
 
     public static function init(): void
     {
-        self::$sessionId = Request::cookie()['session_id'] ?? null;
-        self::$uahash = hash('sha256', normalizeUAgent());
-
-        if (!self::$sessionId) {
-            self::createSession();
-        } else {
-            self::$session = \Cache::get('d_' . DOMAIN_ID . ':sessions:' . self::$sessionId);
-
-            if (
-                self::$session
-                && (
-                    self::$session['ua_hash'] !== self::$uahash
-                    || (
-                        strtotime((string)self::$session['updated_at']) < TIME_NOW - GLOBAL_SETTINGS['session_timeout']
-                        && empty(self::$session['is_persistent'])
-                    )
-                )
-            ) {
-                self::createSession();
-            } elseif (!self::$session) {
-                self::$session = \DB::getRow(
-                    "SELECT session_id, user_id, ua_hash, is_persistent, updated_at
-                     FROM sessions
-                     WHERE domain_id=$1
-                       AND session_id=$2
-                       AND ua_hash=$3
-                       AND (is_persistent OR updated_at>=NOW()-INTERVAL '" . (int)GLOBAL_SETTINGS['session_timeout'] . " seconds')
-                     LIMIT 1",
-                    [DOMAIN_ID, self::$sessionId, self::$uahash]
-                );
-
-                if (!self::$session) {
-                    self::createSession();
-                }
-            }
-        }
+        Session::init();
 
         self::$user = self::getUser();
         debug_step('get User');
 
         if (!self::$user) {
-            self::createSession();
+            Session::create();
             self::$user = self::getUser(0);
         }
 
         self::$group = self::getGroup();
         debug_step('get group');
 
-        $updatedAt = date('Y-m-d H:i:s.uP');
-        self::$session['updated_at'] = $updatedAt;
-
-        \Cache::set('d_' . DOMAIN_ID . ':sessions:' . self::$sessionId, self::$session);
-        \DB::query(
-            'UPDATE sessions SET updated_at=$1 WHERE domain_id=$2 AND session_id=$3',
-            [$updatedAt, DOMAIN_ID, self::$sessionId]
-        );
-
         if (!defined('USER_ID')) {
-            define('USER_ID', (int)self::$session['user_id']);
+            define('USER_ID', Session::userId());
         }
         if (!defined('USERGROUP_ID')) {
             define('USERGROUP_ID', (int)self::$user['usergroup_id']);
         }
     }
 
-    public static function createSession(): string
-    {
-        $sessionId = self::$sessionId = generateSessionId();
-        $sessionData = [
-            'domain_id' => DOMAIN_ID,
-            'session_id' => $sessionId,
-            'user_id' => 0,
-            'ua_hash' => self::$uahash,
-            'is_persistent' => false,
-            'updated_at' => date('Y-m-d H:i:s.uP'),
-        ];
-
-        \DB::insert('sessions', $sessionData);
-        Response::addCookie('session_id', $sessionId, 0, true);
-
-        self::$session = $sessionData;
-        \Cache::set('d_' . DOMAIN_ID . ':sessions:' . $sessionId, self::$session);
-
-        return $sessionId;
-    }
-
-    public static function authorize(int $userId, bool $remember): void
-    {
-        \DB::query(
-            'UPDATE sessions SET user_id=$1, is_persistent=$2 WHERE session_id=$3',
-            [$userId, $remember, self::$sessionId]
-        );
-        \Cache::del('d_' . DOMAIN_ID . ':sessions:' . self::$sessionId);
-    }
-
-    public static function logout(): void
-    {
-        if (!self::$sessionId) {
-            return;
-        }
-
-        \DB::query(
-            'UPDATE sessions SET user_id=0, is_persistent=false WHERE domain_id=$1 AND session_id=$2',
-            [DOMAIN_ID, self::$sessionId]
-        );
-
-        \Cache::del('d_' . DOMAIN_ID . ':sessions:' . self::$sessionId);
-
-        if (is_array(self::$session)) {
-            self::$session['user_id'] = 0;
-            self::$session['is_persistent'] = false;
-        }
-    }
-
-    /**
-     * Invalidate every authenticated session for one user across all domains.
-     *
-     * @return list<array{domain_id:int, session_id:string}>
-     */
-    public static function invalidateSessions(int $userId): array
-    {
-        if ($userId < 1) {
-            return [];
-        }
-
-        $result = \DB::query(
-            'SELECT domain_id, session_id FROM sessions WHERE user_id=$1',
-            [$userId]
-        );
-        if ($result === false) {
-            throw new \RuntimeException('Failed to load user sessions for invalidation.');
-        }
-
-        $sessions = [];
-        while ($row = \DB::fetchRow($result)) {
-            $sessions[] = [
-                'domain_id' => (int)$row['domain_id'],
-                'session_id' => (string)$row['session_id'],
-            ];
-        }
-
-        if ($sessions === []) {
-            return [];
-        }
-
-        if (\DB::query(
-            'UPDATE sessions SET user_id=0, is_persistent=false WHERE user_id=$1',
-            [$userId]
-        ) === false) {
-            throw new \RuntimeException('Failed to invalidate user sessions.');
-        }
-
-        foreach ($sessions as $session) {
-            \Cache::del(
-                'd_' . $session['domain_id'] . ':sessions:' . $session['session_id']
-            );
-        }
-
-        return $sessions;
-    }
-
     public static function getUser(?int $userId = null): ?array
     {
-        $userId ??= (int)(self::$session['user_id'] ?? 0);
+        $userId ??= Session::userId();
         $cacheKey = 'users:v2:' . $userId;
 
         $user = \Cache::get($cacheKey);
@@ -252,7 +116,7 @@ final class User
 
     public static function getId(): int
     {
-        return (int)(self::$session['user_id'] ?? 0);
+        return Session::userId();
     }
 
     public static function isGuest(): bool
@@ -264,11 +128,6 @@ final class User
     {
         $groupId ??= self::currentGroupId();
         return $groupId === (int)(GLOBAL_SETTINGS['usergroup_root'] ?? -1);
-    }
-
-    public static function getSessionId(): ?string
-    {
-        return self::$session['session_id'] ?? null;
     }
 
     /**

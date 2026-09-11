@@ -1,5 +1,13 @@
 <?php
 
+/**
+ * KamiCore
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ *
+ * @see https://kamicore.org
+ */
+
 declare(strict_types=1);
 
 namespace Core;
@@ -224,6 +232,11 @@ final class Renderer
             );
         }
 
+        return $content;
+    }
+
+    public static function finalize(string $content): string
+    {
         return preg_replace('/{{\s*[\w]+\s*}}/', '', $content) ?? $content;
     }
 
@@ -394,7 +407,8 @@ final class Renderer
      */
     private static function loadBundle(string $path): array
     {
-		$key_fname = hash('xxh3', $path);
+		$fingerprint = $path . ':' . (string)(@filemtime($path) ?: 0) . ':' . (string)(@filesize($path) ?: 0);
+		$key_fname = hash('xxh3', $fingerprint);
 
         if (isset(self::$bundleCache[$key_fname])) {
             return self::$bundleCache[$key_fname];

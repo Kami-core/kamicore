@@ -1,5 +1,13 @@
 <?php
 
+/**
+ * KamiCore
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ *
+ * @see https://kamicore.org
+ */
+
 namespace Plugins\LangSwitcher;
 
 if(!IN_KAMI) die();
@@ -34,7 +42,6 @@ class LangSwitcher extends \Core\BasePlugin {
 			}
 
 			\Cache::set($cache_key, $langs);
-			debug_step("langs cached");
 		};
 
 		$item_template = "{$template}_item";

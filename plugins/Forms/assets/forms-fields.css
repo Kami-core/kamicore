@@ -48,3 +48,22 @@
         flex-wrap: wrap;
     }
 }
+
+.form-compound-list {
+    display: grid;
+    gap: 12px;
+}
+
+.form-compound-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    padding-block: 8px;
+}
+
+.form-compound-fields {
+    flex: 1 1 auto;
+    min-width: 0;
+    display: grid;
+    gap: 8px;
+}
