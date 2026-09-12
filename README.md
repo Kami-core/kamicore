@@ -99,6 +99,8 @@ In particular, during the alpha cycle:
 
 Bug reports and focused feedback are welcome, especially when they include reproducible steps and environment details.
 
+The current development direction is tracked in [ROADMAP.md](ROADMAP.md).
+
 ## Technology
 
 The current core stack is intentionally small:
