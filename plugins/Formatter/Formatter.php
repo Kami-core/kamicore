@@ -22,7 +22,8 @@ final class Formatter extends \Core\BasePlugin
             return '';
         }
 
-        return $this->dateValue($value)->format(
+        return \Core\Date::format(
+            $value,
             (string)($this->getLocalizedSetting('date_format') ?? 'd.m.Y')
         );
     }
@@ -33,7 +34,8 @@ final class Formatter extends \Core\BasePlugin
             return '';
         }
 
-        return $this->dateValue($value)->format(
+        return \Core\Date::format(
+            $value,
             (string)($this->getLocalizedSetting('datetime_format') ?? 'd.m.Y, H:i')
         );
     }
@@ -65,16 +67,4 @@ final class Formatter extends \Core\BasePlugin
         ]);
     }
 
-    private function dateValue(string|\DateTimeInterface $value): \DateTimeImmutable
-    {
-        if ($value instanceof \DateTimeInterface) {
-            return \DateTimeImmutable::createFromInterface($value);
-        }
-
-        try {
-            return new \DateTimeImmutable($value);
-        } catch (\Exception $e) {
-            throw new \InvalidArgumentException('Invalid date or datetime value.', 0, $e);
-        }
-    }
 }

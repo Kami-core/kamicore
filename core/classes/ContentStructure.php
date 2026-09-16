@@ -74,7 +74,7 @@ final class ContentStructure
             }
             $write['system_name'] = $systemName;
             $write['parent_id'] = $parentId;
-            $write['schema'] = self::json($schema);
+            $write['schema'] = \Core\Utils\JsonTool::encode($schema, false);
 
             if ($existing) {
                 $searchWeightFields = self::changedSearchWeightFields(
@@ -257,7 +257,7 @@ final class ContentStructure
                 $write['variant_id'] = $data['variant_id'];
             }
             if (array_key_exists('field_settings', $data)) {
-                $write['field_settings'] = self::json($fieldSettings);
+                $write['field_settings'] = \Core\Utils\JsonTool::encode($fieldSettings, false);
             }
 
             if ($existing) {
@@ -356,7 +356,7 @@ final class ContentStructure
                 'parent_id' => $parentId ?? 0,
             ];
             if (array_key_exists('type_settings', $data)) {
-                $write['type_settings'] = self::json(self::decodeObject($data['type_settings']));
+                $write['type_settings'] = \Core\Utils\JsonTool::encode(self::decodeObject($data['type_settings']), false);
             }
 
             if ($existing) {
@@ -1169,7 +1169,7 @@ final class ContentStructure
             $data['schema']['fields'] = $renamed;
             \DB::update(
                 'translations',
-                ['translated_data' => self::json($data)],
+                ['translated_data' => \Core\Utils\JsonTool::encode($data, false)],
                 'translation_id=$1',
                 [(int)$row['translation_id']]
             );
@@ -1200,7 +1200,7 @@ final class ContentStructure
 
             \DB::update(
                 'translations',
-                ['translated_data' => self::json($data)],
+                ['translated_data' => \Core\Utils\JsonTool::encode($data, false)],
                 'translation_id=$1',
                 [(int)$row['translation_id']]
             );
@@ -1225,7 +1225,7 @@ final class ContentStructure
             $schema
         );
         self::assertWrite(
-            \DB::update('content_types', ['schema' => self::json($schema)], 'ct_id=$1', [(int)$type['ct_id']]),
+            \DB::update('content_types', ['schema' => \Core\Utils\JsonTool::encode($schema, false)], 'ct_id=$1', [(int)$type['ct_id']]),
             'Failed to update content type schema.'
         );
         self::refreshFieldSearchVectors((int)$type['ct_id'], $searchWeightFields);
@@ -1370,22 +1370,18 @@ final class ContentStructure
     /** @return array<string, mixed> */
     private static function decodeObject(mixed $value): array
     {
-        if (is_array($value)) return $value;
-        if ($value === null || $value === '') return [];
-        $decoded = json_decode((string)$value, true);
-        if (!is_array($decoded)) {
-            throw new \InvalidArgumentException('Invalid JSON object.');
+        if (is_array($value)) {
+            return $value;
         }
-        return $decoded;
-    }
+        if ($value === null || $value === '') {
+            return [];
+        }
 
-    private static function json(array $data): string
-    {
-        $json = json_encode($data, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
-        if (!is_string($json)) {
-            throw new \RuntimeException('Failed to encode structure data.');
+        try {
+            return \Core\Utils\JsonTool::decode((string)$value);
+        } catch (\RuntimeException $error) {
+            throw new \InvalidArgumentException('Invalid JSON object.', 0, $error);
         }
-        return $json;
     }
 
     private static function assertWrite(mixed $result, string $message): void

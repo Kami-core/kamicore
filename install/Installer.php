@@ -414,6 +414,11 @@ final class Installer
             throw new RuntimeException('Unable to set PostgreSQL client encoding to UTF-8.');
         }
 
+        if (@pg_query($connection, "SET TIME ZONE 'UTC'") === false) {
+            pg_close($connection);
+            throw new RuntimeException('Unable to set PostgreSQL timezone to UTC.');
+        }
+
         return $connection;
     }
 
@@ -786,25 +791,30 @@ final class Installer
 
         $values = [
             '__DB_HOST__' => $data['db_host'],
-            '__DB_PORT__' => (string)$data['db_port'],
+            '__DB_PORT__' => $data['db_port'],
             '__DB_USER__' => $data['db_user'],
             '__DB_PASSWORD__' => $data['db_password'],
             '__DB_NAME__' => $data['db_name'],
-            '__CACHE_ENABLED__' => $data['cache_enabled'] ? '1' : '0',
+            '__CACHE_ENABLED__' => $data['cache_enabled'],
             '__CACHE_HOST__' => $data['cache_host'],
-            '__CACHE_PORT__' => (string)$data['cache_port'],
+            '__CACHE_PORT__' => $data['cache_port'],
             '__CACHE_AUTH__' => $data['cache_auth'],
-            '__CACHE_DB__' => (string)$data['cache_db'],
+            '__CACHE_DB__' => $data['cache_db'],
             '__CACHE_ENCRYPT_KEY__' => $cacheEncryptKey,
             '__SECRET_KEY_FILE__' => $data['secret_path'],
         ];
 
-        $replacements = [];
-        foreach ($values as $placeholder => $value) {
-            $replacements["'{$placeholder}'"] = var_export($value, true);
+        $replacements = array_map(
+            static fn(mixed $value): string => var_export($value, true),
+            $values
+        );
+
+        $config = strtr($template, $replacements);
+        if (preg_match('/__[A-Z0-9_]+__/', $config, $match) === 1) {
+            throw new RuntimeException("Configuration placeholder was not replaced: {$match[0]}");
         }
 
-        return strtr($template, $replacements);
+        return $config;
     }
 
     private function query($connection, string $sql)

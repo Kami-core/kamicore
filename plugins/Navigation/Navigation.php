@@ -23,6 +23,7 @@ class Navigation extends \Core\BasePlugin {
 	}
 
 	public function showMenu(array $instance_params):string {
+		$this->addCss('/plugins/Navigation/assets/navigation.css');
 		$menuId = (int)($instance_params['menu_id'] ?? 0);
 		$template = (string)($instance_params['template'] ?? '');
 		if ($menuId < 1 || $template === '') {
@@ -54,6 +55,7 @@ class Navigation extends \Core\BasePlugin {
 	}
 
 	public function list(array $instance_params = []): string {
+		$this->addCss('/plugins/Navigation/assets/navigation-manager.css');
 		$menuType = \Core\Content::getContentType('navmenu');
 		$menuIds = \DB::getArr(
 			'SELECT item_id FROM content_items WHERE ct_id=$1 ORDER BY item_id',
@@ -72,10 +74,10 @@ class Navigation extends \Core\BasePlugin {
 			$rows[] = [
 				'template' => 'menu_list_row',
 				'params' => [
-					'menu_key' => $this->escape((string)($data['menu_key'] ?? '')),
-					'menu_title' => $this->escape($title),
-					'menu_description' => $this->escape((string)($data['menu_description'] ?? '')),
-					'title_attribute' => $this->escape($title),
+					'menu_key' => \Core\Html::escape((string)($data['menu_key'] ?? '')),
+					'menu_title' => \Core\Html::escape($title),
+					'menu_description' => \Core\Html::escape((string)($data['menu_description'] ?? '')),
+					'title_attribute' => \Core\Html::escape($title),
 					'edit_link' => $this->managerUrl('edit', (int)$menuId),
 					'delete_link' => $this->managerUrl('delete', (int)$menuId),
 					'text_edit' => $this->managerText('edit', 'Edit'),
@@ -92,7 +94,7 @@ class Navigation extends \Core\BasePlugin {
 					'params' => [],
 				]],
 			'menu_count' => (string)$count,
-			'menu_summary' => $this->escape(str_replace(
+			'menu_summary' => \Core\Html::escape(str_replace(
 				'{count}',
 				(string)$count,
 				$this->phrases['menu_count'] ?? '{count} menus'
@@ -129,10 +131,12 @@ class Navigation extends \Core\BasePlugin {
 		$menuId = \Core\Content::create('navmenu', ['plugin_id' => $this->id]);
 		\Core\Content::update($menuId, $data);
 
-		return $this->redirect($this->managerUrl('edit', $menuId));
+		return \Core\Response::redirect($this->managerUrl('edit', $menuId));
 	}
 
 	public function edit(array $instance_params = []): string {
+		$this->addCss('/plugins/Navigation/assets/navigation-manager.css');
+        $this->addJs('/plugins/Navigation/assets/menu-editor.js');
 		$menuId = $this->requestedMenuId();
 		$menu = $this->getMenu($menuId);
 		if (!$menu) {
@@ -145,9 +149,9 @@ class Navigation extends \Core\BasePlugin {
 		$menuData = is_array($menu['data'] ?? null) ? $menu['data'] : [];
 		return $this->render('menu_edit', [
 			'menu_id' => (string)$menuId,
-			'menu_title' => $this->escape((string)($menuData['menu_title'] ?? '')),
+			'menu_title' => \Core\Html::escape((string)($menuData['menu_title'] ?? '')),
 			'menu_fields' => $this->renderMenuFields($menuData),
-			'menu_key_warning' => $this->escape($this->managerText(
+			'menu_key_warning' => \Core\Html::escape($this->managerText(
 				'menu_key_warning',
 				'Changing this key may break recipes, plugin settings, or theme bindings. Change it only if you understand the consequences.'
 			)),
@@ -192,7 +196,7 @@ class Navigation extends \Core\BasePlugin {
 		$this->deleteRemovedItems($menuId, $keptIds);
 		$this->invalidateMenuCache($menuId);
 
-		return $this->redirect($this->managerUrl('edit', $menuId));
+		return \Core\Response::redirect($this->managerUrl('edit', $menuId));
 	}
 
 	public function delete(array $instance_params = []): string {
@@ -414,9 +418,9 @@ class Navigation extends \Core\BasePlugin {
 				'template' => 'menu_edit_row',
 				'params' => [
 					'id' => (string)(int)$childId,
-					'item_title' => $this->escape((string)($data['item_title'] ?? '')),
-					'item_url' => $this->escape((string)($data['item_url'] ?? '')),
-					'item_icon' => $this->escape((string)($data['item_icon'] ?? '')),
+					'item_title' => \Core\Html::escape((string)($data['item_title'] ?? '')),
+					'item_url' => \Core\Html::escape((string)($data['item_url'] ?? '')),
+					'item_icon' => \Core\Html::escape((string)($data['item_icon'] ?? '')),
 					'visibility_field' => $this->renderItemVisibilityField(
 						$data['visible_to_groups'] ?? [],
 						'menu-groups-' . (int)$childId
@@ -497,12 +501,20 @@ class Navigation extends \Core\BasePlugin {
 	}
 
 	private function managerUrl(string $action = 'list', ?int $menuId = null): string {
-		$url = '/' . trim((string)PAGE_SLUG, '/');
+		$url = \Core\Url::path((string) PAGE_SLUG);
 		if ($action !== 'list') {
-			$url .= '/' . $this->prefix . '-action/' . $action;
+			$url = \Core\Url::pathParams(
+				$url,
+				['action' => $action],
+				$this->prefix
+			);
 		}
 		if ($menuId !== null && $menuId > 0) {
-			$url .= '/' . $this->prefix . '-id/' . $menuId;
+			$url = \Core\Url::pathParams(
+				$url,
+				['id' => $menuId],
+				$this->prefix
+			);
 		}
 		return $url;
 	}
@@ -535,8 +547,9 @@ class Navigation extends \Core\BasePlugin {
 			}
 
 			$data['menu_children'] = $this->visibleMenuItemTemplates((int)$childId, $groupId, $menuTemplate);
+
 			if(is_array($data['menu_children']) && count($data['menu_children'])) {
-				$data['submenu'] = $this->render('topnav_children', ['menu_children' => $data['menu_children']]);
+				$data['submenu'] = $this->render($menuTemplate.'_children', ['menu_children' => $data['menu_children']]);
 			}
 			$templates[] = [
 				'template' => $menuTemplate.'_item',
@@ -621,40 +634,23 @@ class Navigation extends \Core\BasePlugin {
 		return $forms;
 	}
 
-	private function redirect(string $url): string {
-		\Core\Response::addHeader('Location: ' . $url, true, 302);
-		return '';
-	}
-
 	private function jsonResponse(array $data, int $status = 200): string {
 		\Core\Response::addHeader('Content-Type: application/json; charset=utf-8', true, $status);
-		return json_encode($data, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)
-			?: '{"status":"error"}';
+		return \Core\Utils\JsonTool::encode($data, false);
 	}
 
 	private function jsonForHtml(array $data): string {
-		return json_encode(
-			$data,
-			JSON_UNESCAPED_UNICODE
-			| JSON_UNESCAPED_SLASHES
-			| JSON_HEX_TAG
-			| JSON_HEX_AMP
-			| JSON_HEX_APOS
-			| JSON_HEX_QUOT
-		) ?: '{}';
+		return \Core\Utils\JsonTool::encodeForHtml($data);
 	}
 
 	private function managerText(string $key, string $fallback): string {
-		return $this->escape((string)($this->phrases[$key] ?? $fallback));
+		return \Core\Html::escape((string)($this->phrases[$key] ?? $fallback));
 	}
 
 	private function notice(string $message, string $kind = 'success'): string {
-		return '<div class="kc-notice kc-notice-' . $this->escape($kind) . '">'
-			. $this->escape($message)
+		return '<div class="kc-notice kc-notice-' . \Core\Html::escape($kind) . '">'
+			. \Core\Html::escape($message)
 			. '</div>';
 	}
 
-	private function escape(string $value): string {
-		return htmlspecialchars($value, ENT_QUOTES, 'UTF-8');
-	}
 }

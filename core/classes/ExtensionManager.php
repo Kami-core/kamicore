@@ -376,12 +376,12 @@ final class ExtensionManager
         $data = [
             'system_name' => self::pluginSystemName($manifest),
             'plugin_prefix' => $manifest['prefix'] ?? null,
-            'settings' => self::json($settings),
-            'config' => self::json(
+            'settings' => JsonTool::encode($settings, false),
+            'config' => JsonTool::encode(
                 is_array($manifest['config'] ?? null)
                     ? $manifest['config']
                     : []
-            ),
+            , false),
             'plugin_version' => $manifest['version'] ?? null,
             'plugin_author' => $info['author'] ?? null,
             'default_language' =>
@@ -781,11 +781,11 @@ final class ExtensionManager
             $themeData = [
                 'system_name' => self::themeSystemName($manifest),
                 'theme_version' => $manifest['info']['version'] ?? null,
-                'theme_settings' => self::json(
+                'theme_settings' => JsonTool::encode(
                     is_array($manifest['settings'] ?? null)
                         ? $manifest['settings']
                         : []
-                ),
+                , false),
             ];
 
             if ($existingTheme === null) {
@@ -819,7 +819,7 @@ final class ExtensionManager
                 $themeLanguage
             );
 
-            $translation = \findTranslatables($manifest);
+            $translation = \Core\ExtensionLanguage::findTranslatables($manifest);
             $translation = is_array($translation) ? $translation : [];
             unset($translation['info'], $translation['layouts']);
             $translation['title'] = $manifest['info']['title']
@@ -860,7 +860,7 @@ final class ExtensionManager
                 'theme_id' => $themeId,
                 'system_name' => $systemName,
                 'layout_filename' => $layoutData['filename'] ?? null,
-                'wrappers' => self::json($wrappers),
+                'wrappers' => JsonTool::encode($wrappers, false),
             ];
 
             if (!$data['layout_filename']) {
@@ -899,7 +899,7 @@ final class ExtensionManager
                 }
             }
 
-            $translation = \findTranslatables($layoutData);
+            $translation = \Core\ExtensionLanguage::findTranslatables($layoutData);
             $translation = is_array($translation) ? $translation : [];
             $translation['title'] = $layoutData['title'] ?? $systemName;
             self::upsertTranslation(
@@ -1177,7 +1177,7 @@ final class ExtensionManager
                 ) values($1, $2, $3)
                 on conflict (entity_uuid, lang_code)
                 do update set translated_data=excluded.translated_data',
-                [$uuid, $language, self::json($translation)]
+                [$uuid, $language, JsonTool::encode($translation, false)]
             ),
             "Failed to save {$language} translation for {$uuid}."
         );
@@ -1185,10 +1185,6 @@ final class ExtensionManager
         \Cache::del("globals:{$uuid}_{$language}");
     }
 
-    private static function json(array $data): string
-    {
-        return JsonTool::encode($data, false);
-    }
 
     /**
      * @return array<string, mixed>|null

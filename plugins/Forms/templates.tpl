@@ -33,7 +33,6 @@
 </div>
 <!-- /kami:template -->
 <!-- kami:template field-richtext -->
-{{richtext_assets}}
 <div class="form-field form-field-richtext"
      data-richtext
      data-output-id="{{id}}-output"
@@ -122,7 +121,6 @@
 <!-- /kami:template -->
 
 <!-- kami:template field-compound -->
-{{field_assets}}
 <div class="form-field form-field-compound"{{compound_attributes}}>
     <label>{{label}}</label>
     <div class="form-compound-list" data-repeatable-list>
@@ -135,7 +133,6 @@
 <!-- /kami:template -->
 
 <!-- kami:template field-repeatable -->
-{{field_assets}}
 <div class="form-field form-field-repeatable"
      data-repeatable
      data-repeatable-required="{{repeatable_required}}">
@@ -151,8 +148,6 @@
 <!-- /kami:template -->
 
 <!-- kami:template field-media -->
-{{field_assets}}
-{{media_assets}}
 <div class="form-field form-field-media"
      data-media-field
      data-media-multiple="{{media_multiple}}"

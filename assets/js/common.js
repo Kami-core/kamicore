@@ -3,13 +3,13 @@
 
     let activeModal = null;
     let previousFocus = null;
+    const initializers = [];
 
     document.addEventListener('click', handleClick);
     document.addEventListener('submit', handleSubmit);
     document.addEventListener('keydown', handleKeydown);
 
     function handleClick(event) {
-        if (!document.body?.classList.contains('kami')) return;
         const modalOpen = event.target.closest('[data-modal-open]');
         if (modalOpen) {
             event.preventDefault();
@@ -45,7 +45,7 @@
             return;
         }
 
-        const ajaxLink = event.target.closest('a[data-ajax-link]');
+        const ajaxLink = event.target.closest('a[data-ajax-link], a[data-ajax][data-target]');
         if (ajaxLink) {
             event.preventDefault();
             submitAjaxLink(ajaxLink);
@@ -56,7 +56,6 @@
     }
 
     function handleSubmit(event) {
-        if (!document.body?.classList.contains('kami-frontend')) return;
         const form = event.target.closest('form[data-ajax-form], form.ajax');
         if (!form) return;
 
@@ -65,7 +64,6 @@
     }
 
     function handleKeydown(event) {
-        if (!document.body?.classList.contains('kami-frontend')) return;
         if (event.key !== 'Escape') return;
 
         if (activeModal) {
@@ -158,6 +156,7 @@
     async function submitAjaxForm(form) {
         const action = form.getAttribute('action');
         if (!action) return;
+        if (form.dataset.confirm && !window.confirm(form.dataset.confirm)) return;
 
         const method = (form.getAttribute('method') || 'POST').toUpperCase();
         const formData = new FormData(form);
@@ -179,6 +178,7 @@
     async function submitAjaxLink(link) {
         const url = link.getAttribute('href');
         if (!url) return;
+        if (link.dataset.confirm && !window.confirm(link.dataset.confirm)) return;
 
         await performRequest({
             url: normalizeAjaxUrl(url),
@@ -258,12 +258,38 @@
         }
 
         executeScripts(target);
+        initDynamic(target);
+    }
+
+    function executeStyles(container) {
+        container.querySelectorAll('link[rel="stylesheet"][href]').forEach(oldLink => {
+            const href = new URL(oldLink.href, document.baseURI).href;
+            const loaded = Array.from(document.querySelectorAll('link[rel="stylesheet"][href]'))
+                .some(link => link !== oldLink && link.href === href);
+
+            if (loaded) {
+                oldLink.remove();
+                return;
+            }
+
+            const link = document.createElement('link');
+            [...oldLink.attributes].forEach(attribute => {
+                link.setAttribute(attribute.name, attribute.value);
+            });
+            document.head.appendChild(link);
+            oldLink.remove();
+        });
     }
 
     function executeScripts(container) {
+        executeStyles(container);
         container.querySelectorAll('script').forEach(oldScript => {
-            const script = document.createElement('script');
+            if (oldScript.src && scriptAlreadyLoaded(oldScript.src, oldScript)) {
+                oldScript.remove();
+                return;
+            }
 
+            const script = document.createElement('script');
             [...oldScript.attributes].forEach(attribute => {
                 script.setAttribute(attribute.name, attribute.value);
             });
@@ -273,6 +299,23 @@
             document.head.appendChild(script);
             oldScript.remove();
         });
+    }
+
+    function scriptAlreadyLoaded(source, currentScript) {
+        const url = new URL(source, document.baseURI).href;
+        return Array.from(document.scripts).some(script => (
+            script !== currentScript
+            && script.src === url
+        ));
+    }
+
+    function registerInitializer(initializer) {
+        if (typeof initializer !== 'function' || initializers.includes(initializer)) return;
+        initializers.push(initializer);
+    }
+
+    function initDynamic(root = document) {
+        initializers.forEach(initializer => initializer(root));
     }
 
     function showModal(content) {
@@ -296,6 +339,7 @@
 
         modal.querySelector('[data-modal-content]').innerHTML = content;
         executeScripts(modal);
+        initDynamic(modal);
         openModal(modal.id);
     }
 
@@ -349,8 +393,111 @@
 
     window.Kami = Object.assign(window.Kami || {}, {
         closeModal,
+        executeScripts,
+        initDynamic,
         notify,
         openModal,
+        registerInitializer,
         showModal
     });
+})();
+
+(() => {
+    'use strict';
+
+    let tooltip = null;
+    let target = null;
+
+    function show(element) {
+        const text = element.dataset.tooltip;
+
+        if (!text) {
+            return;
+        }
+
+        if (
+			element.closest('.admin-sidebar')
+			&& !document.documentElement.classList.contains('admin-sidebar-collapsed')
+		) {
+			return;
+		}
+
+        target = element;
+
+        tooltip ??= createTooltip();
+        tooltip.textContent = text;
+        tooltip.hidden = false;
+
+        position();
+    }
+
+    function hide() {
+        if (tooltip) {
+            tooltip.hidden = true;
+        }
+
+        target = null;
+    }
+
+    function createTooltip() {
+        const element = document.createElement('div');
+
+        element.className = 'kami-tooltip';
+        element.setAttribute('role', 'tooltip');
+        element.hidden = true;
+
+        document.body.appendChild(element);
+
+        return element;
+    }
+
+    function position() {
+        if (!tooltip || !target) {
+            return;
+        }
+
+        const rect = target.getBoundingClientRect();
+        const tooltipRect = tooltip.getBoundingClientRect();
+
+        // tooltip.style.left =
+        //     `${rect.left + rect.width / 2 - tooltipRect.width / 2}px`;
+        //
+        // tooltip.style.top =
+        //     `${rect.top - tooltipRect.height - 8}px`;
+
+		tooltip.style.left = `${rect.left + 20}px`;
+		tooltip.style.top = `${rect.top + 20}px`;
+    }
+
+    document.addEventListener('mouseover', event => {
+        const element = event.target.closest('[data-tooltip]');
+
+		//console.log('1');
+
+        if (element) {
+            show(element);
+        }
+    });
+
+    document.addEventListener('mouseout', event => {
+        if (
+            target
+            && !target.contains(event.relatedTarget)
+        ) {
+            hide();
+        }
+    });
+
+    document.addEventListener('focusin', event => {
+        const element = event.target.closest('[data-tooltip]');
+
+        if (element) {
+            show(element);
+        }
+    });
+
+    document.addEventListener('focusout', hide);
+
+    window.addEventListener('scroll', hide, true);
+    window.addEventListener('resize', hide);
 })();

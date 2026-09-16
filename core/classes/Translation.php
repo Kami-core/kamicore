@@ -229,13 +229,13 @@ final class Translation
              FROM translations
              WHERE entity_uuid=ANY($1::uuid[])
                AND lang_code=ANY($2::text[])',
-            [self::pgTextArray($uuids), self::pgTextArray($languages)]
+            [\DB::prepareTextArray($uuids), \DB::prepareTextArray($languages)]
         );
 
         while ($row = \DB::fetchRow($rows)) {
             $uuid = (string) $row['entity_uuid'];
             $language = (string) $row['lang_code'];
-            $data = self::decodeJson($row['translated_data'] ?? null);
+            $data = \Core\Utils\JsonTool::decodeArray($row['translated_data'] ?? null);
 
             self::$exact[$uuid][$language] = $data === [] ? null : $data;
             $found[$uuid][$language] = true;
@@ -333,32 +333,5 @@ final class Translation
         return "globals:{$uuid}_{$lang}";
     }
 
-    /**
-     * @return array<string, mixed>
-     */
-    private static function decodeJson(mixed $value): array
-    {
-        if (is_array($value)) {
-            return $value;
-        }
 
-        if (!is_string($value) || $value === '') {
-            return [];
-        }
-
-        $decoded = json_decode($value, true);
-        return is_array($decoded) ? $decoded : [];
-    }
-
-    private static function pgTextArray(array $values): string
-    {
-        return '{' . implode(',', array_map(
-            static fn($value): string => '"' . str_replace(
-                ['\\', '"'],
-                ['\\\\', '\\"'],
-                (string) $value
-            ) . '"',
-            $values
-        )) . '}';
-    }
 }

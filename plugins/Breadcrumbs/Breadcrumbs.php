@@ -18,6 +18,7 @@ class Breadcrumbs extends \Core\BasePlugin
 {
     public function renderPlaceholder(array $instanceParams = []): string
     {
+        $this->addCss('/plugins/Breadcrumbs/assets/breadcrumbs.css');
         return $this->render('breadcrumb-container', ['content' => '{{breadcrumb}}']);
     }
 
@@ -124,16 +125,8 @@ ORDER BY depth DESC;", [PAGE_ID, DOMAIN_ID]);
                 continue;
             }
 
-            $title = htmlspecialchars(
-                (string)($item['title'] ?? ''),
-                ENT_QUOTES | ENT_SUBSTITUTE,
-                'UTF-8'
-            );
-            $link = htmlspecialchars(
-                (string)($item['link'] ?? ''),
-                ENT_QUOTES | ENT_SUBSTITUTE,
-                'UTF-8'
-            );
+            $title = \Core\Html::escape((string)($item['title'] ?? ''));
+            $link = \Core\Html::escape((string)($item['link'] ?? ''));
 
             if ($title === '') {
                 continue;
@@ -144,11 +137,7 @@ ORDER BY depth DESC;", [PAGE_ID, DOMAIN_ID]);
                 : $title;
         }
 
-        $separator = "<span>" . htmlspecialchars(
-            (string)($this->settings['separator'] ?? '❯'),
-            ENT_QUOTES | ENT_SUBSTITUTE,
-            'UTF-8'
-        ) . "</span>";
+        $separator = "<span>" . \Core\Html::escape((string)($this->settings['separator'] ?? '❯')) . "</span>";
 
         $this->layoutParams['breadcrumb_items'] = $items;
         $this->layoutParams['breadcrumb'] = implode($separator, $parts);

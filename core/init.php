@@ -13,7 +13,7 @@ if(!IN_KAMI) die();
 require_once ROOT_PATH . 'core/autoload.php';
 
 // Use a deterministic timezone until installation-wide settings are loaded.
-define('CORE_VERSION', '0.5.0');
+define('CORE_VERSION', '0.6.0');
 
 date_default_timezone_set('UTC');
 define('TIME_NOW', time());
@@ -75,8 +75,8 @@ if (!in_array($timezone, timezone_identifiers_list(), true)) {
 }
 $global_settings['default_timezone'] = $timezone;
 
-date_default_timezone_set($timezone);
-DB::query("SELECT set_config('TimeZone', $1, false)", [$timezone]);
+// Internal processing stays in UTC; keep the database session in UTC too.
+DB::query("SELECT set_config('TimeZone', 'UTC', false)");
 
 define('GLOBAL_SETTINGS', $global_settings);
 
@@ -116,14 +116,14 @@ if(!$domain_config) {
 	}
 
 	$domain_id = $domain['domain_id'];
-	$domain_config = json_decode($domain['domain_config'], true);
+	$domain_config = \Core\Utils\JsonTool::decodeArray($domain['domain_config'] ?? null);
 
 	$domain_config['name'] = $alias_name;
 	$domain_config['name_orig'] = $domain_name_orig;
 	$domain_config['is_alias'] = $is_alias;
 	$domain_config['theme_id'] = $domain['theme_id'];
 	$domain_config['theme_path'] = $domain['system_name'];
-	$domain_config['theme_settings'] = json_decode($domain['theme_settings'], true);
+	$domain_config['theme_settings'] = \Core\Utils\JsonTool::decodeArray($domain['theme_settings'] ?? null);
 
 	// renew aliases and current domain
 	$all_domains = [];

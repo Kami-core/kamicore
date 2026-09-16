@@ -12,7 +12,8 @@
       "author": "Kami team"
     },
     "prefix": "profile",
-    "version": "1.0.8",
+    "version": "1.0.9",
+    "category": "users",
     "dependencies": [
       "UserAccount"
     ],

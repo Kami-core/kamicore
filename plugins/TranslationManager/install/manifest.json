@@ -11,11 +11,13 @@
       "author": "Kami team"
     },
     "prefix": "trm",
-    "version": "1.0.0",
+    "version": "1.0.1",
+    "category": "content",
     "dependencies": [
       "Forms",
       "TextProcessor",
-      "Pagination"
+      "Pagination",
+      "Formatter"
     ],
     "config": {
       "handlers": {

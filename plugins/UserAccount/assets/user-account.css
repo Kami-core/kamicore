@@ -1,0 +1,49 @@
+.kc-auth-tabs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
+  margin: 0 40px 24px;
+  padding: 4px;
+  border-radius: var(--kc-radius-md, 10px);
+  background: var(--kc-bg-soft, #F3F4F6);
+}
+
+.kc-auth-tab {
+  min-height: 40px;
+  padding: 8px 12px;
+  border: 0;
+  border-radius: var(--kc-radius-sm, 6px);
+  background: transparent;
+  color: var(--kc-ink-2, #334155);
+  cursor: pointer;
+}
+
+.kc-auth-tab.is-active {
+  background: var(--kc-bg, #fff);
+  color: var(--kc-primary, #0B1F4A);
+  box-shadow: 0 1px 4px rgba(15, 23, 42, 0.12);
+  font-weight: 600;
+}
+
+
+.kc-auth-divider {
+  height: 1px;
+  margin: 24px 0;
+  background: var(--kc-border, #D1D5DB);
+}
+
+.kc-auth-result {
+  margin-top: 16px;
+}
+
+@media (max-width: 960px) {
+  .kc-auth-tabs {
+    margin-inline: 32px;
+  }
+}
+
+@media (max-width: 640px) {
+  .kc-auth-tabs {
+    margin-inline: 28px;
+  }
+}

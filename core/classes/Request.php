@@ -34,6 +34,42 @@ class Request
     /** @var RequestPipe[] */
     private static array $pipes = [];
 
+    /**
+     * Initialize normalized API input without mixing query and body sources.
+     * The API front controller is responsible for decoding and validating the payload.
+     */
+    public static function initApi(array $data, ?string $raw = null): void
+    {
+        if (self::$initialized) {
+            throw new \LogicException('Request is already initialized.');
+        }
+
+        self::$method = strtoupper($_SERVER['REQUEST_METHOD'] ?? 'GET');
+        self::$contentType = trim((string)($_SERVER['CONTENT_TYPE'] ?? ''));
+        self::$rawInput = $raw;
+
+        self::$data = [
+            'method' => self::$method,
+            'contentType' => self::$contentType,
+            'get' => self::$method === 'GET' ? $data : [],
+            'post' => [],
+            'cookie' => [],
+            'files' => [],
+            'merged' => $data,
+            'raw' => $raw,
+        ];
+
+        foreach (self::$pipes as $pipe) {
+            self::$data['merged'] = $pipe->handle(
+                self::$data['merged'],
+                self::$data['raw'],
+                new self
+            );
+        }
+
+        self::$initialized = true;
+    }
+
     public static function init(): void
     {
         if (self::$initialized) {

@@ -124,8 +124,8 @@ final class Mailer extends \Core\BasePlugin
                 );
             }
 
-            $base = $this->decodeSettings($baseSettings);
-            $local = $this->decodeSettings($domain['local_settings'] ?? null);
+            $base = \Core\Utils\JsonTool::decodeArray($baseSettings);
+            $local = \Core\Utils\JsonTool::decodeArray($domain['local_settings'] ?? null);
             $config = array_replace($base, $local);
         }
 
@@ -144,22 +144,6 @@ final class Mailer extends \Core\BasePlugin
         return $config;
     }
 
-    /**
-     * @return array<string, mixed>
-     */
-    private function decodeSettings(mixed $value): array
-    {
-        if (is_array($value)) {
-            return $value;
-        }
-
-        if (!is_string($value) || $value === '') {
-            return [];
-        }
-
-        $decoded = json_decode($value, true);
-        return is_array($decoded) ? $decoded : [];
-    }
 
     private function validateConfig(array $config): void
     {
@@ -313,7 +297,7 @@ final class Mailer extends \Core\BasePlugin
             $domainId === null ? 'global' : (string) $domainId,
             $exception->getMessage(),
             $message->getSubject(),
-            json_encode($message->getTo(), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)
+            \Core\Utils\JsonTool::encode($message->getTo(), false)
         ));
     }
 }

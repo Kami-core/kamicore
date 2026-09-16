@@ -25,6 +25,7 @@ if(!defined('IN_KAMI')) die();
 
 spl_autoload_register(function ($class) {
 	static $psr4 = null;
+	static $classMap = null;
 
     if ($psr4 === null) {
         // Base PSR-4 prefixes
@@ -33,16 +34,40 @@ spl_autoload_register(function ($class) {
             'Plugins\\' => ROOT_PATH . 'plugins/',
         ];
 
-        // Load third-party namespace map, if any
+        $classMap = [];
+
+        // Load third-party namespace and class maps, if any
         $tpConfig = ROOT_PATH . 'config/third_party.php';
         if (is_file($tpConfig)) {
             $thirdPartyMap = require $tpConfig;
-            // Merge while preserving existing keys
-            foreach ($thirdPartyMap as $prefix => $baseDir) {
-                // Normalize trailing slash
+
+            if (isset($thirdPartyMap['psr4']) || isset($thirdPartyMap['classmap'])) {
+                $thirdPartyPsr4 = is_array($thirdPartyMap['psr4'] ?? null)
+                    ? $thirdPartyMap['psr4']
+                    : [];
+                $classMap = is_array($thirdPartyMap['classmap'] ?? null)
+                    ? $thirdPartyMap['classmap']
+                    : [];
+            } else {
+                // Backward compatibility with the original flat PSR-4 map.
+                $thirdPartyPsr4 = is_array($thirdPartyMap) ? $thirdPartyMap : [];
+            }
+
+            foreach ($thirdPartyPsr4 as $prefix => $baseDir) {
+                if (!is_string($prefix) || !is_string($baseDir)) {
+                    continue;
+                }
                 $psr4[$prefix] = rtrim($baseDir, '/\\') . DIRECTORY_SEPARATOR;
             }
         }
+    }
+
+    if (isset($classMap[$class]) && is_string($classMap[$class])) {
+        $path = $classMap[$class];
+        if (is_file($path)) {
+            require $path;
+        }
+        return;
     }
 
     // Resolve by the longest matching namespace prefix

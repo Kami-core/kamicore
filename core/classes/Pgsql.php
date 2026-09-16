@@ -288,11 +288,11 @@ class DB
 
         private static function normalizeBooleanValue(mixed $value): mixed
         {
-                return match ($value) {
-                        't' => true,
-                        'f' => false,
-                        default => $value,
-                };
+                if (is_bool($value) || $value === 't' || $value === 'f') {
+                        return self::readBool($value);
+                }
+
+                return $value;
         }
 
         /**
@@ -302,6 +302,49 @@ class DB
          * become nested PHP arrays. A custom delimiter can be supplied for
          * PostgreSQL types whose typdelim is not a comma.
          */
+        public static function readBool(mixed $value): bool
+        {
+                if (is_bool($value)) {
+                        return $value;
+                }
+
+                return in_array(
+                        strtolower(trim((string) $value)),
+                        ['1', 't', 'true'],
+                        true
+                );
+        }
+
+        public static function prepareIdArray(array $values): string
+        {
+                $values = array_values(array_unique(array_filter(
+                        array_map('intval', $values),
+                        static fn(int $value): bool => $value > 0
+                )));
+
+                return '{' . implode(',', $values) . '}';
+        }
+
+        public static function prepareTextArray(array $values): string
+        {
+                return '{' . implode(',', array_map(
+                        static fn($value): string => '"' . str_replace(
+                                ['\\', '"'],
+                                ['\\\\', '\\"'],
+                                (string) $value
+                        ) . '"',
+                        $values
+                )) . '}';
+        }
+
+        public static function prepareBoolArray(array $values): string
+        {
+                return '{' . implode(',', array_map(
+                        static fn($value): string => self::readBool($value) ? 'true' : 'false',
+                        $values
+                )) . '}';
+        }
+
         public static function convertArr(string $pgArray, string $delimiter = ','): array
         {
                 if (

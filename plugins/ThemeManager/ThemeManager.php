@@ -53,7 +53,17 @@ final class ThemeManager extends \Core\BasePlugin
             );
         }
 
-        return $this->redirect($this->managerUrl());
+        if ($notifications = $this->plugins->get('Notifications')) {
+            $message = match ($operation) {
+                'install' => $this->phrase('installed_success', 'Theme installed.'),
+                'update' => $this->phrase('updated_success', 'Theme updated.'),
+                'uninstall' => $this->phrase('uninstalled_success', 'Theme uninstalled.'),
+                default => $this->phrase('operation_success', 'Theme operation completed.'),
+            };
+            $notifications->store(\Core\User::getId(), $message, 'success');
+        }
+
+        return \Core\Response::seeOther($this->managerUrl());
     }
 
     public function installTheme(string $folder): bool
@@ -81,17 +91,17 @@ final class ThemeManager extends \Core\BasePlugin
             if (!$theme['installed']) {
                 $actions = '<form method="post" action="' . $this->managerUrl('lifecycle') . '">'
                     . '<input type="hidden" name="operation" value="install">'
-                    . '<input type="hidden" name="theme_folder" value="' . $this->escape((string)$theme['folder']) . '">'
+                    . '<input type="hidden" name="theme_folder" value="' . \Core\Html::escape((string)$theme['folder']) . '">'
                     . '<button class="admin-button admin-button-primary" type="submit">'
-                    . $this->escape($this->phrase('install', 'Install'))
+                    . \Core\Html::escape($this->phrase('install', 'Install'))
                     . '</button></form>';
             } else {
                 if ($theme['files_present']) {
                     $actions .= '<form method="post" action="' . $this->managerUrl('lifecycle') . '">'
                         . '<input type="hidden" name="operation" value="update">'
-                        . '<input type="hidden" name="theme_folder" value="' . $this->escape((string)$theme['folder']) . '">'
+                        . '<input type="hidden" name="theme_folder" value="' . \Core\Html::escape((string)$theme['folder']) . '">'
                         . '<button class="admin-button admin-button-action" type="submit">'
-                        . $this->escape($this->phrase('update', 'Update'))
+                        . \Core\Html::escape($this->phrase('update', 'Update'))
                         . '</button></form>';
                 }
 
@@ -99,9 +109,9 @@ final class ThemeManager extends \Core\BasePlugin
                     $actions .= '<form method="post" action="' . $this->managerUrl('lifecycle') . '" '
                         . 'onsubmit="return confirm(' . $this->jsString($this->phrase('confirm_uninstall', 'Uninstall this theme?')) . ')">'
                         . '<input type="hidden" name="operation" value="uninstall">'
-                        . '<input type="hidden" name="theme" value="' . $this->escape($theme['system_name']) . '">'
+                        . '<input type="hidden" name="theme" value="' . \Core\Html::escape($theme['system_name']) . '">'
                         . '<button class="admin-button admin-button-danger" type="submit">'
-                        . $this->escape($this->phrase('uninstall', 'Uninstall'))
+                        . \Core\Html::escape($this->phrase('uninstall', 'Uninstall'))
                         . '</button></form>';
                 }
             }
@@ -109,11 +119,11 @@ final class ThemeManager extends \Core\BasePlugin
             $rows[] = [
                 'template' => 'theme-row',
                 'params' => [
-                    'title' => $this->escape($theme['title']),
-                    'system_name' => $this->escape($theme['system_name']),
-                    'version' => $this->escape($theme['version'] !== '' ? $theme['version'] : '—'),
-                    'status' => $this->escape($this->statusLabel($theme)),
-                    'usage' => $this->escape($theme['usage'] !== [] ? implode(', ', $theme['usage']) : '—'),
+                    'title' => \Core\Html::escape($theme['title']),
+                    'system_name' => \Core\Html::escape($theme['system_name']),
+                    'version' => \Core\Html::escape($theme['version'] !== '' ? $theme['version'] : '—'),
+                    'status' => \Core\Html::escape($this->statusLabel($theme)),
+                    'usage' => \Core\Html::escape($theme['usage'] !== [] ? implode(', ', $theme['usage']) : '—'),
                     'actions' => $actions !== '' ? $actions : '—',
                 ],
             ];
@@ -179,7 +189,7 @@ final class ThemeManager extends \Core\BasePlugin
             }
 
             $row = $installed[$systemName] ?? null;
-            $translation = $row ? (getTranslation((string)$row['uuid']) ?? []) : [];
+            $translation = $row ? (\Core\Translation::get((string)$row['uuid']) ?? []) : [];
             $themeId = $row ? (int)$row['theme_id'] : 0;
 
             $catalog[$systemName] = [
@@ -201,7 +211,7 @@ final class ThemeManager extends \Core\BasePlugin
 
         // Keep DB records visible when the corresponding theme directory is missing.
         foreach ($installed as $systemName => $row) {
-            $translation = getTranslation((string)$row['uuid']) ?? [];
+            $translation = \Core\Translation::get((string)$row['uuid']) ?? [];
             $themeId = (int)$row['theme_id'];
 
             $catalog[$systemName] = [
@@ -270,23 +280,21 @@ final class ThemeManager extends \Core\BasePlugin
 
     private function managerUrl(string $action = 'overview'): string
     {
-        $url = '/' . trim((string)PAGE_SLUG, '/');
-        if ($action !== 'overview') {
-            $url .= '/' . $this->prefix . '-action/' . rawurlencode($action);
-        }
-        return $url;
-    }
+        $url = \Core\Url::path((string) PAGE_SLUG);
 
-    private function redirect(string $url): string
-    {
-        \Core\Response::addHeader('Location: ' . $url, true, 302);
-        return '';
+        return $action === 'overview'
+            ? $url
+            : \Core\Url::pathParams(
+                $url,
+                ['action' => $action],
+                $this->prefix
+            );
     }
 
     private function notice(string $message, string $kind = 'success'): string
     {
-        return '<div class="admin-notice admin-notice-' . $this->escape($kind) . '">'
-            . $this->escape($message)
+        return '<div class="admin-notice admin-notice-' . \Core\Html::escape($kind) . '">'
+            . \Core\Html::escape($message)
             . '</div>';
     }
 
@@ -295,18 +303,9 @@ final class ThemeManager extends \Core\BasePlugin
         return (string)($this->phrases[$key] ?? $fallback);
     }
 
-    private function escape(string $value): string
+private function jsString(string $value): string
     {
-        return htmlspecialchars($value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
-    }
-
-    private function jsString(string $value): string
-    {
-        $json = json_encode(
-            $value,
-            JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_THROW_ON_ERROR
-        );
-        return $this->escape($json);
+        return \Core\Html::escape(\Core\Utils\JsonTool::encodeForHtml($value));
     }
 
     private function assertManagerAccess(): void

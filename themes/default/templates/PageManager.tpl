@@ -2,7 +2,7 @@
 <form id="page-form"
       class="pm-page-editor"
       method="post"
-      action="/admin-pages/pgm-action/save/pgm-pageId/{{page_id}}"
+      action="{{save_action}}"
       data-layout-url="{{layout_data_url}}">
     <input type="hidden" name="page_id" value="{{page_id}}">
     <input type="hidden" id="page-layout" name="layout_json" value="[]">
@@ -302,7 +302,7 @@
         toggle.setAttribute('aria-expanded', shouldOpen ? 'true' : 'false');
 
         if (shouldOpen) {
-            window.Admin?.initDynamic?.(config);
+            window.Kami?.initDynamic?.(config);
         }
     }
 
@@ -437,8 +437,8 @@
 
             config.innerHTML = await response.text();
             config.dataset.loaded = '1';
-            window.Admin?.executeScripts?.(config);
-            window.Admin?.initDynamic?.(config);
+            window.Kami?.executeScripts?.(config);
+            window.Kami?.initDynamic?.(config);
         } catch (error) {
             console.error('Page Manager: failed to load plugin settings.', error);
             config.innerHTML = '';
@@ -551,8 +551,8 @@
         dropzone.querySelectorAll('.plugin-instance').forEach(attachInstanceEvents);
         attachDropzoneEvents(dropzone);
         ensureDropzonePlaceholder(dropzone);
-        window.Admin?.executeScripts?.(dropzone);
-        window.Admin?.initDynamic?.(dropzone);
+        window.Kami?.executeScripts?.(dropzone);
+        window.Kami?.initDynamic?.(dropzone);
     }
 
     function createFallbackZone(wrapper) {
@@ -708,10 +708,6 @@
             <label class="pm-label" for="domain-select">{{phrase.domain}}</label>
             <div class="pm-domain-controls">
                 {{domain_select}}
-                <a class="admin-button admin-button-secondary" href="/admin-domains">
-                    <svg class="icon icon-globe icon-sm"></svg>
-                    <span>{{phrase.manage_domains}}</span>
-                </a>
             </div>
         </div>
 
@@ -738,7 +734,7 @@
     </div>
 
     <div id="page-create-wrapper" class="pm-create-panel" hidden>
-        <form action="/admin-pages/pgm-action/createPage"
+        <form action="{{create_action}}"
               id="page-create-form"
               method="post">
             <input type="hidden" name="domain_id" id="page-create-domain-id" value="">
@@ -789,7 +785,7 @@
     </div>
 
     <div id="page-recipe-create-wrapper" class="pm-create-panel" hidden>
-        <form action="/admin-pages/pgm-action/createPageFromRecipe"
+        <form action="{{recipe_create_action}}"
               id="page-recipe-create-form"
               method="post">
             <input type="hidden" name="domain_id" id="page-recipe-domain-id" value="">
@@ -864,7 +860,7 @@
     'use strict';
 
     const text = {{ui_text}};
-    const pageRoute = '/admin-pages';
+    const pageRoute = {{page_route}};
     const domainSelect = document.getElementById('domain-select');
     const pagesTbody = document.getElementById('domain-pages-list');
     const statusLabel = document.getElementById('domain-pages-status');
@@ -911,16 +907,20 @@
     }
 
     function getDomainIdFromUrl() {
-        const match = window.location.pathname.match(
-            /^\/admin-pages(?:\/pgm-domainId\/([^/]+))?\/?$/
-        );
+        const pathname = window.location.pathname.replace(/\/+$/, '') || '/';
+        const domainPrefix = pageRoute + '/pgm-domainId/';
 
-        if (!match || !match[1]) {
+        if (!pathname.startsWith(domainPrefix)) {
+            return '';
+        }
+
+        const encodedDomainId = pathname.slice(domainPrefix.length);
+        if (!encodedDomainId || encodedDomainId.includes('/')) {
             return '';
         }
 
         try {
-            return decodeURIComponent(match[1]);
+            return decodeURIComponent(encodedDomainId);
         } catch (error) {
             return '';
         }
@@ -1060,7 +1060,7 @@
     }
 
     function createEditUrl(pageId) {
-        return '/admin-pages/pgm-action/edit/pgm-pageId/' + encodeURIComponent(pageId);
+        return pageRoute + '/pgm-action/edit/pgm-pageId/' + encodeURIComponent(pageId);
     }
 
     async function deletePage(page, row, button) {
@@ -1194,7 +1194,7 @@
             layoutContainer.innerHTML = data.layouts || '';
             if (parentContainer) {
                 parentContainer.innerHTML = data.parent_field || '';
-                window.Admin?.initFormsTomSelects?.(parentContainer);
+                window.Kami?.initDynamic?.(parentContainer);
             }
             setPageCount(pages.length);
             setCreateAvailable(true);

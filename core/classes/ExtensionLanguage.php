@@ -35,6 +35,34 @@ final class ExtensionLanguage
         'options',
     ];
 
+    public static function findTranslatables(
+        mixed $data,
+        ?array $names = null
+    ): array|false {
+        if (is_object($data)) {
+            $data = get_object_vars($data);
+        }
+        if (!is_array($data)) {
+            return false;
+        }
+
+        $names ??= ['title', 'description'];
+        $result = [];
+
+        foreach ($data as $key => $value) {
+            if (is_array($value) || is_object($value)) {
+                $nested = self::findTranslatables($value, $names);
+                if ($nested !== false && $nested !== []) {
+                    $result[$key] = $nested;
+                }
+            } elseif (in_array($key, $names, true)) {
+                $result[$key] = $value;
+            }
+        }
+
+        return $result;
+    }
+
     public static function validatePlugin(
         array $language,
         array $manifest,

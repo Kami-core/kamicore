@@ -13,28 +13,28 @@ define('URI', $_SERVER['REQUEST_URI'] ?? '/');
 define('TRUSTED_PROXIES', []);
 
 $db_config = [
-    'host' => '__DB_HOST__',
-    'port' => (int) '__DB_PORT__',
-    'user' => '__DB_USER__',
-    'password' => '__DB_PASSWORD__',
-    'name' => '__DB_NAME__',
+    'host' => __DB_HOST__,
+    'port' => __DB_PORT__,
+    'user' => __DB_USER__,
+    'password' => __DB_PASSWORD__,
+    'name' => __DB_NAME__,
 ];
 
-define('USE_CACHE', '__CACHE_ENABLED__' === '1');
+define('USE_CACHE', __CACHE_ENABLED__);
 
 $redis_config = [
-    'host' => '__CACHE_HOST__',
-    'port' => (int) '__CACHE_PORT__',
+    'host' => __CACHE_HOST__,
+    'port' => __CACHE_PORT__,
     'timeout' => 1.5,
-    'auth' => '__CACHE_AUTH__' !== '' ? '__CACHE_AUTH__' : null,
-    'db' => (int) '__CACHE_DB__',
+    'auth' => __CACHE_AUTH__ !== '' ? __CACHE_AUTH__ : null,
+    'db' => __CACHE_DB__,
     'use_igbinary' => true,
 ];
 
 define('CACHE_DEFAULT_TTL', 300);
-define('CACHE_ENCRYPT_KEY', '__CACHE_ENCRYPT_KEY__');
+define('CACHE_ENCRYPT_KEY', __CACHE_ENCRYPT_KEY__);
 
 // Master key used by Core\SecretStore. Keep this file outside public_html.
-define('KAMI_SECRET_KEY_FILE', '__SECRET_KEY_FILE__');
+define('KAMI_SECRET_KEY_FILE', __SECRET_KEY_FILE__);
 
 define('DEBUG_MODE', false);

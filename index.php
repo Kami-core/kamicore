@@ -56,7 +56,7 @@ if ($requestRoot !== null) {
 // 1. Resolve the frontend URL to a page, optional item, and semantic path parameters.
 
 // Domain pages list - only to identify current. Get from redis if possible.
-$domain_pages = getDomainPages();
+$domain_pages = \Core\PageRegistry::forDomain();
 
 // Separate the path from the query string.
 $parts = parse_url($_SERVER['REQUEST_URI']);
@@ -216,7 +216,7 @@ if($uri_lang) {
 define('LANG', $lang);
 Core\Response::addCookie('lang', $lang);
 
-$system_lang = getTranslation(\Core\Translation::SYSTEM_ENTITY_UUID) ?? [];
+$system_lang = \Core\Translation::get(\Core\Translation::SYSTEM_ENTITY_UUID) ?? [];
 define('SYSTEM_DICTIONARY', $system_lang);
 
 debug_step("Language ($lang) prepared");
@@ -258,8 +258,8 @@ if(!$page_data) {
 	from pages p
 	left join theme_layouts l using(layout_id)
 	where p.domain_id=".DOMAIN_ID." and p.page_id=".PAGE_ID);
-	$page_data['settings'] = json_decode($page_data['page_settings'] ?? '{}', true);
-	$page_data['plugins'] = json_decode($page_data['page_plugins'], true);
+	$page_data['settings'] = \Core\Utils\JsonTool::decodeArray($page_data['page_settings'] ?? null);
+	$page_data['plugins'] = \Core\Utils\JsonTool::decodeArray($page_data['page_plugins'] ?? null);
 
 	$page_data['translation'] = Core\Translation::get($page_data['uuid']);
 
@@ -270,6 +270,11 @@ if(!$page_data) {
 
 $plugins_in_use = [];
 $wrappers = [];
+
+// System assets are registered first; plugin assets follow in request order.
+Core\Assets::css('/assets/css/system.css');
+Core\Assets::js('/assets/js/icons.js');
+Core\Assets::js('/assets/js/common.js');
 
 $plugins = new \Core\PluginRegistry();
 $wrappers = [];
@@ -283,7 +288,7 @@ $layout_params = [
 // Initialize plugins that participate in the page lifecycle without requiring a wrapper.
 $lifecycle_plugin_ids = Core\Settings::get('lifecycle_plugins', []);
 if (is_string($lifecycle_plugin_ids)) {
-	$decoded = json_decode($lifecycle_plugin_ids, true);
+	$decoded = \Core\Utils\JsonTool::decodeArray($lifecycle_plugin_ids);
 	$lifecycle_plugin_ids = is_array($decoded) ? $decoded : [];
 }
 $lifecycle_plugin_ids = is_array($lifecycle_plugin_ids) ? $lifecycle_plugin_ids : [];

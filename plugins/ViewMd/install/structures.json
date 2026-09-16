@@ -1,0 +1,23 @@
+{
+  "field_types": {
+    "markdown": {
+      "title": "Markdown",
+      "description": "Plain Markdown source text.",
+      "parent": "textarea",
+      "settings": {}
+    }
+  },
+  "fields": {
+    "markdown_body": {
+      "title": "Markdown content",
+      "description": "Markdown source rendered by the Markdown viewer.",
+      "type": "markdown",
+      "settings": {
+        "indexed": true,
+        "unique": false,
+        "translatable": true
+      }
+    }
+  },
+  "content_types": {}
+}

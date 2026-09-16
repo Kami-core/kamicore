@@ -1,0 +1,9 @@
+/* ------------------------- breadcrumbs */
+.breadcrumb-container {
+	padding: 20px 0;
+}
+
+.breadcrumb-container span {
+	display: inline-block;
+	margin: 0 10px;
+}

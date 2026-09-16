@@ -1,0 +1,223 @@
+/* =========================================================
+   User profile credentials
+   ========================================================= */
+
+.kc-profile-credentials {
+  width: min(920px, 100%);
+  padding-top: 0;
+}
+
+.kc-profile-credentials-header {
+  margin-bottom: 24px;
+}
+
+.kc-profile-credentials-header h2,
+.kc-profile-credential-heading h3 {
+  margin-top: 0;
+}
+
+.kc-profile-credentials-header h2 {
+  margin-bottom: 6px;
+}
+
+.kc-profile-credentials-header p,
+.kc-profile-credential-heading p {
+  margin: 0;
+  color: var(--kc-ink-2, #334155);
+}
+
+.kc-profile-credentials-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+}
+
+.kc-profile-credential-card {
+  min-width: 0;
+  padding: 22px;
+  border: 1px solid var(--kc-border, #D1D5DB);
+  border-radius: var(--kc-radius-md, 10px);
+  background: var(--kc-bg, #fff);
+}
+
+.kc-profile-credential-card-wide {
+  grid-column: 1 / -1;
+}
+
+.kc-profile-credential-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 18px;
+}
+
+.kc-profile-credential-heading h3 {
+  margin-bottom: 4px;
+  font-size: 19px;
+}
+
+.kc-profile-inline-form {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.kc-profile-inline-form .kc-input {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.kc-profile-status {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  min-height: 28px;
+  padding: 4px 9px;
+  border: 1px solid var(--kc-border, #D1D5DB);
+  border-radius: 999px;
+  color: var(--kc-ink-2, #334155);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1;
+}
+
+.kc-profile-status.is-success {
+  border-color: rgba(22, 101, 52, 0.28);
+  background: rgba(22, 101, 52, 0.06);
+  color: #166534;
+}
+
+.kc-profile-status.is-warning {
+  border-color: rgba(180, 83, 9, 0.28);
+  background: rgba(180, 83, 9, 0.06);
+  color: #92400e;
+}
+
+.kc-profile-status.is-muted {
+  background: var(--kc-bg-soft, #F3F4F6);
+}
+
+.kc-profile-pending {
+  margin-top: 12px;
+  padding: 10px 12px;
+  border-radius: var(--kc-radius-sm, 6px);
+  background: var(--kc-bg-soft, #F3F4F6);
+  color: var(--kc-ink-2, #334155);
+  font-size: 13px;
+}
+
+.kc-profile-pending span {
+  display: block;
+  margin-top: 2px;
+}
+
+.kc-profile-method-status {
+  margin-bottom: 16px;
+}
+
+.kc-profile-password-form {
+  max-width: 720px;
+}
+
+.kc-profile-password-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.kc-profile-provider-list {
+  display: grid;
+  gap: 10px;
+}
+
+.kc-profile-provider {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 14px 0;
+  border-top: 1px solid var(--kc-border, #D1D5DB);
+}
+
+.kc-profile-provider:first-child {
+  padding-top: 0;
+  border-top: 0;
+}
+
+.kc-profile-provider-main {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.kc-profile-provider-main span {
+  overflow-wrap: anywhere;
+  color: var(--kc-ink-2, #334155);
+  font-size: 14px;
+}
+
+.kc-profile-provider .kc-btn-group form {
+  margin: 0;
+}
+
+.kc-profile-danger-zone {
+  max-width: 720px;
+  margin-top: 22px;
+  padding-top: 16px;
+  border-top: 1px solid var(--kc-border, #D1D5DB);
+}
+
+.kc-profile-danger-zone summary {
+  width: fit-content;
+  color: var(--kc-accent, #B91C1C);
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.kc-profile-danger-content {
+  margin-top: 12px;
+}
+
+.kc-profile-danger-content p {
+  margin: 0 0 12px;
+  color: var(--kc-ink-2, #334155);
+  font-size: 14px;
+}
+
+.kc-profile-notice {
+  margin-bottom: 18px;
+}
+
+@media (max-width: 700px) {
+    .kc-profile-credentials-grid,
+  .kc-profile-password-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .kc-profile-credential-card-wide {
+    grid-column: auto;
+  }
+
+  .kc-profile-inline-form,
+  .kc-profile-provider {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .kc-profile-inline-form .kc-btn,
+  .kc-profile-provider > .kc-btn,
+  .kc-profile-provider .kc-btn-group {
+    width: 100%;
+  }
+
+  .kc-profile-provider .kc-btn-group {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .kc-profile-provider .kc-btn-group .kc-btn {
+    width: 100%;
+  }
+}

@@ -59,12 +59,7 @@ final class OpenAIProvider extends AbstractProvider
                 ],
                 [
                     'role' => 'user',
-                    'content' => json_encode(
-                        ['items' => $items],
-                        JSON_UNESCAPED_UNICODE
-                            | JSON_UNESCAPED_SLASHES
-                            | JSON_THROW_ON_ERROR
-                    ),
+                    'content' => \Core\Utils\JsonTool::encode(['items' => $items], false),
                 ],
             ],
             'text' => [

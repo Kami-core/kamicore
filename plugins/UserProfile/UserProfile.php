@@ -16,6 +16,7 @@ class UserProfile extends \Core\BasePlugin
 {
     public function statusbar(array $context_vars = []): string
     {
+        $this->addCss('/plugins/UserProfile/assets/user-status.css');
         $account = $this->account();
 
         if (\Core\User::getId()) {
@@ -137,13 +138,15 @@ class UserProfile extends \Core\BasePlugin
         ?string $noticeMessage = null,
         ?string $returnUrl = null
     ): string {
+        $this->addCss('/plugins/UserProfile/assets/user-profile.css');
+
         try {
             $credentials = $this->account()->getCredentials();
         } catch (\Throwable $error) {
             $this->log('Failed to load credentials: ' . $error->getMessage(), 'error');
 
             return $this->render('credentials_error', [
-                'message' => $this->escape($this->phrase('credentials_load_failed')),
+                'message' => \Core\Html::escape($this->phrase('credentials_load_failed')),
             ]);
         }
 
@@ -168,20 +171,20 @@ class UserProfile extends \Core\BasePlugin
                 'notice_class' => $noticeType === 'success'
                     ? 'kc-notice-success'
                     : 'kc-notice-error',
-                'message' => $this->escape($noticeMessage),
+                'message' => \Core\Html::escape($noticeMessage),
             ]);
         }
 
         $pendingEmail = trim((string)($credentials['pending_email'] ?? ''));
         $pendingEmailHtml = $pendingEmail !== ''
             ? $this->render('pending_email', [
-                'email' => $this->escape($pendingEmail),
+                'email' => \Core\Html::escape($pendingEmail),
             ])
             : '';
 
         $returnUrl = $this->credentialReturnUrl($returnUrl);
         $passwordTemplateParams = [
-            'return_url' => $this->escape($returnUrl),
+            'return_url' => \Core\Html::escape($returnUrl),
         ];
         $passwordHtml = $passwordConfigured
             ? $this->render('password_configured', $passwordTemplateParams)
@@ -191,10 +194,10 @@ class UserProfile extends \Core\BasePlugin
 
         return $this->render('credentials_content', [
             'notice' => $notice,
-            'return_url' => $this->escape($returnUrl),
-            'username' => $this->escape((string)($credentials['username'] ?? '')),
-            'email' => $this->escape((string)($credentials['email'] ?? '')),
-            'email_status' => $this->escape(
+            'return_url' => \Core\Html::escape($returnUrl),
+            'username' => \Core\Html::escape((string)($credentials['username'] ?? '')),
+            'email' => \Core\Html::escape((string)($credentials['email'] ?? '')),
+            'email_status' => \Core\Html::escape(
                 !empty($credentials['email_verified'])
                     ? $this->phrase('verified')
                     : $this->phrase('not_verified')
@@ -215,13 +218,13 @@ class UserProfile extends \Core\BasePlugin
         if ($google !== null && !empty($google['connected'])) {
             $providerEmail = trim((string)($google['email'] ?? ''));
             $identity = $providerEmail !== ''
-                ? $this->escape($providerEmail)
-                : $this->escape($this->phrase('connected'));
+                ? \Core\Html::escape($providerEmail)
+                : \Core\Html::escape($this->phrase('connected'));
 
             return $this->render('provider_connected', [
                 'provider_name' => 'Google',
                 'provider_identity' => $identity,
-                'replace_url' => $this->escape(
+                'replace_url' => \Core\Html::escape(
                     $account->getProviderStartUrl(
                         'google',
                         'replace',
@@ -229,13 +232,13 @@ class UserProfile extends \Core\BasePlugin
                     )
                 ),
                 'provider' => 'google',
-                'return_url' => $this->escape($returnUrl),
+                'return_url' => \Core\Html::escape($returnUrl),
             ]);
         }
 
         return $this->render('provider_not_connected', [
             'provider_name' => 'Google',
-            'connect_url' => $this->escape(
+            'connect_url' => \Core\Html::escape(
                 $account->getProviderStartUrl(
                     'google',
                     'link',
@@ -376,12 +379,4 @@ class UserProfile extends \Core\BasePlugin
         return (string)($this->phrases[$key] ?? $key);
     }
 
-    private function escape(string $value): string
-    {
-        return htmlspecialchars(
-            $value,
-            ENT_QUOTES | ENT_SUBSTITUTE,
-            'UTF-8'
-        );
-    }
 }

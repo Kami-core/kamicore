@@ -63,8 +63,27 @@ final class JsonTool
         return $data;
     }
 
+    public static function decodeArray(mixed $value): array
+    {
+        if (is_array($value)) {
+            return $value;
+        }
+
+        if (!is_string($value) || trim($value) === '') {
+            return [];
+        }
+
+        try {
+            $data = json_decode($value, true, 512, JSON_THROW_ON_ERROR);
+        } catch (JsonException) {
+            return [];
+        }
+
+        return is_array($data) ? $data : [];
+    }
+
     public static function encode(
-        array $data,
+        mixed $data,
         bool $pretty = true,
         bool $unescapedUnicode = true,
         bool $unescapedSlashes = true
@@ -83,17 +102,21 @@ final class JsonTool
             $flags |= JSON_UNESCAPED_SLASHES;
         }
 
-        try {
-            $json = json_encode($data, $flags);
-        } catch (JsonException $e) {
-            throw new RuntimeException("Failed to encode JSON: {$e->getMessage()}", 0, $e);
-        }
+        return self::encodeWithFlags($data, $flags);
+    }
 
-        if (!is_string($json)) {
-            throw new RuntimeException('Failed to encode JSON: unknown error');
-        }
-
-        return $json;
+    public static function encodeForHtml(mixed $data): string
+    {
+        return self::encodeWithFlags(
+            $data,
+            JSON_UNESCAPED_UNICODE
+                | JSON_UNESCAPED_SLASHES
+                | JSON_HEX_TAG
+                | JSON_HEX_AMP
+                | JSON_HEX_APOS
+                | JSON_HEX_QUOT
+                | JSON_THROW_ON_ERROR
+        );
     }
 
     public static function saveFile(
@@ -142,6 +165,21 @@ final class JsonTool
     public static function exists(string $file): bool
     {
         return is_file($file) && is_readable($file);
+    }
+
+    private static function encodeWithFlags(mixed $data, int $flags): string
+    {
+        try {
+            $json = json_encode($data, $flags);
+        } catch (JsonException $e) {
+            throw new RuntimeException("Failed to encode JSON: {$e->getMessage()}", 0, $e);
+        }
+
+        if (!is_string($json)) {
+            throw new RuntimeException('Failed to encode JSON: unknown error');
+        }
+
+        return $json;
     }
 
     private static function stripComments(string $json): string

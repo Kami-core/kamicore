@@ -31,6 +31,9 @@ final class Notifications extends \Core\BasePlugin
 
     public function view(array $instanceParams = []): string
     {
+        $this->addCss('/plugins/Notifications/assets/notifications.css');
+        $this->addJs('/plugins/Notifications/assets/notifications.js');
+
         return $this->render('notifications', [
             'endpoint' => '/ajax/Notifications/get',
         ]);
@@ -187,12 +190,9 @@ final class Notifications extends \Core\BasePlugin
 
     private function jsonResponse(array $messages): string
     {
-        return json_encode(
-            [
-                'status' => 'ok',
-                'messages' => $messages,
-            ],
-            JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR
-        );
+        return \Core\Utils\JsonTool::encode([
+            'status' => 'ok',
+            'messages' => $messages,
+        ], false);
     }
 }

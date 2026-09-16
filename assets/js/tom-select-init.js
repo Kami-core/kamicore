@@ -1,4 +1,4 @@
-/* Remote selects initializer for Kami admin.
+/* Tom Select initializer for Kami forms.
  * Requires Tom Select (https://tom-select.js.org/) to be loaded.
  */
 (function () {
@@ -9,9 +9,6 @@ function encodePathSegment(value) {
   return encodeURIComponent(String(value ?? ''));
 }
 
-function kebabToSnake(s) {
-  return String(s).replace(/-/g, '_');
-}
 
 function buildEndpoint(base, pairs) {
   let url = base.replace(/\/+$/, '');
@@ -285,8 +282,11 @@ async function fetchOptions(el, query, page) {
     initAll(document);
   }
 
-  window.Admin = window.Admin || {};
-  window.Admin.initRemoteSelects = initRemoteSelects;
-  window.Admin.initFormsTomSelects = initFormsTomSelects;
+  window.KamiTomSelect = {
+    init: initAll,
+    initRemoteSelects,
+    initFormsTomSelects
+  };
+  window.Kami?.registerInitializer?.(initAll);
 })();
 

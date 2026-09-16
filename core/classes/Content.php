@@ -51,11 +51,11 @@ class Content
         }
 
         if (isset($itemData['domains']) && is_array($itemData['domains'])) {
-            $itemData['domains'] = self::pgIntArray($itemData['domains']);
+            $itemData['domains'] = \DB::prepareIdArray($itemData['domains']);
         }
 
         if (isset($itemData['item_settings']) && is_array($itemData['item_settings'])) {
-            $itemData['item_settings'] = self::encodeJson($itemData['item_settings']);
+            $itemData['item_settings'] = \Core\Utils\JsonTool::encode($itemData['item_settings'], false);
         }
 
         $itemId = \DB::insert('content_items', $itemData, 'item_id');
@@ -94,7 +94,7 @@ class Content
 
             $contentType = self::getContentType((int) $item['ct_id'], $lang);
             $structure = $contentType['schema']['fields'] ?? [];
-            $commonData = self::decodeJson($item['common_data'] ?? null);
+            $commonData = \Core\Utils\JsonTool::decodeArray($item['common_data'] ?? null);
             $translatedData = self::loadExactTranslation($item['item_uuid'], $lang);
             unset($translatedData['title']);
 
@@ -231,7 +231,7 @@ class Content
                 'UPDATE content_items
                  SET item_slug=$1, parent_id=$2, common_data=$3::jsonb, updated_at=NOW()
                  WHERE item_id=$4',
-                [$slug, $parentId, self::encodeJson($commonData), $id]
+                [$slug, $parentId, \Core\Utils\JsonTool::encode($commonData, false), $id]
             );
 
             if ($translationChanged) {
@@ -252,7 +252,7 @@ class Content
                     'UPDATE translations
                      SET updated_at=NOW()
                      WHERE entity_uuid=$1 AND lang_code=ANY($2::text[])',
-                    [$item['item_uuid'], self::pgTextArray($syncLanguages)]
+                    [$item['item_uuid'], \DB::prepareTextArray($syncLanguages)]
                 );
             }
 
@@ -314,7 +314,7 @@ class Content
 
             $contentType = self::getContentType((int) $item['ct_id'], $lang);
             $structure = $contentType['schema']['fields'] ?? [];
-            $commonData = self::decodeJson($item['common_data'] ?? null);
+            $commonData = \Core\Utils\JsonTool::decodeArray($item['common_data'] ?? null);
             $translatedData = self::loadExactTranslation($item['item_uuid'], $lang);
             unset($translatedData['title']);
 
@@ -460,7 +460,7 @@ class Content
 
             $contentType = self::getContentType((int) $item['ct_id']);
             $structure = $contentType['schema']['fields'] ?? [];
-            $commonData = self::decodeJson($item['common_data'] ?? null);
+            $commonData = \Core\Utils\JsonTool::decodeArray($item['common_data'] ?? null);
             $translations = [];
             $translationRows = \DB::query(
                 'SELECT lang_code, translated_data
@@ -470,7 +470,7 @@ class Content
             );
 
             while ($row = \DB::fetchRow($translationRows)) {
-                $translations[$row['lang_code']] = self::decodeJson($row['translated_data']);
+                $translations[$row['lang_code']] = \Core\Utils\JsonTool::decodeArray($row['translated_data']);
             }
 
             foreach (['item_texts', 'item_nums', 'item_bools', 'item_dates'] as $table) {
@@ -693,7 +693,7 @@ class Content
         $fieldType = self::getFieldType((int) $row['type_id']);
         $row['field_id'] = (int) $row['field_id'];
         $row['type_id'] = (int) $row['type_id'];
-        $row['field_settings'] = self::decodeJson($row['field_settings'] ?? null);
+        $row['field_settings'] = \Core\Utils\JsonTool::decodeArray($row['field_settings'] ?? null);
         $row['type_settings'] = $fieldType['type_settings'];
         $row['root_type_id'] = $fieldType['root_type_id'];
         $row['root_type_name'] = $fieldType['root_type_name'];
@@ -738,7 +738,7 @@ class Content
         $settings = [];
         $parameters = [];
         foreach (array_reverse($chain) as $part) {
-            $partSettings = self::decodeJson($part['type_settings'] ?? null);
+            $partSettings = \Core\Utils\JsonTool::decodeArray($part['type_settings'] ?? null);
             $partParameters = is_array($partSettings['parameters'] ?? null)
                 ? $partSettings['parameters']
                 : [];
@@ -802,7 +802,7 @@ class Content
                     $where[] = 'md5(idx.value)=md5($2::text)';
                 }
                 if ($contentTypeIds !== []) {
-                    $params[] = self::pgIntArray($contentTypeIds);
+                    $params[] = \DB::prepareIdArray($contentTypeIds);
                     $where[] = 'ci.ct_id=ANY($' . count($params) . '::int[])';
                 }
                 foreach (\DB::getArr(
@@ -832,7 +832,7 @@ class Content
         }
 
         if ($contentTypeIds !== []) {
-            $params[] = self::pgIntArray($contentTypeIds);
+            $params[] = \DB::prepareIdArray($contentTypeIds);
             $where[] = 'ci.ct_id=ANY($' . count($params) . '::int[])';
         }
 
@@ -885,8 +885,8 @@ class Content
 
         $data['ct_id'] = (int) $data['ct_id'];
         $data['parent_id'] = isset($data['parent_id']) ? (int) $data['parent_id'] : null;
-        $data['schema'] = self::decodeJson($data['schema'] ?? null);
-        $translation = getTranslation($data['uuid'], $lang) ?? [];
+        $data['schema'] = \Core\Utils\JsonTool::decodeArray($data['schema'] ?? null);
+        $translation = \Core\Translation::get($data['uuid'], $lang) ?? [];
         $data = array_replace_recursive($data, $translation);
         $data['schema'] = self::resolveContentTypeSchema($data['schema'], $lang);
         $data['title'] ??= ucwords(str_replace(['_', '-'], ' ', $data['system_name']));
@@ -924,7 +924,7 @@ class Content
                 $item['item_id'] = (int) $item['item_id'];
                 $item['ct_id'] = (int) $item['ct_id'];
 
-                $translation = getTranslation($item['item_uuid'], $lang) ?? [];
+                $translation = \Core\Translation::get($item['item_uuid'], $lang) ?? [];
                 $structure = self::getContentType($item['ct_id'], $lang)['schema']['fields'] ?? [];
                 $translatedData = [];
 
@@ -941,7 +941,7 @@ class Content
                 }
 
                 $item['data'] = self::mergeItemData(
-                    self::decodeJson($item['common_data'] ?? null),
+                    \Core\Utils\JsonTool::decodeArray($item['common_data'] ?? null),
                     $translatedData,
                     $structure
                 );
@@ -1005,7 +1005,7 @@ class Content
         $typeSql = '';
 
         if ($contentTypeIds !== []) {
-            $params[] = self::pgIntArray($contentTypeIds);
+            $params[] = \DB::prepareIdArray($contentTypeIds);
             $typeSql = 'AND ci.ct_id=ANY($2::int[])';
         }
 
@@ -1125,7 +1125,7 @@ class Content
             ];
         }
 
-        $idArray = self::pgIntArray($result['ids']);
+        $idArray = \DB::prepareIdArray($result['ids']);
         $items = \DB::query(
             'SELECT ci.*, translation.translated_data
              FROM content_items ci
@@ -1147,8 +1147,8 @@ class Content
             ? self::getContentType((int)$item['ct_id'], $language)['schema']['fields'] ?? []
             : [];
         $item['data'] = self::mergeItemData(
-            self::decodeJson($item['common_data'] ?? null),
-            self::decodeJson($item['translated_data'] ?? null),
+            \Core\Utils\JsonTool::decodeArray($item['common_data'] ?? null),
+            \Core\Utils\JsonTool::decodeArray($item['translated_data'] ?? null),
             $structure
         );
 
@@ -1175,7 +1175,7 @@ class Content
             return '$' . count($params);
         };
 
-        $typeParam = $addParam(self::pgIntArray($contentTypeIds));
+        $typeParam = $addParam(\DB::prepareIdArray($contentTypeIds));
         $where[] = "ci.ct_id=ANY({$typeParam}::int[])";
 
         foreach ($filters ?? [] as $filterIndex => $part) {
@@ -1225,7 +1225,7 @@ class Content
             }
 
             $table = reset($tables);
-            $fieldParam = $addParam(self::pgIntArray($fieldIds));
+            $fieldParam = $addParam(\DB::prepareIdArray($fieldIds));
             $conditions = ["idx.field_id=ANY({$fieldParam}::int[])"];
 
             if ($filterMode === 'in') {
@@ -1251,8 +1251,8 @@ class Content
                 };
                 $valueParam = $addParam(
                     $table === 'item_bools'
-                        ? self::pgBoolArray($values)
-                        : self::pgTextArray($values)
+                        ? \DB::prepareBoolArray($values)
+                        : \DB::prepareTextArray($values)
                 );
                 $conditions[] = "idx.value=ANY({$valueParam}::{$cast})";
             } else {
@@ -1313,12 +1313,12 @@ class Content
                 );
 
                 while ($group = \DB::fetchRow($languageGroups)) {
-                    $languageCodes = self::decodeJson($group['lang_codes'] ?? null);
+                    $languageCodes = \Core\Utils\JsonTool::decodeArray($group['lang_codes'] ?? null);
                     if ($languageCodes === []) {
                         continue;
                     }
 
-                    $languageParam = $addParam(self::pgTextArray($languageCodes));
+                    $languageParam = $addParam(\DB::prepareTextArray($languageCodes));
                     $configParam = $addParam((string) ($group['cfg_name'] ?? 'simple'));
                     $fulltextConditions[] = "(
                         search_text.lang_code=ANY({$languageParam}::text[])
@@ -1500,7 +1500,7 @@ class Content
     private static function loadExactTranslation(string $uuid, string $lang): array
     {
 		debug_step('************** trans');
-        return self::decodeJson(
+        return \Core\Utils\JsonTool::decodeArray(
             \DB::getOne(
                 'SELECT translated_data FROM translations WHERE entity_uuid=$1 AND lang_code=$2',
                 [$uuid, $lang]
@@ -1522,7 +1522,7 @@ class Content
              DO UPDATE SET
                  translated_data=EXCLUDED.translated_data,
                  updated_at=EXCLUDED.updated_at',
-            [$uuid, $lang, self::encodeJson($data)]
+            [$uuid, $lang, \Core\Utils\JsonTool::encode($data, false)]
         );
     }
 
@@ -1542,7 +1542,7 @@ class Content
              VALUES($1, $2, $3::jsonb, $4::timestamptz)
              ON CONFLICT (entity_uuid, lang_code)
              DO UPDATE SET translated_data=EXCLUDED.translated_data',
-            [$uuid, $lang, self::encodeJson($data), $itemUpdatedAt]
+            [$uuid, $lang, \Core\Utils\JsonTool::encode($data, false), $itemUpdatedAt]
         );
     }
 
@@ -1799,7 +1799,7 @@ class Content
 
             $field = self::getField($fieldName);
             $fieldType = self::getFieldType((int)$field['type_id']);
-            $globalTranslation = getTranslation((string)$field['uuid'], $lang) ?? [];
+            $globalTranslation = \Core\Translation::get((string)$field['uuid'], $lang) ?? [];
 
             $typeSettings = is_array($field['type_settings'] ?? null)
                 ? $field['type_settings']
@@ -1947,7 +1947,7 @@ class Content
         array $part,
         callable $addParam
     ): string {
-        $fieldParam = $addParam(self::pgIntArray($fieldIds));
+        $fieldParam = $addParam(\DB::prepareIdArray($fieldIds));
         $exists = static function (string $table, string $condition) use ($fieldParam): string {
             return "EXISTS (\n"
                 . "    SELECT 1 FROM {$table} compound_idx\n"
@@ -1987,7 +1987,7 @@ class Content
                 $tableValues = array_values(array_unique($tableValues, SORT_REGULAR));
                 if ($table === 'item_bools') {
                     $tableValues = array_map([self::class, 'normalizeBooleanScalar'], $tableValues);
-                    $valueParam = $addParam(self::pgBoolArray($tableValues));
+                    $valueParam = $addParam(\DB::prepareBoolArray($tableValues));
                     $conditions[] = $exists(
                         $table,
                         "compound_idx.value=ANY({$valueParam}::boolean[])"
@@ -2000,7 +2000,7 @@ class Content
                     'item_dates' => 'timestamptz[]',
                     default => 'text[]',
                 };
-                $valueParam = $addParam(self::pgTextArray($tableValues));
+                $valueParam = $addParam(\DB::prepareTextArray($tableValues));
                 $condition = "compound_idx.value=ANY({$valueParam}::{$cast})";
                 $conditions[] = $exists($table, $condition);
             }
@@ -2301,7 +2301,7 @@ class Content
 
     private static function generateCompoundKey(): string
     {
-        return bin2hex(random_bytes(8));
+        return Crypto::randomHex(8);
     }
 
     private static function normalizeCompoundTranslationPatch(
@@ -2467,7 +2467,7 @@ class Content
             [$uuid, $skipLang]
         );
         while ($row = \DB::fetchRow($rows)) {
-            $data = self::decodeJson($row['translated_data'] ?? null);
+            $data = \Core\Utils\JsonTool::decodeArray($row['translated_data'] ?? null);
             $compound = $data[$fieldName] ?? null;
             if (!is_array($compound)) continue;
 
@@ -2581,7 +2581,7 @@ class Content
             [$uuid]
         );
         while ($row = \DB::fetchRow($result)) {
-            $translations[(string)$row['lang_code']] = self::decodeJson($row['translated_data'] ?? null);
+            $translations[(string)$row['lang_code']] = \Core\Utils\JsonTool::decodeArray($row['translated_data'] ?? null);
         }
 
         foreach (['item_texts', 'item_nums', 'item_bools', 'item_dates'] as $table) {
@@ -2615,46 +2615,6 @@ class Content
         return is_int($identifier) || ctype_digit((string) $identifier);
     }
 
-    private static function decodeJson(mixed $json): array
-    {
-        if (is_array($json)) {
-            return $json;
-        }
-        if (!is_string($json) || $json === '') {
-            return [];
-        }
 
-        $data = json_decode($json, true);
-        return is_array($data) ? $data : [];
-    }
 
-    private static function encodeJson(array $data): string
-    {
-        return json_encode($data, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR);
-    }
-
-    private static function pgIntArray(array $values): string
-    {
-        return '{' . implode(',', array_map('intval', $values)) . '}';
-    }
-
-    private static function pgTextArray(array $values): string
-    {
-        return '{' . implode(',', array_map(
-            static fn($value): string => '"' . str_replace(
-                ['\\', '"'],
-                ['\\\\', '\\"'],
-                (string) $value
-            ) . '"',
-            $values
-        )) . '}';
-    }
-
-    private static function pgBoolArray(array $values): string
-    {
-        return '{' . implode(',', array_map(
-            static fn(bool $value): string => $value ? 'true' : 'false',
-            $values
-        )) . '}';
-    }
 }

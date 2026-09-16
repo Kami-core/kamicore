@@ -28,7 +28,7 @@ final class Session
         }
 
         self::$sessionId = Request::cookie()['session_id'] ?? null;
-        self::$uaHash = hash('sha256', normalizeUAgent());
+        self::$uaHash = hash('sha256', self::normalizeUserAgent());
 
         if (!self::$sessionId) {
             self::create();
@@ -71,9 +71,9 @@ final class Session
 
     public static function create(): string
     {
-        self::$uaHash ??= hash('sha256', normalizeUAgent());
+        self::$uaHash ??= hash('sha256', self::normalizeUserAgent());
 
-        $sessionId = self::$sessionId = generateSessionId();
+        $sessionId = self::$sessionId = self::generateId();
         $createdAt = date('Y-m-d H:i:s.uP');
         $sessionData = [
             'domain_id' => DOMAIN_ID,
@@ -146,7 +146,7 @@ final class Session
         }
 
         $oldSessionId = self::$sessionId;
-        $newSessionId = generateSessionId();
+        $newSessionId = self::generateId();
         $updatedAt = date('Y-m-d H:i:s.uP');
 
         $updatedSessionId = \DB::query(
@@ -259,12 +259,33 @@ final class Session
         self::$session['user_id'] = (int)(self::$session['user_id'] ?? 0);
         self::$session['is_persistent'] = (bool)(self::$session['is_persistent'] ?? false);
 
-        $data = self::$session['data'] ?? [];
-        if (is_string($data)) {
-            $decoded = json_decode($data, true);
-            $data = is_array($decoded) ? $decoded : [];
+        self::$session['data'] = \Core\Utils\JsonTool::decodeArray(
+            self::$session['data'] ?? null
+        );
+    }
+
+    private static function generateId(): string
+    {
+        return Crypto::randomHex();
+    }
+
+    private static function normalizeUserAgent(?string $userAgent = null): string
+    {
+        $userAgent ??= $_SERVER['HTTP_USER_AGENT'] ?? '';
+        $userAgent = strtolower(trim($userAgent));
+
+        $patterns = [
+            '/chrome\/\d+\.\d+\.\d+\.\d+/' => 'chrome',
+            '/firefox\/\d+\.\d+/' => 'firefox',
+            '/safari\/\d+\.\d+/' => 'safari',
+            '/edg\/\d+\.\d+/' => 'edge',
+        ];
+
+        foreach ($patterns as $pattern => $replacement) {
+            $userAgent = preg_replace($pattern, $replacement, $userAgent) ?? $userAgent;
         }
-        self::$session['data'] = is_array($data) ? $data : [];
+
+        return trim(preg_replace('/\s+/', ' ', $userAgent) ?? $userAgent);
     }
 
     private static function cacheKey(int $domainId, string $sessionId): string

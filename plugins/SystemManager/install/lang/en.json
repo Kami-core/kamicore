@@ -74,10 +74,6 @@
     "setting_default_language_help": "Primary language used when no language is explicitly selected.",
     "setting_lifecycle_plugins": "Lifecycle plugins",
     "setting_lifecycle_plugins_help": "Plugins initialized for every page request even when they are not used by a wrapper.",
-    "setting_system_css": "System CSS",
-    "setting_system_css_help": "Stylesheets exposed through the system_css template parameter. One path per item; order is preserved.",
-    "setting_system_js": "System JavaScript",
-    "setting_system_js_help": "JavaScript files exposed through the system_js template parameter. One path per item; order is preserved.",
     "setting_system_custom_code": "System custom code",
     "setting_system_custom_code_help": "Trusted raw HTML exposed through the system_custom_code template parameter. Script tags are allowed."
   }

@@ -12,7 +12,8 @@
       "author": "Kami team"
     },
     "prefix": "cv",
-    "version": "1.0.3",
+    "version": "1.0.5",
+    "category": "display",
     "dependencies": [],
     "config": {
       "handlers": {
@@ -30,7 +31,8 @@
               "description": "Item to display.",
               "type": "item_id",
               "content_types": [
-                "static_content"
+                "static_content",
+                "static_content_block"
               ],
               "default": 0
             }

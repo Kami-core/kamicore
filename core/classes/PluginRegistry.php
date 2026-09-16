@@ -14,10 +14,39 @@ namespace Core;
 
 if (!defined('IN_KAMI')) die();
 
-namespace Core;
-
 final class PluginRegistry
 {
+
+    /** @return array<string, array{id:int, uuid:string, prefix:string}> */
+    public static function forDomain(?int $domainId = null): array
+    {
+        $domainId ??= DOMAIN_ID;
+        $plugins = \Cache::get('d_' . $domainId . ':plugins');
+
+        if (!is_array($plugins)) {
+            $plugins = [];
+            $result = \DB::query(
+                'SELECT p.plugin_id, p.uuid, p.system_name, p.plugin_prefix
+                 FROM plugin_domains pd
+                 JOIN plugins p USING(plugin_id)
+                 WHERE pd.domain_id=$1',
+                [$domainId]
+            );
+
+            while ($plugin = \DB::fetchRow($result)) {
+                $plugins[(string) $plugin['system_name']] = [
+                    'id' => (int) $plugin['plugin_id'],
+                    'uuid' => (string) $plugin['uuid'],
+                    'prefix' => (string) $plugin['plugin_prefix'],
+                ];
+            }
+
+            \Cache::set('d_' . $domainId . ':plugins', $plugins);
+        }
+
+        return $plugins;
+    }
+
     private array $instances = [];
 
     public function get(string $plugin_name): ?BasePlugin

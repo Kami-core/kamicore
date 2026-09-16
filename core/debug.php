@@ -86,7 +86,7 @@ $phpErrors = [];
 
         if (!empty($phpErrors)) {
             echo "<div style='color:#900;'><b>Errors:</b><br><pre>";
-            echo htmlspecialchars(implode("\n", $phpErrors));
+            echo \Core\Html::escape(implode("\n", $phpErrors));
             echo "</pre></div>";
         }
 

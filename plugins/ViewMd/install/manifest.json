@@ -1,0 +1,50 @@
+{
+  "schema_version": "1.0",
+  "type": "plugin",
+  "data": {
+    "info": {
+      "uuid": "1b69196c-6fb8-4dcb-9f4b-821aef623f4a",
+      "name": "ViewMd",
+      "title": "Markdown viewer",
+      "description": "Render Markdown content on the front end.",
+      "origin_type": "local",
+      "origin_ref": null,
+      "author": "Kami team"
+    },
+    "prefix": "md",
+    "version": "1.0.1",
+    "category": "display",
+    "dependencies": [],
+    "config": {
+      "handlers": {
+        "view": {
+          "title": "View",
+          "actions": {
+            "view": {
+              "title": "View"
+            }
+          },
+          "default_action": "view",
+          "instance_params": {
+            "item_id": {
+              "title": "Markdown item",
+              "description": "Content item containing the markdown_body field.",
+              "type": "item_id",
+              "default": 0
+            }
+          }
+        }
+      },
+      "default_handler": "view",
+      "default_language": "en"
+    },
+    "settings": {
+      "safe_mode": {
+        "title": "Safe mode",
+        "description": "Sanitize potentially unsafe Markdown output, including raw HTML and unsafe links.",
+        "type": "checkbox",
+        "default": true
+      }
+    }
+  }
+}

@@ -45,10 +45,7 @@ abstract class AbstractProvider implements ProviderInterface
             throw new \RuntimeException('PHP cURL extension is required for external providers.');
         }
 
-        $body = json_encode(
-            $payload,
-            JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR
-        );
+        $body = \Core\Utils\JsonTool::encode($payload, false);
 
         $curl = curl_init($url);
         if ($curl === false) {

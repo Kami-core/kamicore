@@ -1,0 +1,197 @@
+{
+  "schema_version": "1.0",
+  "type": "plugin",
+  "data": {
+    "info": {
+      "uuid": "f3f0a6a1-7d44-45a0-bce1-9af2b1f934d8",
+      "name": "ViewContent",
+      "title": "Content viewer",
+      "description": "Generic single-item, list and tree viewer for content types.",
+      "origin_type": "local",
+      "origin_ref": null,
+      "author": "Kami team"
+    },
+    "prefix": "vc",
+    "version": "1.0.0",
+    "category": "display",
+    "dependencies": [
+      "Pagination"
+    ],
+    "config": {
+      "handlers": {
+        "view": {
+          "title": "Single item",
+          "actions": {
+            "view": {
+              "title": "View item"
+            }
+          },
+          "default_action": "view",
+          "instance_params": {
+            "content_types": {
+              "title": "Content types",
+              "description": "Content types available to this viewer instance. Leave empty to use all content types enabled in ViewContent.",
+              "type": "content_type_id",
+              "multiple": true,
+              "default": null
+            },
+            "parent_id": {
+              "title": "List parent item",
+              "description": "Optional parent used when the single-item view falls back to a list.",
+              "type": "item_id",
+              "default": null
+            },
+            "items_per_page": {
+              "title": "Items per page",
+              "description": "Number of items in fallback list view. Use 0 to display all items.",
+              "type": "number",
+              "default": 20
+            },
+            "show_pagination": {
+              "title": "Show pagination",
+              "description": "Display pagination controls in fallback list view.",
+              "type": "checkbox",
+              "default": true
+            },
+            "sort_field": {
+              "title": "Sort field",
+              "description": "Optional field used to sort items across all selected content types. Missing values are placed last.",
+              "type": "field_id",
+              "default": null
+            },
+            "sort_direction": {
+              "title": "Sort direction",
+              "description": "Sort direction for the selected sort field.",
+              "type": "select",
+              "options": [
+                {"title": "Ascending", "value": "asc"},
+                {"title": "Descending", "value": "desc"}
+              ],
+              "default": "asc"
+            }
+          }
+        },
+        "list": {
+          "title": "Content list",
+          "actions": {
+            "list": {
+              "title": "List items"
+            }
+          },
+          "default_action": "list",
+          "instance_params": {
+            "content_types": {
+              "title": "Content types",
+              "description": "Content types available to this viewer instance. Leave empty to use all content types enabled in ViewContent.",
+              "type": "content_type_id",
+              "multiple": true,
+              "default": null
+            },
+            "parent_id": {
+              "title": "Parent item",
+              "description": "Optional parent item. When set, only its direct children are listed.",
+              "type": "item_id",
+              "default": null
+            },
+            "items_per_page": {
+              "title": "Items per page",
+              "description": "Number of items displayed per page. Use 0 to display all items.",
+              "type": "number",
+              "default": 20
+            },
+            "show_pagination": {
+              "title": "Show pagination",
+              "description": "Display pagination controls for this list.",
+              "type": "checkbox",
+              "default": true
+            },
+            "sort_field": {
+              "title": "Sort field",
+              "description": "Optional field used to sort items across all selected content types. Missing values are placed last.",
+              "type": "field_id",
+              "default": null
+            },
+            "sort_direction": {
+              "title": "Sort direction",
+              "description": "Sort direction for the selected sort field.",
+              "type": "select",
+              "options": [
+                {"title": "Ascending", "value": "asc"},
+                {"title": "Descending", "value": "desc"}
+              ],
+              "default": "asc"
+            }
+          }
+        },
+        "tree": {
+          "title": "Content tree",
+          "actions": {
+            "tree": {
+              "title": "Show tree"
+            },
+            "tree_children": {
+              "title": "Load tree children"
+            }
+          },
+          "default_action": "tree",
+          "instance_params": {
+            "content_types": {
+              "title": "Content types",
+              "description": "Content types included in the tree. Leave empty to use all content types enabled in ViewContent.",
+              "type": "content_type_id",
+              "multiple": true,
+              "default": null
+            },
+            "parent_id": {
+              "title": "Tree root item",
+              "description": "Optional root anchor. The root itself is not rendered; its children become the first tree level.",
+              "type": "item_id",
+              "default": null
+            },
+            "tree_mode": {
+              "title": "Tree loading mode",
+              "description": "Full renders the complete tree. Lazy loads closed branches through AJAX when first opened.",
+              "type": "select",
+              "options": [
+                {"title": "Full tree", "value": "full"},
+                {"title": "Lazy loading", "value": "lazy"}
+              ],
+              "default": "full"
+            },
+            "sort_field": {
+              "title": "Sort field",
+              "description": "Optional field used to sort sibling items across all selected content types. Missing values are placed last.",
+              "type": "field_id",
+              "default": null
+            },
+            "sort_direction": {
+              "title": "Sort direction",
+              "description": "Sort direction for the selected sort field.",
+              "type": "select",
+              "options": [
+                {"title": "Ascending", "value": "asc"},
+                {"title": "Descending", "value": "desc"}
+              ],
+              "default": "asc"
+            }
+          }
+        },
+        "manage": {
+          "title": "Manage",
+          "actions": {
+            "config": {
+              "title": "Viewer configuration"
+            },
+            "save_config": {
+              "title": "Save viewer configuration"
+            }
+          },
+          "default_action": "config"
+        }
+      },
+      "default_handler": "list",
+      "default_language": "en"
+    },
+    "settings": {}
+  }
+}

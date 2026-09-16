@@ -32,7 +32,7 @@
     }
 
     function initializeDynamic(root) {
-        window.Admin?.initDynamic?.(root);
+        window.Kami?.initDynamic?.(root);
         window.FormsRichtext?.init?.(root);
     }
 
@@ -217,11 +217,5 @@
         init(document);
     }
 
-    if (window.Admin) {
-        const previousInitDynamic = window.Admin.initDynamic;
-        window.Admin.initDynamic = function (root) {
-            previousInitDynamic?.(root);
-            init(root || document);
-        };
-    }
+    window.Kami?.registerInitializer?.(init);
 })();

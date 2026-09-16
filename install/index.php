@@ -10,6 +10,8 @@
 
 declare(strict_types=1);
 
+date_default_timezone_set('UTC');
+
 $secureCookie = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off');
 session_set_cookie_params([
     'httponly' => true,

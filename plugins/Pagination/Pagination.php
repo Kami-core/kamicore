@@ -120,8 +120,8 @@ final class Pagination extends \Core\BasePlugin
         return [
             'template' => 'pagination-item',
             'params' => [
-                'url' => htmlspecialchars($url, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'),
-                'label' => htmlspecialchars($label, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'),
+                'url' => \Core\Html::escape($url),
+                'label' => \Core\Html::escape($label),
                 'class' => $class,
             ],
         ];

@@ -1,0 +1,82 @@
+/* =========================================================
+   User data tables
+   ========================================================= */
+.aa-page header {
+	margin-bottom: 20px;
+	display: flex;
+	justify-content: space-between;
+}
+
+.kc-table-wrap {
+  width: 100%;
+  overflow-x: auto;
+  border: 1px solid var(--kc-border, #D1D5DB);
+  border-radius: var(--kc-radius-md, 10px);
+  background: var(--kc-bg, #fff);
+}
+
+.kc-table {
+  width: 100%;
+  border-collapse: collapse;
+  color: var(--kc-ink-2, #334155);
+  font-size: 0.925rem;
+}
+
+.kc-table th,
+.kc-table td {
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--kc-border, #D1D5DB);
+  text-align: left;
+  vertical-align: middle;
+}
+
+.kc-table th {
+  background: var(--kc-bg-soft, #F3F4F6);
+  color: var(--kc-ink-2, #334155);
+  font-size: 0.76rem;
+  font-weight: 600;
+  letter-spacing: 0.025em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.kc-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.kc-table tbody tr:hover {
+  background: rgba(15, 23, 42, 0.025);
+}
+
+.kc-table td code {
+  white-space: nowrap;
+}
+
+.kc-table-actions-heading,
+.kc-table-actions-cell {
+  text-align: right !important;
+}
+
+.kc-table-actions-cell {
+  white-space: nowrap;
+}
+
+.kc-table-actions-cell .kc-btn-group {
+  justify-content: flex-end;
+}
+
+.kc-table-actions-cell .kc-btn {
+  height: 32px;
+  padding-inline: 10px;
+  font-size: 0.8rem;
+}
+
+.kc-table-actions-cell form {
+  margin: 0;
+}
+
+.kc-table-empty {
+  padding-block: 22px !important;
+  color: var(--kc-ink-2, #334155);
+  text-align: center !important;
+}

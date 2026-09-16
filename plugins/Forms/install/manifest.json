@@ -12,7 +12,8 @@
       "author": "Kami team"
     },
     "prefix": "form",
-    "version": "1.3.0",
+    "version": "1.3.1",
+    "category": "utilities",
     "dependencies": [],
     "config": {
       "handlers": {

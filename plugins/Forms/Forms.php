@@ -16,9 +16,6 @@ if (!defined('IN_KAMI')) die();
 
 final class Forms extends \Core\BasePlugin
 {
-    private bool $richtextAssetsRendered = false;
-    private bool $fieldAssetsRendered = false;
-    private bool $mediaAssetsRendered = false;
     private bool $mediaContextResolved = false;
     private ?array $mediaContext = null;
 
@@ -60,6 +57,7 @@ final class Forms extends \Core\BasePlugin
         'html_editor' => 'richtext',
         'html' => 'textarea',
         'richtext' => 'textarea',
+        'markdown' => 'textarea',
         'textarea' => 'string',
         'email' => 'string',
         'url' => 'string',
@@ -141,12 +139,12 @@ final class Forms extends \Core\BasePlugin
             : [];
 
         return \Core\Renderer::render($template, $this->name, [
-            'action' => self::escape($action),
-            'method' => self::escape($method),
+            'action' => \Core\Html::escape($action),
+            'method' => \Core\Html::escape($method),
             'fields' => $renderedFields,
             'form_attributes' => self::renderAttributes($formAttributes),
             'ajax_attributes' => self::renderAttributes($ajaxAttributes),
-            'submit_label' => self::escape($this->phrase('submit', 'Submit')),
+            'submit_label' => \Core\Html::escape($this->phrase('submit', 'Submit')),
         ]);
     }
 
@@ -257,8 +255,6 @@ final class Forms extends \Core\BasePlugin
         $template = '';
         $ajaxUrl = (string) ($field['ajax_url'] ?? '');
         $options = '';
-        $fieldAssets = '';
-        $mediaAssets = '';
         $multipleEmpty = '';
         $tomselectCreate = '0';
         $repeatableRows = '';
@@ -275,7 +271,7 @@ final class Forms extends \Core\BasePlugin
 
         if ($multiple && ($selectLike || $type === 'autocomplete')) {
             $multipleEmpty = '<input type="hidden" name="'
-                . self::escape($name)
+                . \Core\Html::escape($name)
                 . '" value="">';
         }
 
@@ -297,13 +293,10 @@ final class Forms extends \Core\BasePlugin
             $tomselectCreate = '1';
         } elseif ($useMedia) {
             $template = 'field-media';
-            $fieldAssets = $this->fieldAssets();
-            $mediaAssets = $this->mediaAssets();
-            $mediaRoot = self::escape(trim((string) ($params['root'] ?? '')));
-            $mediaAcceptJson = self::escape(json_encode(
-                self::normalizeMediaAccept($params['accept'] ?? []),
-                JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE
-            ) ?: '[]');
+            $this->registerFieldAssets();
+            $this->registerMediaAssets();
+            $mediaRoot = \Core\Html::escape(trim((string) ($params['root'] ?? '')));
+            $mediaAcceptJson = \Core\Html::escape(\Core\Utils\JsonTool::encode(self::normalizeMediaAccept($params['accept'] ?? []), false));
             $mediaCanManage = !empty($mediaContext['can_manage']) ? '1' : '0';
 
             $mediaName = $name;
@@ -312,7 +305,7 @@ final class Forms extends \Core\BasePlugin
             }
             if ($multiple) {
                 $multipleEmpty = '<input type="hidden" name="'
-                    . self::escape($mediaName)
+                    . \Core\Html::escape($mediaName)
                     . '" value="">';
             }
 
@@ -341,19 +334,19 @@ final class Forms extends \Core\BasePlugin
             if ($multiple && empty($attributes['disabled']) && empty($attributes['readonly'])) {
                 $mediaFooter = '<button class="admin-button admin-button-secondary admin-button-small" '
                     . 'type="button" data-media-add-url>'
-                    . self::escape($this->phrase('add_url', 'Add URL'))
+                    . \Core\Html::escape($this->phrase('add_url', 'Add URL'))
                     . '</button> '
                     . '<button class="admin-button admin-button-secondary admin-button-small" '
                     . 'type="button" data-media-browse-all>'
-                    . self::escape($this->phrase('browse_media', 'Browse Media'))
+                    . \Core\Html::escape($this->phrase('browse_media', 'Browse Media'))
                     . '</button>';
             }
         } elseif ($useRepeatable) {
             $template = 'field-repeatable';
-            $fieldAssets = $this->fieldAssets();
+            $this->registerFieldAssets();
             $repeatableName = str_ends_with($name, '[]') ? $name : $name . '[]';
             $multipleEmpty = '<input type="hidden" name="'
-                . self::escape($repeatableName)
+                . \Core\Html::escape($repeatableName)
                 . '" value="">';
             $values = self::multipleValues($value);
             if ($values === []) {
@@ -380,7 +373,7 @@ final class Forms extends \Core\BasePlugin
             if (empty($attributes['disabled']) && empty($attributes['readonly'])) {
                 $repeatableAddButton = '<button class="admin-button admin-button-secondary admin-button-small" '
                     . 'type="button" data-repeatable-add>'
-                    . self::escape($this->phrase('add_value', 'Add value'))
+                    . \Core\Html::escape($this->phrase('add_value', 'Add value'))
                     . '</button>';
             }
         } else {
@@ -415,56 +408,43 @@ final class Forms extends \Core\BasePlugin
             }
         }
 
-        $richtextAssets = '';
-        if (
-            ($template === 'field-richtext' || ($useRepeatable && self::isTypeOrDescendant($type, 'richtext')))
-            && !$this->richtextAssetsRendered
-        ) {
-            $richtextScript = 'plugins/Forms/assets/forms-richtext.js';
-            $richtextVersion = filemtime(ROOT_PATH . $richtextScript) ?: 1;
-            $richtextMediaAssets = $this->mediaContext() !== null
-                ? $this->mediaAssets() . "\n"
-                : '';
-            $richtextAssets = <<<HTML
-<link rel="stylesheet" href="/third-party/frontend/quill/quill.snow.css">
-<script src="/third-party/frontend/quill/quill.js"></script>
-{$richtextMediaAssets}<script src="/{$richtextScript}?v={$richtextVersion}"></script>
-HTML;
-            $this->richtextAssetsRendered = true;
+        if (in_array($template, ['field-tomselect', 'field-autocomplete'], true)) {
+            $this->registerTomSelectAssets();
         }
 
-        if ($useRepeatable && $richtextAssets !== '') {
-            $fieldAssets = $richtextAssets . "\n" . $fieldAssets;
-            $richtextAssets = '';
+        if (
+            $template === 'field-richtext'
+            || ($useRepeatable && self::isTypeOrDescendant($type, 'richtext'))
+        ) {
+            $this->addCss('/third-party/frontend/quill/quill.snow.css');
+            $this->addJs('/third-party/frontend/quill/quill.js');
+            if ($this->mediaContext() !== null) {
+                $this->registerMediaAssets();
+            }
+            $this->addJs('/plugins/Forms/assets/forms-richtext.js');
         }
 
         return \Core\Renderer::render($template, $this->name, [
-            'id' => self::escape($id),
-            'id_json' => json_encode(
-                $id,
-                JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT
-            ) ?: '""',
-            'name' => self::escape($name),
-            'label' => self::escape($label),
-            'value' => self::escape(self::inputValue($type, $value)),
-            'placeholder' => self::escape($placeholder),
+            'id' => \Core\Html::escape($id),
+            'id_json' => \Core\Utils\JsonTool::encodeForHtml($id),
+            'name' => \Core\Html::escape($name),
+            'label' => \Core\Html::escape($label),
+            'value' => \Core\Html::escape(self::inputValue($type, $value)),
+            'placeholder' => \Core\Html::escape($placeholder),
             'field_attributes' => self::renderAttributes($attributes),
-            'checkbox_value' => self::escape(
+            'checkbox_value' => \Core\Html::escape(
                 self::scalarValue($field['checkbox_value'] ?? 1)
             ),
             'options' => $options,
-            'description' => self::escape((string) ($field['description'] ?? '')),
-            'richtext_assets' => $richtextAssets,
-            'input_type' => self::escape($inputType),
-            'ajax_url' => self::escape($ajaxUrl),
+            'description' => \Core\Html::escape((string) ($field['description'] ?? '')),
+            'input_type' => \Core\Html::escape($inputType),
+            'ajax_url' => \Core\Html::escape($ajaxUrl),
             'tomselect_create' => $tomselectCreate,
             'multiple_empty' => $multipleEmpty,
-            'field_assets' => $fieldAssets,
             'repeatable_rows' => $repeatableRows,
             'repeatable_template' => $repeatableTemplate,
             'repeatable_add_button' => $repeatableAddButton,
             'repeatable_required' => $repeatableRequired,
-            'media_assets' => $mediaAssets,
             'media_rows' => $mediaRows,
             'media_row_template' => $mediaRowTemplate,
             'media_footer' => $mediaFooter,
@@ -715,10 +695,10 @@ HTML;
         }
 
         if ($ids !== []) {
-            $bind = [self::pgIntArray($ids)];
+            $bind = [\DB::prepareIdArray($ids)];
             $where = ['item_id=ANY($1::int[])'];
             if ($contentTypeIds !== []) {
-                $bind[] = self::pgIntArray($contentTypeIds);
+                $bind[] = \DB::prepareIdArray($contentTypeIds);
                 $where[] = 'ct_id=ANY($2::int[])';
             }
             $itemIds = array_map(
@@ -861,7 +841,7 @@ HTML;
             $where[] = 'entity.user_id > 0';
         }
         if ($ids !== []) {
-            $bind[] = self::pgIntArray($ids);
+            $bind[] = \DB::prepareIdArray($ids);
             $where[] = $config['id'] . '=ANY($' . count($bind) . '::int[])';
         } elseif ($query !== '') {
             $bind[] = $query;
@@ -876,7 +856,7 @@ HTML;
         if ($ids === [] && !empty($parameters['exclude_ids'])) {
             $excludeIds = self::normalizeEntityIds($parameters['exclude_ids']);
             if ($excludeIds !== []) {
-                $bind[] = self::pgIntArray($excludeIds);
+                $bind[] = \DB::prepareIdArray($excludeIds);
                 $where[] = $config['id'] . '<>ALL($' . count($bind) . '::int[])';
             }
         }
@@ -884,7 +864,7 @@ HTML;
         if ($type === 'page_id' && !empty($parameters['domain_ids'])) {
             $domainIds = self::normalizeEntityIds($parameters['domain_ids']);
             if ($domainIds !== []) {
-                $bind[] = self::pgIntArray($domainIds);
+                $bind[] = \DB::prepareIdArray($domainIds);
                 $where[] = 'entity.domain_id=ANY($' . count($bind) . '::int[])';
             }
         }
@@ -892,7 +872,7 @@ HTML;
         if ($type === 'plugin_id' && !empty($parameters['domain_ids'])) {
             $domainIds = self::normalizeEntityIds($parameters['domain_ids']);
             if ($domainIds !== []) {
-                $bind[] = self::pgIntArray($domainIds);
+                $bind[] = \DB::prepareIdArray($domainIds);
                 $where[] = 'entity.is_active=true AND EXISTS (SELECT 1 FROM plugin_domains pd_filter'
                     . ' WHERE pd_filter.plugin_id=entity.plugin_id'
                     . ' AND pd_filter.domain_id=ANY($' . count($bind) . '::int[]))';
@@ -910,7 +890,7 @@ HTML;
                 }
             }
             if ($fieldTypeIds !== []) {
-                $bind[] = self::pgIntArray(array_values(array_unique($fieldTypeIds)));
+                $bind[] = \DB::prepareIdArray(array_values(array_unique($fieldTypeIds)));
                 $where[] = 'entity.type_id=ANY($' . count($bind) . '::int[])';
             }
         }
@@ -919,7 +899,7 @@ HTML;
             if (!empty($parameters['usergroup_ids'])) {
                 $usergroupIds = self::normalizeEntityIds($parameters['usergroup_ids']);
                 if ($usergroupIds !== []) {
-                    $bind[] = self::pgIntArray($usergroupIds);
+                    $bind[] = \DB::prepareIdArray($usergroupIds);
                     $where[] = 'entity.usergroup_id=ANY($' . count($bind) . '::int[])';
                 }
             }
@@ -1068,36 +1048,25 @@ HTML;
         return $items;
     }
 
-    private function fieldAssets(): string
+    private function registerFieldAssets(): void
     {
-        if ($this->fieldAssetsRendered) {
-            return '';
-        }
-        $this->fieldAssetsRendered = true;
-
-        $css = 'plugins/Forms/assets/forms-fields.css';
-        $js = 'plugins/Forms/assets/forms-fields.js';
-        $cssVersion = is_file(ROOT_PATH . $css) ? (filemtime(ROOT_PATH . $css) ?: 1) : 1;
-        $jsVersion = is_file(ROOT_PATH . $js) ? (filemtime(ROOT_PATH . $js) ?: 1) : 1;
-
-        return '<link rel="stylesheet" href="/' . $css . '?v=' . $cssVersion . '">'
-            . "\n<script src=\"/{$js}?v={$jsVersion}\"></script>";
+        $this->addCss('/plugins/Forms/assets/forms-fields.css');
+        $this->addJs('/plugins/Forms/assets/forms-fields.js');
     }
 
-    private function mediaAssets(): string
+    private function registerMediaAssets(): void
     {
-        if ($this->mediaAssetsRendered) {
-            return '';
+        $media = $this->plugins->get('Media');
+        if ($media && method_exists($media, 'registerBrowserAssets')) {
+            $media->registerBrowserAssets();
         }
-        $this->mediaAssetsRendered = true;
+    }
 
-        $css = 'plugins/Media/assets/media-browser.css';
-        $js = 'plugins/Media/assets/media-browser.js';
-        $cssVersion = is_file(ROOT_PATH . $css) ? (filemtime(ROOT_PATH . $css) ?: 1) : 1;
-        $jsVersion = is_file(ROOT_PATH . $js) ? (filemtime(ROOT_PATH . $js) ?: 1) : 1;
-
-        return '<link rel="stylesheet" href="/' . $css . '?v=' . $cssVersion . '">'
-            . "\n<script src=\"/{$js}?v={$jsVersion}\"></script>";
+    private function registerTomSelectAssets(): void
+    {
+        $this->addCss('/assets/vendor/tom-select/tom-select.css');
+        $this->addJs('/assets/vendor/tom-select/tom-select.complete.js');
+        $this->addJs('/assets/js/tom-select-init.js');
     }
 
     private function mediaContext(): ?array
@@ -1107,29 +1076,12 @@ HTML;
         }
         $this->mediaContextResolved = true;
 
-        if (!defined('DOMAIN_ID')) {
-            return null;
-        }
-        if (
-            !is_file(ROOT_PATH . 'plugins/Media/assets/media-browser.js')
-            || !is_file(ROOT_PATH . 'plugins/Media/assets/media-browser.css')
-        ) {
+        $media = $this->plugins->get('Media');
+        if (!$media) {
             return null;
         }
 
-        $row = \DB::getRow(
-            'SELECT p.plugin_id '
-                . 'FROM plugins p '
-                . 'JOIN plugin_domains pd ON pd.plugin_id=p.plugin_id '
-                . 'WHERE p.system_name=$1 AND p.is_active=true AND pd.domain_id=$2 '
-                . 'LIMIT 1',
-            ['Media', (int) DOMAIN_ID]
-        );
-        if (!$row) {
-            return null;
-        }
-
-        $pluginId = (int) $row['plugin_id'];
+        $pluginId = (int) $media->id;
         if (!\Core\User::canPlugin($pluginId, 'view')) {
             return null;
         }
@@ -1164,10 +1116,9 @@ HTML;
         $rowTemplate = '';
         $addButton = '';
         $containerAttributes = '';
-        $fieldAssets = '';
 
         if ($multiple) {
-            $fieldAssets = $this->fieldAssets();
+            $this->registerFieldAssets();
             $containerAttributes = ' data-repeatable data-repeatable-required="'
                 . ($required ? '1' : '0') . '"';
             $rows = is_array($value) ? array_values($value) : [];
@@ -1202,7 +1153,7 @@ HTML;
             if (empty($attributes['disabled']) && empty($attributes['readonly'])) {
                 $addButton = '<button class="admin-button admin-button-secondary admin-button-small" '
                     . 'type="button" data-repeatable-add>'
-                    . self::escape($this->phrase('add_value', 'Add value'))
+                    . \Core\Html::escape($this->phrase('add_value', 'Add value'))
                     . '</button>';
             }
         } else {
@@ -1218,10 +1169,9 @@ HTML;
         }
 
         return \Core\Renderer::render('field-compound', $this->name, [
-            'field_assets' => $fieldAssets,
             'compound_attributes' => $containerAttributes,
-            'label' => self::escape($label),
-            'description' => self::escape($description),
+            'label' => \Core\Html::escape($label),
+            'description' => \Core\Html::escape($description),
             'compound_rows' => $rowsHtml,
             'compound_template' => $rowTemplate,
             'compound_add_button' => $addButton,
@@ -1284,13 +1234,13 @@ HTML;
         array $attributes
     ): string {
         $controls = $this->repeatableControls($attributes);
-        $safeName = self::escape($name);
-        $safeId = self::escape($id);
-        $safePlaceholder = self::escape($placeholder);
+        $safeName = \Core\Html::escape($name);
+        $safeId = \Core\Html::escape($id);
+        $safePlaceholder = \Core\Html::escape($placeholder);
         $normalizedValue = self::inputValue($type, $value);
 
         if (self::isTypeOrDescendant($type, 'richtext')) {
-            $htmlValue = self::escape(self::scalarValue($value));
+            $htmlValue = \Core\Html::escape(self::scalarValue($value));
             return '<div class="form-repeatable-row form-repeatable-row-richtext" data-repeatable-row>'
                 . '<div class="form-field-richtext" data-richtext '
                 . 'data-output-id="' . $safeId . '-output" '
@@ -1317,10 +1267,10 @@ HTML;
         if (self::isTypeOrDescendant($type, 'textarea')) {
             $control = '<textarea id="' . $safeId . '" name="' . $safeName . '" placeholder="'
                 . $safePlaceholder . '"' . self::renderAttributes($attributes) . '>'
-                . self::escape($normalizedValue) . '</textarea>';
+                . \Core\Html::escape($normalizedValue) . '</textarea>';
         } else {
-            $control = '<input type="' . self::escape($inputType) . '" id="' . $safeId
-                . '" name="' . $safeName . '" value="' . self::escape($normalizedValue)
+            $control = '<input type="' . \Core\Html::escape($inputType) . '" id="' . $safeId
+                . '" name="' . $safeName . '" value="' . \Core\Html::escape($normalizedValue)
                 . '" placeholder="' . $safePlaceholder . '"'
                 . self::renderAttributes($attributes) . '>';
         }
@@ -1338,26 +1288,26 @@ HTML;
         array $attributes,
         bool $multiple
     ): string {
-        $safeName = self::escape($name);
-        $safeId = self::escape($id);
+        $safeName = \Core\Html::escape($name);
+        $safeId = \Core\Html::escape($id);
         $control = '<input type="text" id="' . $safeId . '" name="' . $safeName
-            . '" value="' . self::escape($value) . '" placeholder="'
-            . self::escape($placeholder) . '"' . self::renderAttributes($attributes)
+            . '" value="' . \Core\Html::escape($value) . '" placeholder="'
+            . \Core\Html::escape($placeholder) . '"' . self::renderAttributes($attributes)
             . ' data-media-input>';
 
         $buttons = '';
         if (empty($attributes['disabled']) && empty($attributes['readonly'])) {
             $buttons .= '<button class="admin-button admin-button-secondary admin-button-small" '
                 . 'type="button" data-media-browse-row>'
-                . self::escape($this->phrase('browse_media', 'Browse Media'))
+                . \Core\Html::escape($this->phrase('browse_media', 'Browse Media'))
                 . '</button>';
             if ($multiple) {
                 $buttons .= '<button class="admin-button admin-button-secondary admin-button-small" type="button" '
-                    . 'data-repeatable-up title="' . self::escape($this->phrase('move_up', 'Move up')) . '">↑</button>'
+                    . 'data-repeatable-up title="' . \Core\Html::escape($this->phrase('move_up', 'Move up')) . '">↑</button>'
                     . '<button class="admin-button admin-button-secondary admin-button-small" type="button" '
-                    . 'data-repeatable-down title="' . self::escape($this->phrase('move_down', 'Move down')) . '">↓</button>'
+                    . 'data-repeatable-down title="' . \Core\Html::escape($this->phrase('move_down', 'Move down')) . '">↓</button>'
                     . '<button class="admin-button admin-button-secondary admin-button-small" type="button" '
-                    . 'data-repeatable-remove>' . self::escape($this->phrase('remove', 'Remove')) . '</button>';
+                    . 'data-repeatable-remove>' . \Core\Html::escape($this->phrase('remove', 'Remove')) . '</button>';
             }
         }
 
@@ -1375,11 +1325,11 @@ HTML;
 
         return '<div class="form-repeatable-actions">'
             . '<button class="admin-button admin-button-secondary admin-button-small" type="button" '
-            . 'data-repeatable-up title="' . self::escape($this->phrase('move_up', 'Move up')) . '">↑</button>'
+            . 'data-repeatable-up title="' . \Core\Html::escape($this->phrase('move_up', 'Move up')) . '">↑</button>'
             . '<button class="admin-button admin-button-secondary admin-button-small" type="button" '
-            . 'data-repeatable-down title="' . self::escape($this->phrase('move_down', 'Move down')) . '">↓</button>'
+            . 'data-repeatable-down title="' . \Core\Html::escape($this->phrase('move_down', 'Move down')) . '">↓</button>'
             . '<button class="admin-button admin-button-secondary admin-button-small" type="button" '
-            . 'data-repeatable-remove>' . self::escape($this->phrase('remove', 'Remove')) . '</button>'
+            . 'data-repeatable-remove>' . \Core\Html::escape($this->phrase('remove', 'Remove')) . '</button>'
             . '</div>';
     }
 
@@ -1434,10 +1384,7 @@ HTML;
             $status
         );
 
-        return json_encode(
-            $data,
-            JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES
-        ) ?: '{"status":"error","items":[]}';
+        return \Core\Utils\JsonTool::encode($data, false);
     }
 
     /** @return list<string> */
@@ -1472,10 +1419,6 @@ HTML;
         )));
     }
 
-    private static function pgIntArray(array $values): string
-    {
-        return '{' . implode(',', array_map('intval', $values)) . '}';
-    }
 
     private static function compactText(string $value, int $limit = 80): string
     {
@@ -1605,7 +1548,7 @@ HTML;
             $html .= '        <option'
                 . self::renderAttributes($attributes)
                 . '>'
-                . self::escape($label)
+                . \Core\Html::escape($label)
                 . "</option>\n";
         }
 
@@ -1634,7 +1577,7 @@ HTML;
                 continue;
             }
 
-            $html .= ' ' . $name . '="' . self::escape((string) $value) . '"';
+            $html .= ' ' . $name . '="' . \Core\Html::escape((string) $value) . '"';
         }
 
         return $html;
@@ -1645,7 +1588,7 @@ HTML;
         $id = preg_replace('/[^A-Za-z0-9_-]+/', '-', $name) ?? '';
         $id = trim($id, '-');
 
-        return $id !== '' ? 'field-' . $id : 'field-' . bin2hex(random_bytes(4));
+        return $id !== '' ? 'field-' . $id : 'field-' . \Core\Crypto::randomHex(4);
     }
 
     private static function inputValue(string $type, mixed $value): string
@@ -1715,8 +1658,4 @@ HTML;
         return false;
     }
 
-    private static function escape(string $value): string
-    {
-        return htmlspecialchars($value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
-    }
 }

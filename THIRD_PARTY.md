@@ -14,6 +14,16 @@ KamiCore includes or uses the third-party components listed below. Each componen
 
 Copyright and attribution notices supplied by the PHPMailer project are preserved in the bundled distribution.
 
+### Parsedown 1.8.0
+
+- Purpose: Markdown parsing and HTML rendering.
+- Location: `third-party/parsedown/`
+- Project: https://github.com/erusev/parsedown
+- License: MIT License (`MIT`).
+- License text: `third-party/parsedown/LICENSE.txt`
+
+Copyright and attribution notices supplied by the Parsedown project are preserved in the bundled distribution.
+
 ### Quill 1.3.7
 
 - Purpose: rich-text editing.

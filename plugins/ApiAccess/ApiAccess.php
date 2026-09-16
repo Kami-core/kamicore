@@ -17,6 +17,7 @@ use Core\Request;
 use Core\Translation;
 use Core\User;
 use Plugins\Forms\Forms;
+use Plugins\Formatter\Formatter;
 
 if (!defined('IN_KAMI')) die();
 
@@ -25,9 +26,11 @@ final class ApiAccess extends \Core\BasePlugin
     private const CONTENT_OPERATIONS = ['view', 'create', 'edit', 'delete'];
 
     private ?Forms $forms = null;
+    private ?Formatter $formatter = null;
 
     public function tokenList(array $instanceParams = []): string
     {
+        $this->addCss('/plugins/ApiAccess/assets/api-access.css');
         $this->assertApiAccess();
         $userId = User::getId();
         $rows = [];
@@ -56,25 +59,21 @@ final class ApiAccess extends \Core\BasePlugin
             $rows[] = [
                 'template' => 'token-row',
                 'params' => [
-                    'name' => $this->escape((string)$row['name']),
-                    'token_hint' => $this->escape('kami_…' . (string)$row['token_hint']),
-                    'created' => $this->escape($this->formatDate($row['created_at'] ?? null)),
-                    'last_used' => $this->escape(
-                        $row['last_used_at']
-                            ? $this->formatDate($row['last_used_at'])
-                            : $this->phrase('never_used', 'Never used')
-                    ),
-                    'expires' => $this->escape(
-                        $row['expires_at']
-                            ? $this->formatDate($row['expires_at'])
-                            : $this->phrase('never', 'Never')
-                    ),
-                    'access' => $this->escape(
+                    'name' => \Core\Html::escape((string)$row['name']),
+                    'token_hint' => \Core\Html::escape('kami_…' . (string)$row['token_hint']),
+                    'created' => \Core\Html::escape($this->formatter()->dateTime($row['created_at'] ?? null)),
+                    'last_used' => $row['last_used_at']
+                        ? \Core\Html::escape($this->formatter()->dateTime($row['last_used_at']))
+                        : '{{phrase.never_used}}',
+                    'expires' => $row['expires_at']
+                        ? \Core\Html::escape($this->formatter()->dateTime($row['expires_at']))
+                        : '{{phrase.never}}',
+                    'access' => \Core\Html::escape(
                         $this->replaceCount('actions_count', '{count} actions', $actionCount)
                         . ' · '
                         . $this->replaceCount('types_count', '{count} content types', $typeCount)
                     ),
-                    'status' => $this->escape($this->phrase($status, ucfirst($status))),
+                    'status' => '{{phrase.' . $status . '}}',
                     'actions_html' => $this->tokenActions((int)$row['token_id'], $status),
                 ],
             ];
@@ -93,7 +92,7 @@ final class ApiAccess extends \Core\BasePlugin
         return $this->render('token-list', [
             'notice' => $notice,
             'token_rows' => $rows,
-            'create_url' => $this->url('tokenEdit'),
+            'create_url' => $this->actionUrl('tokenEdit'),
         ]);
     }
 
@@ -106,7 +105,7 @@ final class ApiAccess extends \Core\BasePlugin
         if ($tokenId > 0) {
             $token = $this->ownedToken($tokenId);
             if (!$this->isEditable($token)) {
-                return $this->redirect($this->url('tokenList'));
+                return \Core\Response::redirect($this->actionUrl('tokenList'));
             }
         }
 
@@ -140,10 +139,7 @@ final class ApiAccess extends \Core\BasePlugin
         }
 
         $restrictions = $this->normalizeRestrictions($data);
-        $restrictionsJson = json_encode(
-            $restrictions,
-            JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR
-        );
+        $restrictionsJson = \Core\Utils\JsonTool::encode($restrictions, false);
 
         if ($tokenId > 0) {
             $token = $this->ownedToken($tokenId);
@@ -164,7 +160,7 @@ final class ApiAccess extends \Core\BasePlugin
                 throw new \RuntimeException('Failed to update API token.');
             }
 
-            return $this->redirect($this->url('tokenList', ['status' => 'updated']));
+            return \Core\Response::redirect($this->actionUrl('tokenList', ['status' => 'updated']));
         }
 
         $secret = $this->generateToken();
@@ -173,7 +169,7 @@ final class ApiAccess extends \Core\BasePlugin
             [
                 'user_id' => $userId,
                 'name' => $name,
-                'token_hash' => hash('sha256', $secret),
+                'token_hash' => \Core\Crypto::tokenHash($secret),
                 'token_hint' => substr($secret, -6),
                 'restrictions' => $restrictionsJson,
                 'expires_at' => $expiresAt,
@@ -185,8 +181,8 @@ final class ApiAccess extends \Core\BasePlugin
         }
 
         return $this->render('token-created', [
-            'token' => $this->escape($secret),
-            'done_url' => $this->url('tokenList'),
+            'token' => \Core\Html::escape($secret),
+            'done_url' => $this->actionUrl('tokenList'),
         ]);
     }
 
@@ -205,7 +201,7 @@ final class ApiAccess extends \Core\BasePlugin
             [(int)$token['token_id'], User::getId()]
         );
 
-        return $this->redirect($this->url('tokenList', ['status' => 'disabled']));
+        return \Core\Response::redirect($this->actionUrl('tokenList', ['status' => 'disabled']));
     }
 
     public function tokenEnable(array $instanceParams = []): string
@@ -223,7 +219,7 @@ final class ApiAccess extends \Core\BasePlugin
             [(int)$token['token_id'], User::getId()]
         );
 
-        return $this->redirect($this->url('tokenList', ['status' => 'enabled']));
+        return \Core\Response::redirect($this->actionUrl('tokenList', ['status' => 'enabled']));
     }
 
     public function tokenRevoke(array $instanceParams = []): string
@@ -241,7 +237,7 @@ final class ApiAccess extends \Core\BasePlugin
             [(int)$token['token_id'], User::getId()]
         );
 
-        return $this->redirect($this->url('tokenList', ['status' => 'revoked']));
+        return \Core\Response::redirect($this->actionUrl('tokenList', ['status' => 'revoked']));
     }
 
     public function tokenDelete(array $instanceParams = []): string
@@ -260,11 +256,12 @@ final class ApiAccess extends \Core\BasePlugin
             throw new \RuntimeException('Failed to delete API token.');
         }
 
-        return $this->redirect($this->url('tokenList', ['status' => 'deleted']));
+        return \Core\Response::redirect($this->actionUrl('tokenList', ['status' => 'deleted']));
     }
 
     private function renderEditor(?array $token, ?string $error = null, array $submitted = []): string
     {
+        $this->addCss('/plugins/ApiAccess/assets/api-access.css');
         $tokenId = (int)($token['token_id'] ?? 0);
         $restrictions = $submitted !== []
             ? $this->normalizeRestrictions($submitted)
@@ -302,24 +299,24 @@ final class ApiAccess extends \Core\BasePlugin
         $tokenInfo = '';
         if ($token) {
             $tokenInfo = $this->render('token-info', [
-                'token_hint' => $this->escape('kami_…' . (string)$token['token_hint']),
-                'created_at' => $this->escape($this->formatDate($token['created_at'] ?? null)),
+                'token_hint' => \Core\Html::escape('kami_…' . (string)$token['token_hint']),
+                'created_at' => \Core\Html::escape($this->formatter()->dateTime($token['created_at'] ?? null)),
             ]);
         }
 
         return $this->render('token-edit', [
-            'page_title' => $this->escape(
+            'page_title' => \Core\Html::escape(
                 $token ? (string)$token['name'] : $this->phrase('create', 'Create token')
             ),
             'notice' => $error !== null && $error !== ''
-                ? $this->render('notice-error', ['message' => $this->escape($error)])
+                ? $this->render('notice-error', ['message' => \Core\Html::escape($error)])
                 : '',
             'token_id' => (string)$tokenId,
             'fields' => $fields,
             'token_info' => $tokenInfo,
             'permissions_html' => $this->renderPermissions($restrictions),
-            'save_url' => $this->url('tokenSave'),
-            'back_url' => $this->url('tokenList'),
+            'save_url' => $this->actionUrl('tokenSave'),
+            'back_url' => $this->actionUrl('tokenList'),
         ]);
     }
 
@@ -331,8 +328,8 @@ final class ApiAccess extends \Core\BasePlugin
 
         foreach ($apiGroups as $group) {
             $apiHtml .= '<div class="aa-permission-group">'
-                . '<h4>' . $this->escape($group['plugin_title']) . ' · '
-                . $this->escape($group['handler_title']) . '</h4>';
+                . '<h4>' . \Core\Html::escape($group['plugin_title']) . ' · '
+                . \Core\Html::escape($group['handler_title']) . '</h4>';
             foreach ($group['actions'] as $action) {
                 $id = (string)$action['id'];
                 $apiHtml .= $this->permissionCheckbox(
@@ -348,7 +345,7 @@ final class ApiAccess extends \Core\BasePlugin
 
         if ($apiHtml === '') {
             $apiHtml = '<p class="admin-page-description">'
-                . $this->escape($this->phrase('no_api_actions', 'No API actions are currently available.'))
+                . \Core\Html::escape($this->phrase('no_api_actions', 'No API actions are currently available.'))
                 . '</p>';
         }
 
@@ -365,14 +362,14 @@ final class ApiAccess extends \Core\BasePlugin
                     isset($selectedOps[$operation])
                 );
             }
-            $contentHtml .= '<tr><td><strong>' . $this->escape((string)$type['title'])
-                . '</strong><div class="admin-page-description">' . $this->escape($typeName)
+            $contentHtml .= '<tr><td><strong>' . \Core\Html::escape((string)$type['title'])
+                . '</strong><div class="admin-page-description">' . \Core\Html::escape($typeName)
                 . '</div></td><td>' . $opsHtml . '</td></tr>';
         }
 
         if ($contentHtml === '') {
             $contentHtml = '<tr><td colspan="2" class="admin-page-description">'
-                . $this->escape(
+                . \Core\Html::escape(
                     $this->phrase('no_content_permissions', 'No content permissions are currently available.')
                 )
                 . '</td></tr>';
@@ -400,7 +397,7 @@ final class ApiAccess extends \Core\BasePlugin
         );
 
         while ($plugin = \DB::fetchRow($rows)) {
-            $config = $this->decodeJson($plugin['config'] ?? null);
+            $config = \Core\Utils\JsonTool::decodeArray($plugin['config'] ?? null);
             $translation = Translation::get((string)$plugin['uuid']) ?? [];
             $pluginTitle = (string)($translation['title'] ?? $plugin['system_name']);
 
@@ -528,7 +525,7 @@ final class ApiAccess extends \Core\BasePlugin
      */
     private function decodeRestrictions(mixed $value): array
     {
-        $data = $this->decodeJson($value);
+        $data = \Core\Utils\JsonTool::decodeArray($value);
         $actions = array_values(array_unique(array_filter(
             array_map('strval', is_array($data['actions'] ?? null) ? $data['actions'] : []),
             static fn(string $value): bool => $value !== ''
@@ -596,12 +593,12 @@ final class ApiAccess extends \Core\BasePlugin
         array $params = []
     ): array {
         $params['token_id'] = (string)$tokenId;
-        $params['edit_url'] ??= $this->url('tokenEdit', ['token' => $tokenId]);
+        $params['edit_url'] ??= $this->actionUrl('tokenEdit', ['token' => $tokenId]);
         $params['action_url'] ??= match ($template) {
-            'token-action-enable' => $this->url('tokenEnable'),
-            'token-action-disable' => $this->url('tokenDisable'),
-            'token-action-revoke' => $this->url('tokenRevoke'),
-            'token-action-delete' => $this->url('tokenDelete'),
+            'token-action-enable' => $this->actionUrl('tokenEnable'),
+            'token-action-disable' => $this->actionUrl('tokenDisable'),
+            'token-action-revoke' => $this->actionUrl('tokenRevoke'),
+            'token-action-delete' => $this->actionUrl('tokenDelete'),
             default => '',
         };
 
@@ -623,11 +620,11 @@ final class ApiAccess extends \Core\BasePlugin
         ?string $hint = null
     ): string {
         return '<label class="aa-permission-option">'
-            . '<input type="checkbox" name="' . $this->escape($name) . '" value="'
-            . $this->escape($value) . '"' . ($checked ? ' checked' : '') . '> '
-            . '<span>' . $this->escape($label) . '</span>'
+            . '<input type="checkbox" name="' . \Core\Html::escape($name) . '" value="'
+            . \Core\Html::escape($value) . '"' . ($checked ? ' checked' : '') . '> '
+            . '<span>' . \Core\Html::escape($label) . '</span>'
             . ($hint !== null
-                ? '<code class="aa-permission-code">' . $this->escape($hint) . '</code>'
+                ? '<code class="aa-permission-code">' . \Core\Html::escape($hint) . '</code>'
                 : '')
             . '</label>';
     }
@@ -639,27 +636,26 @@ final class ApiAccess extends \Core\BasePlugin
             return null;
         }
 
-        $date = \DateTimeImmutable::createFromFormat('!Y-m-d\\TH:i', $raw);
-        $errors = \DateTimeImmutable::getLastErrors();
-        if (
-            !$date
-            || ($errors !== false && ($errors['warning_count'] > 0 || $errors['error_count'] > 0))
-            || $date <= new \DateTimeImmutable('now')
-        ) {
+        try {
+            $date = \Core\Date::fromFormat('!Y-m-d\\TH:i', $raw);
+        } catch (\InvalidArgumentException) {
             throw new \InvalidArgumentException(
                 $this->phrase('invalid_expiry', 'Expiration date must be in the future.')
             );
         }
 
-        return $date->format('Y-m-d H:i:s');
+        if ($date <= \Core\Date::value('now')) {
+            throw new \InvalidArgumentException(
+                $this->phrase('invalid_expiry', 'Expiration date must be in the future.')
+            );
+        }
+
+        return \Core\Date::storage($date);
     }
 
     private function generateToken(): string
     {
-        return 'kami_' . rtrim(
-            strtr(base64_encode(random_bytes(32)), '+/', '-_'),
-            '='
-        );
+        return 'kami_' . \Core\Crypto::randomBase64Url();
     }
 
     private function ownedTokenFromRequest(): array
@@ -689,8 +685,11 @@ final class ApiAccess extends \Core\BasePlugin
         if (!empty($token['revoked_at'])) {
             return false;
         }
-        if (!empty($token['expires_at']) && strtotime((string)$token['expires_at']) <= time()) {
-            return false;
+        if (!empty($token['expires_at'])) {
+            $expiresAt = \Core\Date::value((string)$token['expires_at']);
+            if ($expiresAt !== null && $expiresAt <= \Core\Date::value('now')) {
+                return false;
+            }
         }
         return true;
     }
@@ -715,19 +714,13 @@ final class ApiAccess extends \Core\BasePlugin
         return $forms;
     }
 
-    private function url(string $action, array $params = []): string
+    private function formatter(): Formatter
     {
-        $url = '/' . PAGE_SLUG . '/' . $this->prefix . '-action/' . $action;
-        foreach ($params as $key => $value) {
-            $url .= '/' . $this->prefix . '-' . $key . '/' . rawurlencode((string)$value);
+        $formatter = $this->formatter ??= $this->plugins->get('Formatter');
+        if (!$formatter instanceof Formatter) {
+            throw new \RuntimeException('Formatter plugin is not available.');
         }
-        return $url;
-    }
-
-    private function redirect(string $url): string
-    {
-        \Core\Response::addHeader('Location: ' . $url, true, 302);
-        return '';
+        return $formatter;
     }
 
     private function statusNotice(string $status): string
@@ -744,7 +737,7 @@ final class ApiAccess extends \Core\BasePlugin
         }
 
         return $this->render('notice-success', [
-            'message' => $this->escape($this->phrase($keys[$status], $status)),
+            'message' => \Core\Html::escape($this->phrase($keys[$status], $status)),
         ]);
     }
 
@@ -768,42 +761,18 @@ final class ApiAccess extends \Core\BasePlugin
         return (string)($this->phrases[$key] ?? $fallback);
     }
 
-    private function formatDate(mixed $value): string
-    {
-        $timestamp = strtotime((string)$value);
-        return $timestamp !== false ? date('Y-m-d H:i', $timestamp) : '';
-    }
-
     private function formatExpiryInput(mixed $value): string
     {
-        $timestamp = strtotime((string)$value);
-        return $timestamp !== false ? date('Y-m-d\\TH:i', $timestamp) : '';
-    }
-
-    private function decodeJson(mixed $value): array
-    {
-        if (is_array($value)) {
-            return $value;
+        if ($value === null || $value === '') {
+            return '';
         }
-        if (!is_string($value) || trim($value) === '') {
-            return [];
-        }
-        $decoded = json_decode($value, true);
-        return is_array($decoded) ? $decoded : [];
+
+        return \Core\Date::format((string)$value, 'Y-m-d\\TH:i');
     }
 
-    private function escape(string $value): string
-    {
-        return htmlspecialchars($value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
-    }
 
-    private function escapeJsQuoted(string $value): string
+private function escapeJsQuoted(string $value): string
     {
-        return htmlspecialchars(
-            json_encode($value, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT)
-                ?: '""',
-            ENT_QUOTES | ENT_SUBSTITUTE,
-            'UTF-8'
-        );
+        return \Core\Html::escape(\Core\Utils\JsonTool::encodeForHtml($value));
     }
 }

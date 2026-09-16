@@ -1,0 +1,37 @@
+{
+  "plugin": {
+    "title": "Content viewer",
+    "description": "Generic single-item, list and tree viewer for content types."
+  },
+  "handlers": {
+    "view": {"title": "Single item", "actions": {"view": {"title": "View item"}}},
+    "list": {"title": "Content list", "actions": {"list": {"title": "List items"}}},
+    "tree": {
+      "title": "Content tree",
+      "actions": {
+        "tree": {"title": "Show tree"},
+        "tree_children": {"title": "Load tree children"}
+      }
+    },
+    "manage": {
+      "title": "Manage",
+      "actions": {
+        "config": {"title": "Viewer configuration"},
+        "save_config": {"title": "Save viewer configuration"}
+      }
+    }
+  },
+  "phrases": {
+    "configuration": "Content viewer configuration",
+    "configuration_description": "Enable content types and optionally assign templates for single, list and tree items.",
+    "content_type": "Content type",
+    "enabled": "Enabled",
+    "single_template": "Single template",
+    "list_template": "List item template",
+    "tree_template": "Tree item template",
+    "template_fallback_hint": "Leave empty to use the built-in fallback template.",
+    "save": "Save",
+    "saved": "ViewContent configuration saved.",
+    "no_items": "No content items found."
+  }
+}

@@ -11,7 +11,8 @@
       "author": "Kami team"
     },
     "prefix": "text",
-    "version": "1.0.0",
+    "version": "1.0.1",
+    "category": "utilities",
     "dependencies": [],
     "config": {},
     "settings": {}

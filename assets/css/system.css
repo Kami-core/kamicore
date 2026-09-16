@@ -18,3 +18,730 @@
     width: 24px;
     height: 24px;
 }
+
+/* Shared manager UI tokens. Themes may override these values. */
+:root {
+  --admin-bg: #f5f6f8;
+  --admin-surface: #ffffff;
+  --admin-surface-soft: #f7f8fa;
+  --admin-surface-hover: #f6f9fc;
+  --admin-border: #d8dee6;
+  --admin-border-strong: #c6ced8;
+  --admin-text: #303741;
+  --admin-text-soft: #485460;
+  --admin-muted: #687582;
+  --admin-accent: #1e87f0;
+  --admin-accent-hover: #0f74d1;
+  --admin-accent-soft: #eef6ff;
+  --admin-accent-border: #c8def4;
+  --admin-action: #708399;
+  --admin-danger: #d9364f;
+  --admin-danger-hover: #b42338;
+  --admin-danger-soft: #fff1f3;
+  --admin-danger-border: #f2c4cb;
+  --admin-success: #237a3b;
+  --admin-success-soft: #f0fbf4;
+  --admin-success-border: #a9d9b8;
+  --admin-warning: #8a5b00;
+  --admin-warning-soft: #fff8e8;
+  --admin-warning-border: #e8c77e;
+  --admin-radius: 6px;
+  --admin-radius-lg: 8px;
+  --admin-shadow: 0 4px 14px rgb(15 23 42 / 6%);
+}
+
+/* Shared manager controls. */
+/* Base reset for text-like buttons */
+	.button-reset {
+		background: none;
+		border: none;
+		padding: 0;
+		margin: 0;
+		font: inherit;
+		color: inherit;
+		cursor: pointer;
+	}
+
+	/* Link-style button: looks like text/link, behaves like button */
+	.button-link {
+		background: none;
+		border: none;
+		padding: 0;
+		margin: 0;
+		font: inherit;
+		color: inherit;
+		cursor: pointer;
+	}
+
+	/* Action-style link for small inline actions */
+	.action-link {
+		background: none;
+		border: none;
+		padding: 0;
+		margin: 0;
+		font: inherit;
+		color: var(--admin-accent); /* UIKit primary color */
+		cursor: pointer;
+	}
+
+	.action-link:hover {
+		text-decoration: underline;
+	}
+
+	/* Icon button: compact, no default button styles */
+	.button-icon {
+		background: none;
+		border: none;
+		padding: 0;
+		margin: 0;
+		font: inherit;
+		cursor: pointer;
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+	}
+
+	/* Muted style for secondary actions */
+	.button-muted {
+		color: #999;
+	}
+
+	.button-muted:hover {
+		color: #666;
+	}
+
+	/* Dangerous action styled as link */
+	.button-danger-link {
+		color: #e53935;
+	}
+
+	.button-danger-link:hover {
+		color: #c62828;
+	}
+
+	.quill-raw-field .ql-editor {
+		min-height: 200px !important;      /* your field height */
+		max-height: 80vh;       /* prevent "1.5 screens" */
+		overflow-y: auto;
+	}
+
+.ts-wrapper {
+	overflow: visible !important;
+}
+
+/* Shared admin UI primitives. */
+.admin-page {
+  margin: 24px 0;
+  padding-top: 20px;
+  overflow: hidden;
+  border: 1px solid var(--admin-border);
+  border-radius: var(--admin-radius-lg);
+  background: var(--admin-surface);
+  box-shadow: var(--admin-shadow);
+}
+
+.admin-page-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--admin-border);
+}
+
+.admin-page-title {
+  margin: 0;
+  color: #252b33;
+  font-size: 1.25rem;
+  font-weight: 500;
+}
+
+.admin-page-description,
+.admin-panel-description {
+  margin: 4px 0 0;
+  color: var(--admin-muted);
+  font-size: 0.84rem;
+  line-height: 1.45;
+}
+
+.admin-page-status {
+  color: var(--admin-muted);
+  font-size: 0.85rem;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.admin-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--admin-border);
+  background: var(--admin-surface-soft);
+}
+
+.admin-toolbar-end {
+  align-items: flex-end;
+}
+
+.admin-panel {
+  border: 1px solid var(--admin-border);
+  border-radius: var(--admin-radius-lg);
+  background: var(--admin-surface);
+}
+
+.admin-panel-raised {
+  box-shadow: var(--admin-shadow);
+}
+
+.admin-page > .admin-panel {
+  margin: 16px 20px 0;
+}
+
+.admin-page > .admin-panel:last-child {
+  margin-bottom: 20px;
+}
+
+.admin-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--admin-border);
+}
+
+.admin-panel-title {
+  margin: 0;
+  color: #252b33;
+  font-size: 1rem;
+  font-weight: 500;
+}
+
+.admin-button {
+  box-sizing: border-box;
+  min-height: 38px;
+  padding: 8px 14px;
+  border: 1px solid transparent;
+  border-radius: var(--admin-radius);
+  font: inherit;
+  font-size: 0.86rem;
+  line-height: 20px;
+  text-decoration: none;
+  white-space: nowrap;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  transition: border-color .12s ease, background-color .12s ease, color .12s ease;
+}
+
+.admin-button-primary {
+  border-color: var(--admin-accent);
+  background: var(--admin-accent);
+  color: #fff;
+}
+
+.admin-button-primary:hover:not(:disabled),
+.admin-button-primary:focus-visible:not(:disabled) {
+  border-color: var(--admin-accent-hover);
+  background: var(--admin-accent-hover);
+  color: #fff;
+  text-decoration: none;
+}
+
+.admin-button-secondary {
+  border-color: var(--admin-border-strong);
+  background: var(--admin-surface);
+  color: var(--admin-text-soft);
+}
+
+.admin-button-secondary:hover:not(:disabled),
+.admin-button-secondary:focus-visible:not(:disabled) {
+  border-color: var(--admin-accent-border);
+  background: var(--admin-accent-soft);
+  color: var(--admin-accent-hover);
+  text-decoration: none;
+}
+
+/* Basic editor actions: Edit / Open / Settings / Translate. */
+.admin-button-action {
+  border-color: var(--admin-border-strong);
+  background: var(--admin-surface);
+  color: var(--admin-action);
+}
+
+.admin-button-action:hover:not(:disabled),
+.admin-button-action:focus-visible:not(:disabled),
+.admin-action-button:hover:not(:disabled),
+.admin-action-button:focus-visible:not(:disabled) {
+  border-color: var(--admin-accent-border);
+  background: var(--admin-accent-soft);
+  color: var(--admin-accent-hover);
+  text-decoration: none;
+}
+
+.admin-button-danger {
+  border-color: var(--admin-danger-border);
+  background: var(--admin-surface);
+  color: var(--admin-danger);
+}
+
+.admin-button-danger:hover:not(:disabled),
+.admin-button-danger:focus-visible:not(:disabled) {
+  border-color: var(--admin-danger-border);
+  background: var(--admin-danger-soft);
+  color: var(--admin-danger-hover);
+}
+
+.admin-button-small {
+  min-height: 32px;
+  padding: 5px 10px;
+  font-size: 0.78rem;
+}
+
+.admin-button:disabled,
+.admin-action-button:disabled {
+  opacity: .48;
+  cursor: not-allowed;
+}
+
+.admin-actions,
+.admin-form-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.admin-actions {
+  gap: 6px;
+  flex-wrap: nowrap;
+}
+
+.admin-actions-heading,
+.admin-actions-cell {
+
+  text-align: right !important;
+  white-space: nowrap;
+}
+
+.admin-action-button {
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--admin-action);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: border-color .12s ease, background-color .12s ease, color .12s ease;
+}
+
+.admin-action-button-small {
+  width: 30px;
+  height: 30px;
+}
+
+.admin-action-danger:hover,
+.admin-action-danger:focus-visible {
+  border-color: var(--admin-danger-border);
+  background: var(--admin-danger-soft);
+  color: var(--admin-danger);
+}
+
+.admin-table-wrap {
+  overflow-x: auto;
+}
+
+.admin-table {
+  width: 100%;
+  border-collapse: collapse;
+  color: var(--admin-text-soft);
+}
+
+.admin-table th,
+.admin-table td {
+  padding: 12px 20px;
+  border-bottom: 1px solid var(--admin-border);
+  text-align: left;
+  vertical-align: middle;
+}
+
+.admin-table th {
+  background: var(--admin-surface-soft);
+  color: #66727f;
+  font-size: 0.76rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.admin-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.admin-table tbody tr:hover {
+  background: var(--admin-surface-hover);
+}
+
+.admin-table-top td {
+  vertical-align: top;
+}
+
+.admin-empty-state {
+  padding-block: 24px !important;
+  color: #7d8995;
+  text-align: center !important;
+}
+
+.admin-input {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 38px;
+  padding: 8px 10px;
+  border: 1px solid var(--admin-border-strong);
+  border-radius: var(--admin-radius);
+  background: var(--admin-surface);
+  color: var(--admin-text);
+  font: inherit;
+}
+
+.admin-input:focus {
+  border-color: var(--admin-accent);
+  outline: 3px solid rgb(30 135 240 / 14%);
+}
+
+/* Shared form controls for Forms output inside admin managers. */
+.admin-form input[type="text"],
+.admin-form input[type="email"],
+.admin-form input[type="url"],
+.admin-form input[type="number"],
+.admin-form input[type="date"],
+.admin-form input[type="month"],
+.admin-form input[type="time"],
+.admin-form input[type="datetime-local"],
+.admin-form textarea,
+.admin-form select,
+.admin-form-fields input[type="text"],
+.admin-form-fields input[type="email"],
+.admin-form-fields input[type="url"],
+.admin-form-fields input[type="number"],
+.admin-form-fields input[type="date"],
+.admin-form-fields input[type="month"],
+.admin-form-fields input[type="time"],
+.admin-form-fields input[type="datetime-local"],
+.admin-form-fields textarea,
+.admin-form-fields select {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 38px;
+  padding: 8px 10px;
+  border: 1px solid var(--admin-border-strong);
+  border-radius: var(--admin-radius);
+  background: var(--admin-surface);
+  color: var(--admin-text);
+  font: inherit;
+}
+
+.admin-form input:focus,
+.admin-form textarea:focus,
+.admin-form select:focus,
+.admin-form-fields input:focus,
+.admin-form-fields textarea:focus,
+.admin-form-fields select:focus {
+  border-color: var(--admin-accent);
+  outline: 3px solid rgb(30 135 240 / 14%);
+}
+
+.admin-form .form-field > label,
+.admin-form .form-field-richtext > label,
+.admin-form-fields .form-field > label {
+  display: block;
+  margin-bottom: 6px;
+  color: #3e4650;
+  font-size: 0.84rem;
+  font-weight: 500;
+}
+
+.admin-input-wide {
+  min-width: 230px;
+}
+
+.admin-textarea {
+  min-height: 78px;
+  line-height: 1.45;
+  resize: vertical;
+}
+
+.admin-notice,
+.kc-notice {
+  margin: 12px 0;
+  padding: 10px 12px;
+  border: 1px solid var(--admin-border);
+  border-radius: var(--admin-radius);
+  background: var(--admin-surface);
+  color: var(--admin-text-soft);
+  font-size: 0.85rem;
+}
+
+.admin-page > .admin-notice {
+  margin: 14px 20px 18px;
+}
+
+.admin-notice[hidden],
+.kc-notice[hidden] {
+  display: none;
+}
+
+.admin-notice-success,
+.kc-notice-success {
+  border-color: var(--admin-success-border);
+  background: var(--admin-success-soft);
+  color: var(--admin-success);
+}
+
+.admin-notice-error,
+.kc-notice-error {
+  border-color: var(--admin-danger-border);
+  background: var(--admin-danger-soft);
+  color: var(--admin-danger-hover);
+}
+
+.admin-notice-warning {
+  border-color: var(--admin-warning-border);
+  background: var(--admin-warning-soft);
+  color: var(--admin-warning);
+}
+
+.admin-visually-hidden {
+  position: absolute !important;
+  width: 1px !important;
+  height: 1px !important;
+  padding: 0 !important;
+  margin: -1px !important;
+  overflow: hidden !important;
+  clip: rect(0, 0, 0, 0) !important;
+  white-space: nowrap !important;
+  border: 0 !important;
+}
+
+@media (max-width: 720px) {
+  .admin-page-header,
+.admin-toolbar,
+.admin-panel-header {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .admin-page-status {
+    text-align: left;
+  }
+
+  .admin-table-wide {
+    min-width: 620px;
+  }
+
+  .admin-table-wider {
+    min-width: 680px;
+  }
+}
+
+/* Shared parent-page navigation for admin managers. */
+.admin-back-link {
+  margin-bottom: 9px;
+  color: var(--admin-muted);
+  font-size: 0.84rem;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.admin-back-link:hover,
+.admin-back-link:focus-visible {
+  color: var(--admin-accent);
+  text-decoration: underline;
+}
+
+/* Shared modal primitives used by the frontend helpers. */
+.kc-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+}
+
+#kami-modal.kc-modal:not([hidden]) {
+  display: grid;
+}
+
+.kc-modal-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.72);
+}
+
+.kc-modal-dialog {
+  position: relative;
+  z-index: 1;
+  width: min(100%, 600px);
+  max-height: calc(100vh - 40px);
+  overflow-y: auto;
+  padding: 32px;
+  border-radius: var(--kc-radius-lg, 16px);
+  background: var(--kc-bg, #fff);
+  box-shadow: var(--kc-shadow-lg, 0 20px 60px rgb(0 0 0 / 35%));
+}
+
+.kc-modal-close {
+  position: absolute;
+  top: 10px;
+  right: 12px;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--kc-ink-2, #334155);
+  font-size: 28px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.kc-modal-open {
+  overflow: hidden;
+}
+
+.kc-modal-title {
+  margin: 0 0 24px;
+  text-align: center;
+}
+
+/* Shared request state and notices. */
+.kc-notifications {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  z-index: 11000;
+  display: grid;
+  gap: 10px;
+  width: min(360px, calc(100vw - 40px));
+}
+
+.kc-notice {
+  padding: 12px 14px;
+  border: 1px solid var(--kc-border, #D1D5DB);
+  border-radius: var(--kc-radius-sm, 6px);
+  background: var(--kc-bg, #fff);
+  color: var(--kc-ink, #0F172A);
+  box-shadow: var(--kc-shadow-md, 0 12px 30px rgb(0 0 0 / 25%));
+}
+
+.kc-notice-error {
+  border-color: rgba(185, 28, 28, 0.35);
+  color: var(--kc-accent, #B91C1C);
+}
+
+.kc-notice-success {
+  border-color: rgba(22, 101, 52, 0.3);
+  color: #166534;
+}
+
+.is-busy {
+  opacity: 0.7;
+  cursor: progress;
+}
+
+
+
+.kami-tooltip {
+	display: block;
+    position: fixed;
+    z-index: 1000;
+
+    max-width: 240px;
+    padding: 5px 8px;
+
+    border-radius: 4px;
+    background: #252b33;
+    color: #fff;
+
+    font-size: 0.75rem;
+    line-height: 1.35;
+    white-space: nowrap;
+
+    pointer-events: none;
+    box-shadow: 0 3px 10px rgb(0 0 0 / 18%);
+}
+
+/* Semantic output generated by the rich text editor. */
+/* Rich text output generated by Quill. */
+.ql-align-center {
+  text-align: center;
+}
+
+.ql-align-right {
+  text-align: right;
+}
+
+.ql-align-justify {
+  text-align: justify;
+}
+
+.ql-indent-1 {
+  padding-left: 3em;
+}
+
+.ql-indent-2 {
+  padding-left: 6em;
+}
+
+.ql-indent-3 {
+  padding-left: 9em;
+}
+
+.ql-indent-4 {
+  padding-left: 12em;
+}
+
+.ql-indent-5 {
+  padding-left: 15em;
+}
+
+.ql-indent-6 {
+  padding-left: 18em;
+}
+
+.ql-indent-7 {
+  padding-left: 21em;
+}
+
+.ql-indent-8 {
+  padding-left: 24em;
+}
+
+iframe.ql-video {
+  display: block;
+  width: min(100%, 56rem);
+  aspect-ratio: 16 / 9;
+  border: 0;
+}
+
+pre.ql-syntax {
+  overflow-x: auto;
+  padding: 1em;
+  border-radius: var(--kc-radius-sm, 6px);
+  background: #1f2937;
+  color: #f9fafb;
+  white-space: pre-wrap;
+}

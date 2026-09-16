@@ -126,6 +126,9 @@
         const quill = new Quill(editorElement, {
             theme: 'snow',
             modules: {
+                clipboard: {
+                    matchVisual: false
+                },
                 toolbar: {
                     container: [
                         [{ header: [2, 3, 4, 5, 6, false] }],
@@ -205,12 +208,6 @@
 
     window.FormsRichtext = { init: initAll };
 
-    if (window.Admin) {
-        const previousInitDynamic = window.Admin.initDynamic;
-        window.Admin.initDynamic = function (root) {
-            previousInitDynamic?.(root);
-            initAll(root || document);
-        };
-    }
+    window.Kami?.registerInitializer?.(initAll);
 })();
 

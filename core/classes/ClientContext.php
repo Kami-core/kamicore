@@ -31,7 +31,7 @@ final class ClientContext
 
         $contextId = strtolower(trim((string)(Request::cookie()[self::COOKIE_NAME] ?? '')));
         if (!preg_match(self::ID_PATTERN, $contextId)) {
-            $contextId = bin2hex(random_bytes(32));
+            $contextId = Crypto::randomHex();
             Response::addCookie(
                 self::COOKIE_NAME,
                 $contextId,

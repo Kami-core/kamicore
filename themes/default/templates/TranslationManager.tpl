@@ -140,7 +140,6 @@
     <span class="tm-muted" data-tm-batch-state></span>
   </div>
 </section>
-<script src="/plugins/TranslationManager/assets/batch.js"></script>
 <!-- /kami:template -->
 
 

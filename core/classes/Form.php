@@ -27,13 +27,13 @@ final class Form
 	protected static function renderCsrfField(): string
     {
         $token = self::generateCsrfToken();
-        return '<input type="hidden" name="csrf_token" value="' . htmlspecialchars($token) . '">';
+        return '<input type="hidden" name="csrf_token" value="' . Html::escape($token) . '">';
     }
 
     protected static function generateCsrfToken(): string
     {
         if (!isset($_SESSION)) session_start();
-        $token = bin2hex(random_bytes(16));
+        $token = Crypto::randomHex();
         $_SESSION['csrf_token'] = $token;
         return $token;
     }
@@ -61,7 +61,7 @@ final class Form
 		$content_type_field = $config['content_type'] ? "<input type=hidden name='content_type' value='{$config['content_type']}'>" : "";
 
         return Renderer::render($template, $config['plugin_name'], [
-            'action' => htmlspecialchars($action),
+            'action' => Html::escape($action),
             'method' => $method,
             'fields' => $fieldsHtml . $csrfField . $content_type_field
         ]);
@@ -87,7 +87,7 @@ final class Form
 					'select * from field_variants where variant_name=$1',
 					[(string)$field['variant']]
 				);
-				$field_settings_variant = json_decode($row['variant_settings'] ?? "", true) ?? [];
+				$field_settings_variant = \Core\Utils\JsonTool::decodeArray($row['variant_settings'] ?? null);
 			}
 		}
 
@@ -98,7 +98,7 @@ final class Form
 				'select * from field_types where system_name=$1',
 				[$type]
 			);
-			$field_settings_type = json_decode($row['type_settings'] ?? '', true) ?? [];
+			$field_settings_type = \Core\Utils\JsonTool::decodeArray($row['type_settings'] ?? null);
 			\Cache::set("globals:field_settings:{$type}", $field_settings_type);
 		}
 
@@ -111,6 +111,18 @@ final class Form
                 ?? (!empty($field['variant'])
                     ? "form-{$field['variant']}"
                     : "form-{$type}"));
+
+        if ($tpl === 'form-html') {
+            Assets::css('/third-party/frontend/quill/quill.snow.css');
+            Assets::js('/third-party/frontend/quill/quill.js');
+            Assets::js('/assets/js/quill-init.js');
+        }
+
+        if (in_array($tpl, ['form-ct_id', 'form-item_id'], true)) {
+            Assets::css('/assets/vendor/tom-select/tom-select.css');
+            Assets::js('/assets/vendor/tom-select/tom-select.complete.js');
+            Assets::js('/assets/js/tom-select-init.js');
+        }
 
 		// if field pre-processing function exists
 		if(isset($field['settings']['functions']['edit']) && $field['settings']['functions']['edit']) {
@@ -129,10 +141,10 @@ final class Form
 		} else {
 			// Default values
 			$vars = [
-				'name' => htmlspecialchars($field['name'] ?? ''),
-				'label' => htmlspecialchars($field['title'] ?? ''),
-				'value' => ($field['settings']['multiple']) ? "" : htmlspecialchars($field['value'] ?? $field['default'] ?? ""),
-				'placeholder' => htmlspecialchars($field['placeholder'] ?? $field['title']),
+				'name' => Html::escape($field['name'] ?? ''),
+				'label' => Html::escape($field['title'] ?? ''),
+				'value' => ($field['settings']['multiple']) ? "" : Html::escape($field['value'] ?? $field['default'] ?? ""),
+				'placeholder' => Html::escape($field['placeholder'] ?? $field['title']),
 				'required' => !empty($field['required']) ? 'required' : '',
 				'options' => $field['options'] ?? [],
 				'multiple' => $field['settings']['multiple']
@@ -148,22 +160,22 @@ final class Form
 				foreach($field['value'] as $row_id => $value) {
 					if(is_array($value)) $value = $value[0];
 					$cur_vars = $vars;
-					$cur_vars['name'] =  htmlspecialchars($field['name'] ?? '')."[{$row_id}]";
-					$cur_vars['id'] =  htmlspecialchars($field['name'] ?? '')."_{$row_id}";
-					$cur_vars['value'] =  htmlspecialchars($value ?? $field['default'] ?? "");
+					$cur_vars['name'] =  Html::escape($field['name'] ?? '')."[{$row_id}]";
+					$cur_vars['id'] =  Html::escape($field['name'] ?? '')."_{$row_id}";
+					$cur_vars['value'] =  Html::escape($value ?? $field['default'] ?? "");
 
 					$field_container .= Renderer::render($tpl, $pluginName, $cur_vars);
 				}
 			} else {
 				$cur_vars = $vars;
-				$cur_vars['name'] =  htmlspecialchars($field['name'] ?? '')."[]";
-				$cur_vars['value'] =  htmlspecialchars($field['value'] ?? $field['default'] ?? "");
+				$cur_vars['name'] =  Html::escape($field['name'] ?? '')."[]";
+				$cur_vars['value'] =  Html::escape($field['value'] ?? $field['default'] ?? "");
 				$field_container .= Renderer::render($tpl, $pluginName, $cur_vars);
 			}
 
 			$cur_vars = $vars;
-			$cur_vars['name'] =  htmlspecialchars($field['name'] ?? '')."[]";
-			$cur_vars['value'] =  htmlspecialchars($field['default'] ?? "");
+			$cur_vars['name'] =  Html::escape($field['name'] ?? '')."[]";
+			$cur_vars['value'] =  Html::escape($field['default'] ?? "");
 
 			$field_container .= "</div>
 			<button type='button' class='uk-button uk-button-primary' id='{$field['name']}_add'>Add {$field['title']}</button>
@@ -267,15 +279,11 @@ EJS;
 		}
 
 		return [
-			'name' => htmlspecialchars($name, ENT_QUOTES, 'UTF-8'),
-			'id' => htmlspecialchars($fieldId, ENT_QUOTES, 'UTF-8'),
-			'label' => htmlspecialchars((string)($field['title'] ?? ''), ENT_QUOTES, 'UTF-8'),
+			'name' => Html::escape($name),
+			'id' => Html::escape($fieldId),
+			'label' => Html::escape((string)($field['title'] ?? '')),
 			'value' => '',
-			'placeholder' => htmlspecialchars(
-				(string)($field['placeholder'] ?? $field['title'] ?? ''),
-				ENT_QUOTES,
-				'UTF-8'
-			),
+			'placeholder' => Html::escape((string)($field['placeholder'] ?? $field['title'] ?? '')),
 			'required' => !empty($field['required']) ? 'required' : '',
 			'ct_ids' => implode(',', $contentTypeIds),
 			'multiple' => !empty($field['settings']['multiple']) ? 'multiple' : '',
@@ -298,12 +306,8 @@ EJS;
 			$options[] = [
 				'template' => 'form-select-option',
 				'params' => [
-					'title' => htmlspecialchars(
-						(string)($option['title'] ?? $optionValue),
-						ENT_QUOTES,
-						'UTF-8'
-					),
-					'value' => htmlspecialchars($optionValue, ENT_QUOTES, 'UTF-8'),
+					'title' => Html::escape((string)($option['title'] ?? $optionValue)),
+					'value' => Html::escape($optionValue),
 					'selected' => (string)$value === $optionValue ? 'selected' : '',
 				],
 			];
@@ -315,15 +319,11 @@ EJS;
 		);
 
 		return [
-			'name' => htmlspecialchars((string)($field['name'] ?? ''), ENT_QUOTES, 'UTF-8'),
-			'id' => htmlspecialchars($fieldId, ENT_QUOTES, 'UTF-8'),
-			'label' => htmlspecialchars((string)($field['title'] ?? ''), ENT_QUOTES, 'UTF-8'),
-			'value' => htmlspecialchars((string)$value, ENT_QUOTES, 'UTF-8'),
-			'placeholder' => htmlspecialchars(
-				(string)($field['placeholder'] ?? $field['title'] ?? ''),
-				ENT_QUOTES,
-				'UTF-8'
-			),
+			'name' => Html::escape((string)($field['name'] ?? '')),
+			'id' => Html::escape($fieldId),
+			'label' => Html::escape((string)($field['title'] ?? '')),
+			'value' => Html::escape((string)$value),
+			'placeholder' => Html::escape((string)($field['placeholder'] ?? $field['title'] ?? '')),
 			'required' => !empty($field['required']) ? 'required' : '',
 			'options' => $options,
 			'multiple' => false,
@@ -378,7 +378,7 @@ EJS;
 
 		header('Content-Type: application/json; charset=utf-8');
 
-		echo json_encode([
+		echo \Core\Utils\JsonTool::encode([
 			'status' => 'ok',
 			'data' => [
 				'items' => $items,
@@ -390,7 +390,7 @@ EJS;
 				],
 			],
 			'error' => null,
-		], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+		], false);
 
 		exit;
 	}

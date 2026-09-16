@@ -29,8 +29,8 @@ final class UserManager extends \Core\BasePlugin
         $this->assertAccess();
 
         return $this->render('overview', [
-            'users_url' => $this->url('users'),
-            'groups_url' => $this->url('groups'),
+            'users_url' => $this->actionUrl('users'),
+            'groups_url' => $this->actionUrl('groups'),
         ]);
     }
 
@@ -134,7 +134,16 @@ final class UserManager extends \Core\BasePlugin
         }
 
         User::clearUserCache($userId);
-        return $this->redirect($this->url('users'));
+
+        if ($notifications = $this->plugins->get('Notifications')) {
+            $notifications->store(
+                User::getId(),
+                $this->phrase('user_saved', 'User saved.'),
+                'success'
+            );
+        }
+
+        return \Core\Response::seeOther($this->actionUrl('users'));
     }
 
     public function groups(array $instanceParams = []): string
@@ -237,7 +246,16 @@ final class UserManager extends \Core\BasePlugin
         }
 
         User::clearGroupCache($groupId);
-        return $this->redirect($this->url('groups'));
+
+        if ($notifications = $this->plugins->get('Notifications')) {
+            $notifications->store(
+                User::getId(),
+                $this->phrase('group_saved', 'Group saved.'),
+                'success'
+            );
+        }
+
+        return \Core\Response::seeOther($this->actionUrl('groups'));
     }
 
     public function groupDelete(array $instanceParams = []): string
@@ -278,7 +296,16 @@ final class UserManager extends \Core\BasePlugin
 
         \Core\Translation::forget((string)$group['uuid']);
         User::clearGroupCache($groupId);
-        return $this->redirect($this->url('groups'));
+
+        if ($notifications = $this->plugins->get('Notifications')) {
+            $notifications->store(
+                User::getId(),
+                $this->phrase('group_deleted', 'Group deleted.'),
+                'success'
+            );
+        }
+
+        return \Core\Response::seeOther($this->actionUrl('groups'));
     }
 
     public function acl(array $instanceParams = []): string
@@ -318,7 +345,18 @@ final class UserManager extends \Core\BasePlugin
         }
 
         User::clearAclCache($groupId);
-        return $this->redirect($this->url('acl', ['groupId' => $groupId]));
+
+        if ($notifications = $this->plugins->get('Notifications')) {
+            $notifications->store(
+                User::getId(),
+                $this->phrase('acl_saved', 'Permissions saved.'),
+                'success'
+            );
+        }
+
+        return \Core\Response::seeOther(
+            $this->actionUrl('acl', ['groupId' => $groupId])
+        );
     }
 
     private function renderUsers(): string
@@ -334,26 +372,26 @@ final class UserManager extends \Core\BasePlugin
         );
 
         while ($row = \DB::fetchRow($result)) {
-            $translation = getTranslation((string)$row['uuid']) ?? [];
+            $translation = \Core\Translation::get((string)$row['uuid']) ?? [];
             $groupTitle = (string)($translation['title'] ?? $row['group_system_name']);
             $rows .= $this->render('user-row', [
-                'username' => $this->escape((string)$row['username']),
-                'email' => $this->escape((string)($row['email'] ?? '—')),
-                'group' => $this->escape($groupTitle),
-                'group_name' => $this->escape((string)$row['group_system_name']),
+                'username' => \Core\Html::escape((string)$row['username']),
+                'email' => \Core\Html::escape((string)($row['email'] ?? '—')),
+                'group' => \Core\Html::escape($groupTitle),
+                'group_name' => \Core\Html::escape((string)$row['group_system_name']),
                 'status' => $this->phrase(!empty($row['is_active']) ? 'active' : 'inactive', !empty($row['is_active']) ? 'Active' : 'Inactive'),
                 'verification' => !empty($row['email_verified_at'])
                     ? $this->phrase('verified', 'Verified')
                     : $this->phrase('unverified', 'Unverified'),
-                'edit_url' => $this->url('userEdit', ['userId' => (int)$row['user_id']]),
+                'edit_url' => $this->actionUrl('userEdit', ['userId' => (int)$row['user_id']]),
             ]);
         }
 
         return $this->render('users', [
             'user_rows' => $rows,
-            'create_url' => $this->url('userEdit'),
-            'groups_url' => $this->url('groups'),
-            'back_url' => $this->url('overview'),
+            'create_url' => $this->actionUrl('userEdit'),
+            'groups_url' => $this->actionUrl('groups'),
+            'back_url' => $this->actionUrl('overview'),
         ]);
     }
 
@@ -369,7 +407,7 @@ final class UserManager extends \Core\BasePlugin
         $groupOptions = [];
         $groups = \DB::query('SELECT usergroup_id, uuid, system_name FROM usergroups');
         while ($group = \DB::fetchRow($groups)) {
-            $translation = getTranslation((string)$group['uuid']) ?? [];
+            $translation = \Core\Translation::get((string)$group['uuid']) ?? [];
             $title = (string)($translation['title'] ?? $group['system_name']);
             $groupOptions[] = [
                 'value' => (int)$group['usergroup_id'],
@@ -409,18 +447,18 @@ final class UserManager extends \Core\BasePlugin
         ]);
 
         $passwordField = '<div class="form-field">'
-            . '<label for="um-password">' . $this->escape($this->phrase('new_password', 'New password')) . '</label>'
+            . '<label for="um-password">' . \Core\Html::escape($this->phrase('new_password', 'New password')) . '</label>'
             . '<input type="password" id="um-password" name="password" value="" autocomplete="new-password">'
-            . '<p class="form-hint">' . $this->escape($this->phrase('password_help', 'Leave empty to keep the current password.')) . '</p>'
+            . '<p class="form-hint">' . \Core\Html::escape($this->phrase('password_help', 'Leave empty to keep the current password.')) . '</p>'
             . '</div>';
 
         return $this->render('user-edit', [
-            'page_title' => $this->escape($user ? (string)$user['username'] : $this->phrase('new_user', 'New user')),
+            'page_title' => \Core\Html::escape($user ? (string)$user['username'] : $this->phrase('new_user', 'New user')),
             'user_id' => (string)$userId,
             'fields' => $fields,
             'password_field' => $passwordField,
-            'save_url' => $this->url('userSave'),
-            'back_url' => $this->url('users'),
+            'save_url' => $this->actionUrl('userSave'),
+            'back_url' => $this->actionUrl('users'),
         ]);
     }
 
@@ -436,7 +474,7 @@ final class UserManager extends \Core\BasePlugin
         );
 
         while ($row = \DB::fetchRow($result)) {
-            $translation = getTranslation((string)$row['uuid']) ?? [];
+            $translation = \Core\Translation::get((string)$row['uuid']) ?? [];
             $row['title'] = (string)($translation['title'] ?? $row['system_name']);
             $row['description'] = (string)($translation['description'] ?? '');
             $groupRows[] = $row;
@@ -448,31 +486,31 @@ final class UserManager extends \Core\BasePlugin
             $delete = '';
             if (empty($row['is_system'])) {
                 $delete = $this->render('group-delete', [
-                    'delete_url' => $this->url('groupDelete'),
+                    'delete_url' => $this->actionUrl('groupDelete'),
                     'group_id' => (string)$row['usergroup_id'],
-                    'confirm' => $this->escape($this->phrase('confirm_delete_group', 'Delete this group?')),
+                    'confirm' => \Core\Html::escape($this->phrase('confirm_delete_group', 'Delete this group?')),
                 ]);
             }
 
             $rows .= $this->render('group-row', [
-                'title' => $this->escape((string)$row['title']),
-                'name' => $this->escape((string)$row['system_name']),
-                'description' => $this->escape((string)$row['description']),
+                'title' => \Core\Html::escape((string)$row['title']),
+                'name' => \Core\Html::escape((string)$row['system_name']),
+                'description' => \Core\Html::escape((string)$row['description']),
                 'users' => (string)$row['user_count'],
                 'system_badge' => !empty($row['is_system'])
-                    ? ' <span class="admin-page-description">(' . $this->escape($this->phrase('system', 'system')) . ')</span>'
+                    ? ' <span class="admin-page-description">(' . \Core\Html::escape($this->phrase('system', 'system')) . ')</span>'
                     : '',
-                'edit_url' => $this->url('groupEdit', ['groupId' => (int)$row['usergroup_id']]),
-                'acl_url' => $this->url('acl', ['groupId' => (int)$row['usergroup_id']]),
+                'edit_url' => $this->actionUrl('groupEdit', ['groupId' => (int)$row['usergroup_id']]),
+                'acl_url' => $this->actionUrl('acl', ['groupId' => (int)$row['usergroup_id']]),
                 'delete' => $delete,
             ]);
         }
 
         return $this->render('groups', [
             'group_rows' => $rows,
-            'create_url' => $this->url('groupEdit'),
-            'users_url' => $this->url('users'),
-            'back_url' => $this->url('overview'),
+            'create_url' => $this->actionUrl('groupEdit'),
+            'users_url' => $this->actionUrl('users'),
+            'back_url' => $this->actionUrl('overview'),
         ]);
     }
 
@@ -486,7 +524,7 @@ final class UserManager extends \Core\BasePlugin
         }
 
         $translation = $group
-            ? (getTranslation((string)$group['uuid']) ?? [])
+            ? (\Core\Translation::get((string)$group['uuid']) ?? [])
             : [];
         $title = (string)($translation['title'] ?? ($group['system_name'] ?? ''));
         $description = (string)($translation['description'] ?? '');
@@ -526,11 +564,11 @@ final class UserManager extends \Core\BasePlugin
         ]);
 
         return $this->render('group-edit', [
-            'page_title' => $this->escape($group ? $title : $this->phrase('new_group', 'New group')),
+            'page_title' => \Core\Html::escape($group ? $title : $this->phrase('new_group', 'New group')),
             'group_id' => (string)$groupId,
             'fields' => $fields,
-            'save_url' => $this->url('groupSave'),
-            'back_url' => $this->url('groups'),
+            'save_url' => $this->actionUrl('groupSave'),
+            'back_url' => $this->actionUrl('groups'),
         ]);
     }
 
@@ -540,7 +578,7 @@ final class UserManager extends \Core\BasePlugin
         if (!$group) {
             throw new \RuntimeException('User group not found.');
         }
-        $groupTranslation = getTranslation((string)$group['uuid']) ?? [];
+        $groupTranslation = \Core\Translation::get((string)$group['uuid']) ?? [];
         $groupTitle = (string)($groupTranslation['title'] ?? $group['system_name']);
 
         $selectedPages = array_fill_keys(array_map('intval', \DB::getArr(
@@ -555,7 +593,7 @@ final class UserManager extends \Core\BasePlugin
              JOIN domains d USING(domain_id)'
         );
         while ($page = \DB::fetchRow($pages)) {
-            $translation = getTranslation((string)$page['uuid']) ?? [];
+            $translation = \Core\Translation::get((string)$page['uuid']) ?? [];
             $page['title'] = (string)($translation['title'] ?? $page['system_name']);
             $pageRows[] = $page;
         }
@@ -573,7 +611,7 @@ final class UserManager extends \Core\BasePlugin
             if ($lastDomain !== $page['domain_name']) {
                 $lastDomain = (string)$page['domain_name'];
                 $pageFields .= '<h4 class="admin-panel-title" style="margin:16px 0 8px">'
-                    . $this->escape($lastDomain) . '</h4>';
+                    . \Core\Html::escape($lastDomain) . '</h4>';
             }
             $pageId = (int)$page['page_id'];
             $label = (string)$page['title'] . ' (' . (string)$page['system_name'] . ') · /'
@@ -599,12 +637,12 @@ final class UserManager extends \Core\BasePlugin
         $pluginRows = [];
         $plugins = \DB::query('SELECT plugin_id, uuid, system_name, config FROM plugins');
         while ($plugin = \DB::fetchRow($plugins)) {
-            $config = $this->decodeJson($plugin['config'] ?? null);
+            $config = \Core\Utils\JsonTool::decodeArray($plugin['config'] ?? null);
             $handlers = is_array($config['handlers'] ?? null) ? $config['handlers'] : [];
             if ($handlers === []) {
                 continue;
             }
-            $translation = getTranslation((string)$plugin['uuid']) ?? [];
+            $translation = \Core\Translation::get((string)$plugin['uuid']) ?? [];
             $plugin['title'] = (string)($translation['title'] ?? $plugin['system_name']);
             $plugin['handlers'] = $handlers;
             $pluginRows[] = $plugin;
@@ -613,8 +651,8 @@ final class UserManager extends \Core\BasePlugin
         foreach ($pluginRows as $plugin) {
             $pluginId = (int)$plugin['plugin_id'];
             $pluginFields .= '<h4 class="admin-panel-title" style="margin:16px 0 8px">'
-                . $this->escape((string)$plugin['title'])
-                . ' <span class="admin-page-description">(' . $this->escape((string)$plugin['system_name']) . ')</span></h4>';
+                . \Core\Html::escape((string)$plugin['title'])
+                . ' <span class="admin-page-description">(' . \Core\Html::escape((string)$plugin['system_name']) . ')</span></h4>';
             foreach (array_keys($plugin['handlers']) as $handler) {
                 if (!is_string($handler) || $handler === '') {
                     continue;
@@ -643,7 +681,7 @@ final class UserManager extends \Core\BasePlugin
         $typeRows = [];
         $types = \DB::query('SELECT ct_id, uuid, system_name FROM content_types');
         while ($type = \DB::fetchRow($types)) {
-            $translation = getTranslation((string)$type['uuid']) ?? [];
+            $translation = \Core\Translation::get((string)$type['uuid']) ?? [];
             $type['title'] = (string)($translation['title'] ?? $type['system_name']);
             $typeRows[] = $type;
         }
@@ -661,22 +699,22 @@ final class UserManager extends \Core\BasePlugin
                 );
             }
             $contentRows .= $this->render('content-acl-row', [
-                'content_type' => $this->escape((string)$type['title'])
+                'content_type' => \Core\Html::escape((string)$type['title'])
                     . ' <span class="admin-page-description">('
-                    . $this->escape((string)$type['system_name']) . ')</span>',
+                    . \Core\Html::escape((string)$type['system_name']) . ')</span>',
                 'capabilities' => $checks,
             ]);
         }
 
         return $this->render('acl', [
-            'group_title' => $this->escape($groupTitle),
-            'group_name' => $this->escape((string)$group['system_name']),
+            'group_title' => \Core\Html::escape($groupTitle),
+            'group_name' => \Core\Html::escape((string)$group['system_name']),
             'page_fields' => $pageFields,
             'plugin_fields' => $pluginFields,
             'content_rows' => $contentRows,
             'group_id' => (string)$groupId,
-            'save_url' => $this->url('aclSave'),
-            'back_url' => $this->url('groups'),
+            'save_url' => $this->actionUrl('aclSave'),
+            'back_url' => $this->actionUrl('groups'),
         ]);
     }
 
@@ -703,7 +741,7 @@ final class UserManager extends \Core\BasePlugin
             [
                 $uuid,
                 $language,
-                json_encode($translation, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+                \Core\Utils\JsonTool::encode($translation, false),
             ]
         ) === false) {
             throw new \RuntimeException('Failed to save user group translation.');
@@ -737,7 +775,7 @@ final class UserManager extends \Core\BasePlugin
             if ($pluginId < 1 || !is_array($handlers)) {
                 continue;
             }
-            $config = $this->decodeJson(\DB::getOne(
+            $config = \Core\Utils\JsonTool::decodeArray(\DB::getOne(
                 'SELECT config FROM plugins WHERE plugin_id=$1',
                 [$pluginId]
             ));
@@ -803,9 +841,9 @@ final class UserManager extends \Core\BasePlugin
     ): string {
         return '<label style="display:' . ($compact ? 'inline-flex' : 'flex')
             . ';align-items:center;gap:7px;margin:' . ($compact ? '0 14px 0 0' : '5px 0') . '">'
-            . '<input type="checkbox" name="' . $this->escape($name) . '" value="' . $this->escape($value) . '"'
+            . '<input type="checkbox" name="' . \Core\Html::escape($name) . '" value="' . \Core\Html::escape($value) . '"'
             . ($checked ? ' checked' : '') . '> '
-            . $this->escape($label)
+            . \Core\Html::escape($label)
             . '</label>';
     }
 
@@ -916,40 +954,10 @@ final class UserManager extends \Core\BasePlugin
         }
     }
 
-    private function url(string $action, array $params = []): string
-    {
-        $url = '/' . PAGE_SLUG . '/' . $this->prefix . '-action/' . $action;
-        foreach ($params as $key => $value) {
-            $url .= '/' . $this->prefix . '-' . $key . '/' . rawurlencode((string)$value);
-        }
-        return $url;
-    }
-
-    private function redirect(string $url): string
-    {
-        \Core\Response::addHeader('Location: ' . $url, true, 302);
-        return '';
-    }
-
     private function phrase(string $key, string $fallback): string
     {
         return (string)($this->phrases[$key] ?? $fallback);
     }
 
-    private function decodeJson(mixed $value): array
-    {
-        if (is_array($value)) {
-            return $value;
-        }
-        if (!is_string($value) || trim($value) === '') {
-            return [];
-        }
-        $decoded = json_decode($value, true);
-        return is_array($decoded) ? $decoded : [];
-    }
 
-    private function escape(string $value): string
-    {
-        return htmlspecialchars($value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
-    }
 }

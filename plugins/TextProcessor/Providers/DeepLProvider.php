@@ -99,10 +99,7 @@ final class DeepLProvider extends AbstractProvider
                 $context,
                 []
             );
-            $size = strlen(json_encode(
-                $payload,
-                JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR
-            ));
+            $size = strlen(\Core\Utils\JsonTool::encode($payload, false));
 
             if ($size > self::MAX_REQUEST_BYTES && $chunk !== []) {
                 $chunks[] = $chunk;
@@ -116,10 +113,7 @@ final class DeepLProvider extends AbstractProvider
                     $context,
                     []
                 );
-                $size = strlen(json_encode(
-                    $payload,
-                    JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR
-                ));
+                $size = strlen(\Core\Utils\JsonTool::encode($payload, false));
             }
 
             if ($size > self::MAX_REQUEST_BYTES) {

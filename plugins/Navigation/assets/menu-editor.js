@@ -27,7 +27,7 @@ function createMenuItemElement(form) {
 }
 
 function initEntityFields(root) {
-    window.Admin?.initFormsTomSelects?.(root);
+    window.Kami?.initDynamic?.(root);
 }
 
 function directItems(list) {
@@ -60,8 +60,9 @@ function rebuildInputNames(form) {
     processList(rootList, 'items');
 }
 
-export function initMenuEditor(form) {
-    if (!form) return;
+function initMenuEditor(form) {
+    if (!form || form.dataset.navigationMenuEditorReady === '1') return;
+    form.dataset.navigationMenuEditorReady = '1';
 
     const rootList = form.querySelector('#menu-root');
     if (!rootList) {
@@ -162,3 +163,19 @@ export function initMenuEditor(form) {
     form.addEventListener('dragend', clearDragState);
     form.addEventListener('submit', () => rebuildInputNames(form));
 }
+
+
+function initMenuEditors(root = document) {
+    if (root instanceof Element && root.matches('[data-navigation-menu-editor]')) {
+        initMenuEditor(root);
+    }
+    root.querySelectorAll?.('[data-navigation-menu-editor]').forEach(initMenuEditor);
+}
+
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', () => initMenuEditors(document), {once: true});
+} else {
+    initMenuEditors(document);
+}
+
+window.Kami?.registerInitializer?.(initMenuEditors);

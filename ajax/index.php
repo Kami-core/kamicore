@@ -31,7 +31,7 @@ if($zero!='ajax') die('bad request');
 if (!empty($segments)) {
 	$className = array_shift($segments);
 
-	$plugins = getDomainPlugins();
+	$plugins = \Core\PluginRegistry::forDomain();
 
 	if(isset($plugins[$className])) {
 		$path = "Plugins\\$className";
@@ -95,7 +95,7 @@ define('LANG', $lang);
 
 $system_lang = Cache::get(\Core\Translation::SYSTEM_ENTITY_UUID."_".LANG);
 if(!$system_lang) {
-	$system_lang = json_decode(DB::getOne("select translated_data from translations where entity_uuid='".\Core\Translation::SYSTEM_ENTITY_UUID."' AND lang_code='".LANG."'") ?? "", true);
+	$system_lang = \Core\Utils\JsonTool::decodeArray(DB::getOne("select translated_data from translations where entity_uuid='".\Core\Translation::SYSTEM_ENTITY_UUID."' AND lang_code='".LANG."'") ?? null);
 }
 define('SYSTEM_DICTIONARY', $system_lang);
 
@@ -123,6 +123,10 @@ Core\Response::addHeader("X-Powered-By: Kami");
 // Ajax actions may return either final HTML fragments or structured JSON.
 // Only HTML-like responses belong to the Renderer finalization lifecycle.
 if (!json_validate($content)) {
+    // HTML fragments carry the JavaScript registered while building them.
+    // The client skips external scripts that are already present on the page.
+    $content .= Core\Assets::renderCss();
+    $content .= Core\Assets::renderJs();
 	$content = Core\Renderer::finalize($content);
 }
 

@@ -20,34 +20,50 @@ class PluginManager extends \Core\BasePlugin
 {
     public function list(array $contextVars = []): string
     {
+        $this->addCss('/plugins/PluginManager/assets/plugin-manager.css');
         $this->assertManagerAccess();
 
+        $catalog = $this->pluginCatalog();
+        $categoryCounts = array_count_values(array_column($catalog, 'category'));
         $rows = [];
-        foreach ($this->pluginCatalog() as $plugin) {
+        $currentCategory = null;
+
+        foreach ($catalog as $plugin) {
+            if ($plugin['category'] !== $currentCategory) {
+                $currentCategory = $plugin['category'];
+                $rows[] = [
+                    'template' => 'plugin-category-row',
+                    'params' => [
+                        'category' => \Core\Html::escape($this->categoryTitle($currentCategory)),
+                        'count' => (string)($categoryCounts[$currentCategory] ?? 0),
+                    ],
+                ];
+            }
+
             $actions = [];
             if (!$plugin['installed']) {
                 $actions[] = '<form method="post" action="' . $this->managerUrl('lifecycle') . '">'
                     . '<input type="hidden" name="operation" value="install">'
-                    . '<input type="hidden" name="plugin" value="' . $this->escape($plugin['system_name']) . '">'
+                    . '<input type="hidden" name="plugin" value="' . \Core\Html::escape($plugin['system_name']) . '">'
                     . '<button class="admin-button admin-button-primary" type="submit">'
-                    . $this->escape($this->phrases['install'] ?? 'Install') . '</button></form>';
+                    . \Core\Html::escape($this->phrases['install'] ?? 'Install') . '</button></form>';
             } else {
                 $actions[] = '<a class="admin-button admin-button-secondary" href="'
                     . $this->managerUrl('plugin', ['pm-plugin' => $plugin['system_name']]) . '">'
-                    . $this->escape($this->phrases['settings'] ?? 'Manage') . '</a>';
+                    . \Core\Html::escape($this->phrases['settings'] ?? 'Manage') . '</a>';
 
                 if ($plugin['update_available']) {
                     $actions[] = '<form method="post" action="' . $this->managerUrl('lifecycle') . '">'
                         . '<input type="hidden" name="operation" value="update">'
-                        . '<input type="hidden" name="plugin" value="' . $this->escape($plugin['system_name']) . '">'
+                        . '<input type="hidden" name="plugin" value="' . \Core\Html::escape($plugin['system_name']) . '">'
                         . '<button class="admin-button admin-button-primary" type="submit">'
-                        . $this->escape($this->phrases['update'] ?? 'Update') . '</button></form>';
+                        . \Core\Html::escape($this->phrases['update'] ?? 'Update') . '</button></form>';
                 }
 
                 if ($plugin['has_setup']) {
                     $actions[] = '<a class="admin-button admin-button-secondary" href="'
                         . $this->managerUrl('setup', ['pm-plugin' => $plugin['system_name']]) . '">'
-                        . $this->escape($this->phrases['setup'] ?? 'Setup') . '</a>';
+                        . \Core\Html::escape($this->phrases['setup'] ?? 'Setup') . '</a>';
                 }
 
                 if (!$plugin['active'] && $plugin['domain_count'] === 0) {
@@ -57,9 +73,9 @@ class PluginManager extends \Core\BasePlugin
                         ) . ')">'
                         . '<input type="hidden" name="operation" value="uninstall">'
                         . '<input type="hidden" name="plugin" value="'
-                        . $this->escape($plugin['system_name']) . '">'
+                        . \Core\Html::escape($plugin['system_name']) . '">'
                         . '<button class="admin-button admin-button-danger" type="submit">'
-                        . $this->escape($this->phrases['uninstall'] ?? 'Uninstall')
+                        . \Core\Html::escape($this->phrases['uninstall'] ?? 'Uninstall')
                         . '</button></form>';
                 }
             }
@@ -67,12 +83,12 @@ class PluginManager extends \Core\BasePlugin
             $rows[] = [
                 'template' => 'plugin-row',
                 'params' => [
-                    'title' => $this->escape($plugin['title']),
-                    'system_name' => $this->escape($plugin['system_name']),
-                    'description' => $this->escape($plugin['description']),
-                    'version' => $this->escape($plugin['package_version'] ?: '—'),
-                    'installed_version' => $this->escape($plugin['installed_version'] ?: '—'),
-                    'status' => $this->escape($plugin['installed']
+                    'title' => \Core\Html::escape($plugin['title']),
+                    'system_name' => \Core\Html::escape($plugin['system_name']),
+                    'description' => \Core\Html::escape($plugin['description']),
+                    'version' => \Core\Html::escape($plugin['package_version'] ?: '—'),
+                    'installed_version' => \Core\Html::escape($plugin['installed_version'] ?: '—'),
+                    'status' => \Core\Html::escape($plugin['installed']
                         ? ($plugin['active']
                             ? ($this->phrases['active'] ?? 'Active')
                             : ($this->phrases['inactive'] ?? 'Inactive'))
@@ -80,7 +96,7 @@ class PluginManager extends \Core\BasePlugin
                     'status_class' => $plugin['installed']
                         ? ($plugin['active'] ? 'is-active' : 'is-inactive')
                         : 'is-available',
-                    'domains' => $this->escape((string)$plugin['domain_count']),
+                    'domains' => \Core\Html::escape((string)$plugin['domain_count']),
                     'actions' => implode('', $actions),
                 ],
             ];
@@ -88,12 +104,13 @@ class PluginManager extends \Core\BasePlugin
 
         return $this->render('plugins', [
             'plugin_rows' => $rows,
-            'plugin_count' => (string)count($rows),
+            'plugin_count' => (string)count($catalog),
         ]);
     }
 
     public function plugin(array $contextVars = []): string
     {
+        $this->addCss('/plugins/PluginManager/assets/plugin-manager.css');
         $this->assertManagerAccess();
         $pluginName = $this->requestedPluginName();
         $plugin = \DB::getRow(
@@ -122,15 +139,15 @@ class PluginManager extends \Core\BasePlugin
                 'template' => 'domain-row',
                 'params' => [
                     'domain_id' => (string)$domainId,
-                    'domain_name' => $this->escape((string)$domain['domain_name']),
+                    'domain_name' => \Core\Html::escape((string)$domain['domain_name']),
                     'checked' => isset($activeDomains[$domainId]) ? ' checked' : '',
                 ],
             ];
         }
 
         $settingsStructure = $this->pluginManifestSettings($pluginName);
-        $baseValues = $this->decodeJson($plugin['settings'] ?? null);
-        $settingsTranslation = getTranslation((string)$plugin['uuid'])['settings'] ?? [];
+        $baseValues = \Core\Utils\JsonTool::decodeArray($plugin['settings'] ?? null);
+        $settingsTranslation = \Core\Translation::get((string)$plugin['uuid'])['settings'] ?? [];
         $globalFields = '';
         foreach ($settingsStructure as $name => $structure) {
             if (!is_string($name) || !is_array($structure) || !$this->isGlobalSetting($structure)) {
@@ -153,14 +170,14 @@ class PluginManager extends \Core\BasePlugin
                 [$domainId]
             ) ?? $domainId);
             $domainOptions[] = '<option value="' . $domainId . '">'
-                . $this->escape($domainName) . '</option>';
+                . \Core\Html::escape($domainName) . '</option>';
         }
 
         return $this->render('plugin-detail', [
-            'title' => $this->escape($this->pluginTitle($plugin)),
-            'system_name' => $this->escape((string)$plugin['system_name']),
-            'version' => $this->escape((string)($plugin['plugin_version'] ?? '—')),
-            'prefix' => $this->escape((string)($plugin['plugin_prefix'] ?? '—')),
+            'title' => \Core\Html::escape($this->pluginTitle($plugin)),
+            'system_name' => \Core\Html::escape((string)$plugin['system_name']),
+            'version' => \Core\Html::escape((string)($plugin['plugin_version'] ?? '—')),
+            'prefix' => \Core\Html::escape((string)($plugin['plugin_prefix'] ?? '—')),
             'domain_rows' => $domainRows,
             'activation_action' => $this->managerUrl('pluginActivation'),
             'settings_action' => $this->managerUrl('pluginSettingsSave'),
@@ -174,7 +191,7 @@ class PluginManager extends \Core\BasePlugin
             ),
             'settings_load_url' => '/ajax/PluginManager/pluginDomainSettings',
             'back_url' => $this->managerUrl(),
-            'back_label' => $this->escape($this->phrases['back_to_plugins'] ?? 'Back to plugins'),
+            'back_label' => \Core\Html::escape($this->phrases['back_to_plugins'] ?? 'Back to plugins'),
         ]);
     }
 
@@ -200,7 +217,17 @@ class PluginManager extends \Core\BasePlugin
             return $this->notice('Plugin operation failed.', 'error');
         }
 
-        return $this->redirect($this->managerUrl());
+        if ($notifications = $this->plugins->get('Notifications')) {
+            $message = match ($operation) {
+                'install' => $this->phrases['installed_success'] ?? 'Plugin installed.',
+                'update' => $this->phrases['updated_success'] ?? 'Plugin updated.',
+                'uninstall' => $this->phrases['uninstalled_success'] ?? 'Plugin uninstalled.',
+                default => $this->phrases['operation_success'] ?? 'Plugin operation completed.',
+            };
+            $notifications->store(\Core\User::getId(), $message, 'success');
+        }
+
+        return \Core\Response::seeOther($this->managerUrl());
     }
 
     public function pluginActivation(array $contextVars = []): string
@@ -213,7 +240,18 @@ class PluginManager extends \Core\BasePlugin
             : [];
 
         $this->setDomainActivation($pluginName, $domains);
-        return $this->redirect($this->managerUrl('plugin', ['pm-plugin' => $pluginName]));
+
+        if ($notifications = $this->plugins->get('Notifications')) {
+            $notifications->store(
+                \Core\User::getId(),
+                $this->phrases['activation_saved'] ?? 'Plugin activation updated.',
+                'success'
+            );
+        }
+
+        return \Core\Response::seeOther(
+            $this->managerUrl('plugin', ['pm-plugin' => $pluginName])
+        );
     }
 
     public function pluginSettingsSave(array $contextVars = []): string
@@ -228,7 +266,18 @@ class PluginManager extends \Core\BasePlugin
             $domainId,
             is_array($data['local_settings'] ?? null) ? $data['local_settings'] : []
         );
-        return $this->redirect($this->managerUrl('plugin', ['pm-plugin' => $pluginName]));
+
+        if ($notifications = $this->plugins->get('Notifications')) {
+            $notifications->store(
+                \Core\User::getId(),
+                $this->phrases['settings_saved'] ?? 'Plugin settings saved.',
+                'success'
+            );
+        }
+
+        return \Core\Response::seeOther(
+            $this->managerUrl('plugin', ['pm-plugin' => $pluginName])
+        );
     }
 
     public function pluginDomainSettings(array $data = []): string
@@ -253,9 +302,9 @@ class PluginManager extends \Core\BasePlugin
         }
 
         $structure = $this->pluginManifestSettings($pluginName);
-        $baseValues = $this->decodeJson($plugin['settings'] ?? null);
-        $locals = $this->decodeJson($domain['local_settings'] ?? null);
-        $translation = getTranslation((string)$plugin['uuid'])['settings'] ?? [];
+        $baseValues = \Core\Utils\JsonTool::decodeArray($plugin['settings'] ?? null);
+        $locals = \Core\Utils\JsonTool::decodeArray($domain['local_settings'] ?? null);
+        $translation = \Core\Translation::get((string)$plugin['uuid'])['settings'] ?? [];
         $html = '';
         foreach ($structure as $name => $setting) {
             if (!is_string($name) || !is_array($setting) || $this->isGlobalSetting($setting)) {
@@ -285,6 +334,7 @@ class PluginManager extends \Core\BasePlugin
 
     public function setup(array $contextVars = []): string
     {
+        $this->addCss('/plugins/PluginManager/assets/plugin-manager.css');
         $this->assertManagerAccess();
         $selectedPlugin = trim((string)$this->param('plugin', ''));
         $setupPlugins = [];
@@ -314,11 +364,11 @@ class PluginManager extends \Core\BasePlugin
         return $this->render('setup', [
             'plugins_json' => $this->jsonForHtml($setupPlugins),
             'domains_json' => $this->jsonForHtml($domainOptions),
-            'selected_plugin' => $this->escape($selectedPlugin),
+            'selected_plugin' => \Core\Html::escape($selectedPlugin),
             'plan_url' => '/ajax/PluginManager/resolveSetup',
             'apply_url' => '/ajax/PluginManager/applySetup',
             'back_url' => $this->managerUrl(),
-            'back_label' => $this->escape($this->phrases['back_to_plugins'] ?? 'Back to plugins'),
+            'back_label' => \Core\Html::escape($this->phrases['back_to_plugins'] ?? 'Back to plugins'),
         ]);
     }
 
@@ -1066,9 +1116,9 @@ class PluginManager extends \Core\BasePlugin
             'action' => (string)$data['action'],
             'status' => (string)$data['status'],
             'preset_name' => $data['preset_name'] ?? null,
-            'config' => $this->json(
+            'config' => \Core\Utils\JsonTool::encode(
                 is_array($data['config'] ?? null) ? $data['config'] : []
-            ),
+            , false),
             'error' => $data['error'] ?? null,
         ], 'setup_id');
 
@@ -1089,11 +1139,11 @@ class PluginManager extends \Core\BasePlugin
             'ownership' => (string)($resource['ownership'] ?? 'created'),
             'recipe_id' => $resource['recipe_id'] ?? null,
             'recipe_snapshot' => isset($resource['recipe_snapshot'])
-                ? $this->json(is_array($resource['recipe_snapshot']) ? $resource['recipe_snapshot'] : [])
+                ? \Core\Utils\JsonTool::encode(is_array($resource['recipe_snapshot']) ? $resource['recipe_snapshot'] : [], false)
                 : null,
-            'config' => $this->json(
+            'config' => \Core\Utils\JsonTool::encode(
                 is_array($resource['config'] ?? null) ? $resource['config'] : []
-            ),
+            , false),
             'updated_at' => date('Y-m-d H:i:s'),
         ]);
 
@@ -1186,7 +1236,7 @@ class PluginManager extends \Core\BasePlugin
             $row = $installed[$systemName] ?? null;
             $packageVersion = trim((string)($manifest['version'] ?? ''));
             $installedVersion = trim((string)($row['plugin_version'] ?? ''));
-            $translation = $row ? getTranslation((string)$row['uuid']) : [];
+            $translation = $row ? \Core\Translation::get((string)$row['uuid']) : [];
 
             $catalog[$systemName] = [
                 'system_name' => $systemName,
@@ -1199,6 +1249,7 @@ class PluginManager extends \Core\BasePlugin
                     ?? ''),
                 'package_version' => $packageVersion,
                 'installed_version' => $installedVersion,
+                'category' => $this->normalizeCategory($manifest['category'] ?? null),
                 'installed' => $row !== null,
                 'active' => !empty($row['is_active']),
                 'domain_count' => (int)($row['domain_count'] ?? 0),
@@ -1212,7 +1263,7 @@ class PluginManager extends \Core\BasePlugin
 
         // Keep installed packages visible even if their source directory is missing.
         foreach ($installed as $systemName => $row) {
-            $translation = getTranslation((string)$row['uuid']) ?? [];
+            $translation = \Core\Translation::get((string)$row['uuid']) ?? [];
             $catalog[$systemName] = [
                 'system_name' => $systemName,
                 'folder' => null,
@@ -1220,6 +1271,7 @@ class PluginManager extends \Core\BasePlugin
                 'description' => (string)($translation['description'] ?? ''),
                 'package_version' => '',
                 'installed_version' => (string)($row['plugin_version'] ?? ''),
+                'category' => 'others',
                 'installed' => true,
                 'active' => !empty($row['is_active']),
                 'domain_count' => (int)($row['domain_count'] ?? 0),
@@ -1228,7 +1280,39 @@ class PluginManager extends \Core\BasePlugin
             ];
         }
 
-        return \Core\Translation::sortByTitle(array_values($catalog));
+        $sorted = \Core\Translation::sortByTitle(array_values($catalog));
+        $groups = [];
+        foreach ($sorted as $plugin) {
+            $groups[$plugin['category']][] = $plugin;
+        }
+
+        uksort($groups, function (string $a, string $b): int {
+            if ($a === 'others') {
+                return $b === 'others' ? 0 : 1;
+            }
+            if ($b === 'others') {
+                return -1;
+            }
+            return strcasecmp($a, $b);
+        });
+
+        return array_merge(...array_values($groups));
+    }
+
+    private function normalizeCategory(mixed $category): string
+    {
+        $category = strtolower(trim((string)$category));
+        return preg_match('/^[a-z][a-z0-9_-]*$/', $category) ? $category : 'others';
+    }
+
+    private function categoryTitle(string $category): string
+    {
+        $phraseKey = 'category_' . $category;
+        if (isset($this->phrases[$phraseKey]) && is_string($this->phrases[$phraseKey])) {
+            return $this->phrases[$phraseKey];
+        }
+
+        return ucwords(str_replace(['-', '_'], ' ', $category));
     }
 
     private function pluginManifestSettings(string $pluginName): array
@@ -1369,7 +1453,7 @@ class PluginManager extends \Core\BasePlugin
         }
 
         $structure = $this->pluginManifestSettings($pluginName);
-        $baseSettings = $this->decodeJson($plugin['settings'] ?? null);
+        $baseSettings = \Core\Utils\JsonTool::decodeArray($plugin['settings'] ?? null);
         foreach ($structure as $name => $setting) {
             if (!is_string($name) || !is_array($setting) || !$this->isGlobalSetting($setting)) {
                 continue;
@@ -1385,7 +1469,7 @@ class PluginManager extends \Core\BasePlugin
 
         if (\DB::update(
             'plugins',
-            ['settings' => $this->json($baseSettings)],
+            ['settings' => \Core\Utils\JsonTool::encode($baseSettings, false)],
             'plugin_id=$1',
             [(int)$plugin['plugin_id']]
         ) === false) {
@@ -1400,7 +1484,7 @@ class PluginManager extends \Core\BasePlugin
             if (!$domain) {
                 throw new \RuntimeException('Plugin is not active on selected domain.');
             }
-            $locals = $this->decodeJson($domain['local_settings'] ?? null);
+            $locals = \Core\Utils\JsonTool::decodeArray($domain['local_settings'] ?? null);
             foreach ($structure as $name => $setting) {
                 if (!is_string($name) || !is_array($setting) || $this->isGlobalSetting($setting)) {
                     continue;
@@ -1420,7 +1504,7 @@ class PluginManager extends \Core\BasePlugin
             }
             if (\DB::update(
                 'plugin_domains',
-                ['local_settings' => $this->json($locals)],
+                ['local_settings' => \Core\Utils\JsonTool::encode($locals, false)],
                 'plugin_id=$1 and domain_id=$2',
                 [(int)$plugin['plugin_id'], $domainId]
             ) === false) {
@@ -1609,7 +1693,7 @@ class PluginManager extends \Core\BasePlugin
             : \DB::getArr('select domain_config from domains');
 
         foreach ($configs as $configJson) {
-            $config = json_decode((string)$configJson, true);
+            $config = \Core\Utils\JsonTool::decodeArray($configJson);
             if (!is_array($config) || !is_array($config['languages'] ?? null)) {
                 continue;
             }
@@ -1650,7 +1734,7 @@ class PluginManager extends \Core\BasePlugin
 
     private function pluginTitle(array $plugin): string
     {
-        $translation = getTranslation((string)$plugin['uuid']) ?? [];
+        $translation = \Core\Translation::get((string)$plugin['uuid']) ?? [];
         return (string)($translation['title'] ?? $plugin['system_name']);
     }
 
@@ -1665,26 +1749,22 @@ class PluginManager extends \Core\BasePlugin
 
     private function managerUrl(string $action = 'list', array $params = []): string
     {
-        $url = '/' . trim((string)PAGE_SLUG, '/');
+        $url = \Core\Url::path((string) PAGE_SLUG);
         if ($action !== 'list') {
-            $url .= '/' . $this->prefix . '-action/' . rawurlencode($action);
+            $url = \Core\Url::pathParams(
+                $url,
+                ['action' => $action],
+                $this->prefix
+            );
         }
-        foreach ($params as $name => $value) {
-            $url .= '/' . rawurlencode((string)$name) . '/' . rawurlencode((string)$value);
-        }
-        return $url;
-    }
 
-    private function redirect(string $url): string
-    {
-        \Core\Response::addHeader('Location: ' . $url, true, 302);
-        return '';
+        return \Core\Url::pathParams($url, $params);
     }
 
     private function notice(string $message, string $kind = 'success'): string
     {
-        return '<div class="kc-notice kc-notice-' . $this->escape($kind) . '">'
-            . $this->escape($message) . '</div>';
+        return '<div class="kc-notice kc-notice-' . \Core\Html::escape($kind) . '">'
+            . \Core\Html::escape($message) . '</div>';
     }
 
     private function jsonResponse(array $data, int $status = 200): string
@@ -1694,39 +1774,17 @@ class PluginManager extends \Core\BasePlugin
             true,
             $status
         );
-        return json_encode($data, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)
-            ?: '{"status":"error"}';
+        return \Core\Utils\JsonTool::encode($data, false);
     }
 
     private function jsonForHtml(array $data): string
     {
-        return json_encode(
-            $data,
-            JSON_UNESCAPED_UNICODE
-            | JSON_UNESCAPED_SLASHES
-            | JSON_HEX_TAG
-            | JSON_HEX_AMP
-            | JSON_HEX_APOS
-            | JSON_HEX_QUOT
-        ) ?: '{}';
+        return \Core\Utils\JsonTool::encodeForHtml($data);
     }
 
-    private function escape(string $value): string
+private function jsString(string $value): string
     {
-        return htmlspecialchars($value, ENT_QUOTES, 'UTF-8');
-    }
-
-    private function jsString(string $value): string
-    {
-        return json_encode(
-            $value,
-            JSON_UNESCAPED_UNICODE
-            | JSON_UNESCAPED_SLASHES
-            | JSON_HEX_TAG
-            | JSON_HEX_AMP
-            | JSON_HEX_APOS
-            | JSON_HEX_QUOT
-        ) ?: '""';
+        return \Core\Html::escape(\Core\Utils\JsonTool::encodeForHtml($value));
     }
 
     private function assertManagerAccess(): void
@@ -1775,24 +1833,5 @@ class PluginManager extends \Core\BasePlugin
         ], $data);
     }
 
-    private function decodeJson(mixed $value): array
-    {
-        if (is_array($value)) {
-            return $value;
-        }
-        if ($value === null || $value === '') {
-            return [];
-        }
 
-        $decoded = json_decode((string)$value, true);
-        return is_array($decoded) ? $decoded : [];
-    }
-
-    private function json(array $value): string
-    {
-        return json_encode(
-            $value,
-            JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR
-        );
-    }
 }

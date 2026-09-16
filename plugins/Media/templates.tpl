@@ -1,6 +1,5 @@
 <!-- kami:template browser -->
 <section class="admin-page media-page">
-  <link rel="stylesheet" href="/plugins/Media/assets/media-browser.css">
   <header class="admin-page-header">
     <div>
       <h2 class="admin-page-title">{{phrase.media}}</h2>
@@ -35,6 +34,5 @@
     <div class="media-browser-empty" data-media-empty hidden>{{phrase.empty_folder}}</div>
   </div>
 
-  <script src="/plugins/Media/assets/media-browser.js"></script>
 </section>
 <!-- /kami:template -->

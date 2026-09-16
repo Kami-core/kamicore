@@ -27,8 +27,20 @@
     "domains": "Домени",
     "status": "Статус",
     "actions": "Дії",
+    "category_content": "Контент",
+    "category_display": "Відображення",
+    "category_users": "Користувачі",
+    "category_system": "Система",
+    "category_utilities": "Утиліти",
+    "category_others": "Інші",
     "plugin_manager": "Менеджер плагінів",
     "save": "Зберегти",
+    "installed_success": "Плагін встановлено.",
+    "updated_success": "Плагін оновлено.",
+    "uninstalled_success": "Плагін видалено.",
+    "operation_success": "Операцію з плагіном виконано.",
+    "activation_saved": "Активацію плагіна оновлено.",
+    "settings_saved": "Налаштування плагіна збережено.",
     "cancel": "Скасувати"
   }
 }

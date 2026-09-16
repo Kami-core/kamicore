@@ -13,5 +13,10 @@ declare(strict_types=1);
 if (!defined('IN_KAMI')) die();
 
 return [
-    'PHPMailer\\PHPMailer\\' => ROOT_PATH . 'third-party/PHPMailer/src/',
+    'psr4' => [
+        'PHPMailer\\PHPMailer\\' => ROOT_PATH . 'third-party/PHPMailer/src/',
+    ],
+    'classmap' => [
+        'Parsedown' => ROOT_PATH . 'third-party/parsedown/Parsedown.php',
+    ],
 ];

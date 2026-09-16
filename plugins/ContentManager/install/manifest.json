@@ -12,7 +12,8 @@
       "author": "Kami team"
     },
     "prefix": "cm",
-    "version": "1.2.0",
+    "version": "1.2.6",
+    "category": "content",
     "dependencies": [
       "Forms",
       "Pagination"
@@ -90,19 +91,48 @@
           "actions": {
             "listTypes": {
               "title": "List content types",
-              "api": true
+              "api": true,
+              "method": "GET"
             },
             "getType": {
               "title": "Get content type structure",
-              "api": true
+              "api": true,
+              "method": "GET"
+            },
+            "listFieldTypes": {
+              "title": "List field types",
+              "api": true,
+              "method": "GET"
+            },
+            "getFieldType": {
+              "title": "Get field type",
+              "api": true,
+              "method": "GET"
+            },
+            "listFields": {
+              "title": "List global fields",
+              "api": true,
+              "method": "GET"
+            },
+            "getField": {
+              "title": "Get global field",
+              "api": true,
+              "method": "GET"
+            },
+            "getItems": {
+              "title": "Get content items",
+              "api": true,
+              "method": "GET"
             },
             "searchItems": {
               "title": "Search content items",
-              "api": true
+              "api": true,
+              "method": "POST"
             },
             "getItem": {
               "title": "Get content item",
-              "api": true
+              "api": true,
+              "method": "GET"
             }
           }
         },
@@ -111,15 +141,18 @@
           "actions": {
             "createItem": {
               "title": "Create content item",
-              "api": true
+              "api": true,
+              "method": "POST"
             },
             "updateItem": {
               "title": "Update content item",
-              "api": true
+              "api": true,
+              "method": "PATCH"
             },
             "deleteItem": {
               "title": "Delete content item",
-              "api": true
+              "api": true,
+              "method": "DELETE"
             }
           }
         },
@@ -128,19 +161,23 @@
           "actions": {
             "updateType": {
               "title": "Update content type",
-              "api": true
+              "api": true,
+              "method": "PATCH"
             },
             "attachField": {
               "title": "Attach field",
-              "api": true
+              "api": true,
+              "method": "POST"
             },
             "detachField": {
               "title": "Detach field",
-              "api": true
+              "api": true,
+              "method": "DELETE"
             },
             "reorderFields": {
               "title": "Reorder fields",
-              "api": true
+              "api": true,
+              "method": "PATCH"
             }
           }
         }

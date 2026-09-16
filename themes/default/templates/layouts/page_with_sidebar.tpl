@@ -4,12 +4,12 @@
 {{template:pageheader}}
 </head>
 
-<body class="kami kami-frontend">
+<body class="kami kami-frontend kami-wide">
 
 {{template:bodyheader}}
 
-<section class="kc-section">
-<div class="kc-container kc-container-wide">
+<section class="kc-section kc-content-section">
+<div class="kc-container">
 
 
 

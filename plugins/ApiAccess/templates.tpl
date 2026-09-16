@@ -1,6 +1,6 @@
 <!-- kami:template token-list -->
-<div class="admin-page aa-page">
-  <header class="admin-page-header">
+<div class="aa-page">
+  <header>
     <div>
       <h2 class="admin-page-title">{{phrase.title}}</h2>
       <p class="admin-page-description">{{phrase.description}}</p>
@@ -84,8 +84,8 @@
 <!-- /kami:template -->
 
 <!-- kami:template token-edit -->
-<div class="admin-page aa-page">
-  <header class="admin-page-header">
+<div class="aa-page">
+  <header>
     <div>
       <a class="admin-back-link" href="{{back_url}}"><svg class="icon icon-chevron-left icon-sm" aria-hidden="true"></svg><span>{{phrase.cancel}}</span></a>
       <h2 class="admin-page-title">{{page_title}}</h2>
@@ -94,7 +94,7 @@
   {{notice}}
   <form method="post" action="{{save_url}}" class="admin-form">
     <input type="hidden" name="token_id" value="{{token_id}}">
-    <section class="admin-panel">
+    <section class="card">
       <div class="admin-form-fields">{{fields}}{{token_info}}</div>
     </section>
     {{permissions_html}}
@@ -119,13 +119,13 @@
 <!-- /kami:template -->
 
 <!-- kami:template permissions -->
-<section class="admin-panel aa-permissions">
+<div class="aa-page">
   <header class="admin-panel-header">
     <div>
       <h3 class="admin-panel-title">{{phrase.permissions}}</h3>
     </div>
   </header>
-  <div class="aa-permissions-body">
+  <div class="card">
     <div class="aa-permission-section">
       <h3>{{phrase.api_actions}}</h3>
       <p class="admin-page-description">{{phrase.api_actions_help}}</p>
@@ -141,16 +141,15 @@
       </div>
     </div>
   </div>
-</section>
+</div>
 <style>
 .aa-permissions-body{padding:4px 18px 18px}.aa-permission-section+.aa-permission-section{margin-top:24px}.aa-permission-group{margin:14px 0}.aa-permission-group h4{margin:0 0 8px}.aa-permission-option{display:inline-flex;align-items:center;gap:7px;margin:4px 16px 4px 0}.aa-permission-code{opacity:.65;font-size:.85em}
 </style>
 <!-- /kami:template -->
 
 <!-- kami:template token-created -->
-<div class="admin-page aa-page">
-  <section class="admin-panel">
-    <header class="admin-panel-header">
+<div class="aa-page">
+    <header>
       <div>
         <h2 class="admin-panel-title">{{phrase.token_created}}</h2>
         <p class="admin-panel-description"><strong>{{phrase.token_created_help}}</strong></p>
@@ -165,7 +164,6 @@
         <a class="admin-button admin-button-secondary" href="{{done_url}}">{{phrase.done}}</a>
       </div>
     </div>
-  </section>
 </div>
 <script>
 (() => {

@@ -4,9 +4,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{{status}} — {{title}}</title>
-    <link rel="stylesheet" href="/themes/default/assets/css/default.css">
-
     {{system_css}}
+    {{assets_css}}
+    <link rel="stylesheet" href="/themes/default/assets/css/default.css">
     {{system_js}}
 </head>
 <body class="kami kami-frontend">
@@ -30,9 +30,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{{status}} — {{title}}</title>
-    <link rel="stylesheet" href="/themes/default/assets/css/default.css">
-
     {{system_css}}
+    {{assets_css}}
+    <link rel="stylesheet" href="/themes/default/assets/css/default.css">
     {{system_js}}
 </head>
 <body class="kami kami-frontend">

@@ -1,0 +1,37 @@
+{
+  "plugin": {
+    "title": "Переглядач контенту",
+    "description": "Універсальний перегляд окремих елементів, списків і дерев контенту."
+  },
+  "handlers": {
+    "view": {"title": "Окремий елемент", "actions": {"view": {"title": "Перегляд елемента"}}},
+    "list": {"title": "Список контенту", "actions": {"list": {"title": "Список елементів"}}},
+    "tree": {
+      "title": "Дерево контенту",
+      "actions": {
+        "tree": {"title": "Показати дерево"},
+        "tree_children": {"title": "Завантажити дочірні елементи"}
+      }
+    },
+    "manage": {
+      "title": "Керування",
+      "actions": {
+        "config": {"title": "Налаштування переглядача"},
+        "save_config": {"title": "Зберегти налаштування переглядача"}
+      }
+    }
+  },
+  "phrases": {
+    "configuration": "Налаштування переглядача контенту",
+    "configuration_description": "Увімкніть типи контенту та, за потреби, задайте шаблони для single, list і tree.",
+    "content_type": "Тип контенту",
+    "enabled": "Увімкнено",
+    "single_template": "Шаблон single",
+    "list_template": "Шаблон елемента списку",
+    "tree_template": "Шаблон вузла дерева",
+    "template_fallback_hint": "Залиште порожнім, щоб використати вбудований fallback-шаблон.",
+    "save": "Зберегти",
+    "saved": "Налаштування ViewContent збережено.",
+    "no_items": "Елементів контенту не знайдено."
+  }
+}

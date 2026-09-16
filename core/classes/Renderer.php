@@ -44,71 +44,21 @@ final class Renderer
         return self::renderCompiled($compiledTemplate, $pluginName, $params);
     }
 
-    /** @return array{system_css: string, system_js: string, system_custom_code: string} */
+    /** @return array{system_css: string, system_js: string, assets_css: string, assets_js: string, system_custom_code: string} */
     public static function systemTemplateParams(): array
     {
         return [
-            'system_css' => self::renderSystemAssets(
-                self::systemSettingList('system_css'),
-                'css'
-            ),
-            'system_js' => self::renderSystemAssets(
-                self::systemSettingList('system_js'),
-                'js'
-            ),
+            // Kept as empty compatibility placeholders for existing themes.
+            'system_css' => '',
+            'system_js' => '',
+            'assets_css' => Assets::renderCss(),
+            'assets_js' => Assets::renderJs(),
             'system_custom_code' => (string) (
                 defined('GLOBAL_SETTINGS')
                     ? (GLOBAL_SETTINGS['system_custom_code'] ?? '')
                     : ''
             ),
         ];
-    }
-
-    /** @return list<string> */
-    private static function systemSettingList(string $name): array
-    {
-        $value = defined('GLOBAL_SETTINGS')
-            ? (GLOBAL_SETTINGS[$name] ?? [])
-            : [];
-
-        if (is_string($value)) {
-            $decoded = json_decode($value, true);
-            $value = is_array($decoded) ? $decoded : [$value];
-        }
-
-        if (!is_array($value)) {
-            return [];
-        }
-
-        $result = [];
-        foreach ($value as $item) {
-            if (!is_scalar($item)) {
-                continue;
-            }
-            $item = trim((string) $item);
-            if ($item !== '') {
-                $result[] = $item;
-            }
-        }
-
-        return $result;
-    }
-
-    private static function renderSystemAssets(array $assets, string $type): string
-    {
-        $html = [];
-        foreach ($assets as $asset) {
-            $path = htmlspecialchars(
-                $asset,
-                ENT_QUOTES | ENT_SUBSTITUTE,
-                'UTF-8'
-            );
-            $html[] = $type === 'css'
-                ? '<link rel="stylesheet" href="' . $path . '">'
-                : '<script src="' . $path . '"></script>';
-        }
-
-        return implode("\n", $html);
     }
 
     /**
@@ -162,9 +112,9 @@ final class Renderer
         } catch (\Throwable $error) {
             error_log('[Renderer] Failed to render error page: ' . $error->getMessage());
 
-            $statusText = htmlspecialchars((string)$params['status'], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
-            $title = htmlspecialchars((string)$params['title'], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
-            $message = htmlspecialchars((string)$params['message'], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+            $statusText = Html::escape((string)$params['status']);
+            $title = Html::escape((string)$params['title']);
+            $message = Html::escape((string)$params['message']);
 
             return '<!DOCTYPE html><html><head><meta charset="UTF-8">'
                 . '<meta name="viewport" content="width=device-width, initial-scale=1.0">'

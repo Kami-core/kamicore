@@ -19,6 +19,9 @@ final class User
     public static ?array $user = null;
     public static ?array $group = null;
 
+    /** @var null|array{actions:array<string,true>,content_by_id:array<int,array<string,true>>,content_by_name:array<string,array<string,true>>} */
+    private static ?array $apiScope = null;
+
     private const ACL_CACHE_TTL = 300;
     private const ACL_CACHE_NS = 'acl_bag_v3:';
 
@@ -45,8 +48,51 @@ final class User
         }
     }
 
+    /**
+     * Initialize the current user from an authenticated API token.
+     * API scope can only narrow the user's current group permissions.
+     */
+    public static function initApi(int $userId, array $restrictions): bool
+    {
+        self::$user = null;
+        self::$group = null;
+        self::$apiScope = null;
+
+        if ($userId < 1) {
+            return false;
+        }
+
+        $user = self::getUser($userId);
+        if (!$user || empty($user['is_active'])) {
+            return false;
+        }
+
+        self::$user = $user;
+        self::$group = self::getGroup((int)$user['usergroup_id']);
+        if (!self::$group || empty(self::$group['has_api'])) {
+            self::$user = null;
+            self::$group = null;
+            return false;
+        }
+
+        self::$apiScope = self::compileApiScope($restrictions);
+
+        if (!defined('USER_ID')) {
+            define('USER_ID', (int)$user['user_id']);
+        }
+        if (!defined('USERGROUP_ID')) {
+            define('USERGROUP_ID', (int)$user['usergroup_id']);
+        }
+
+        return true;
+    }
+
     public static function getUser(?int $userId = null): ?array
     {
+        if ($userId === null && self::$apiScope !== null && self::$user !== null) {
+            return self::$user;
+        }
+
         $userId ??= Session::userId();
         $cacheKey = 'users:v2:' . $userId;
 
@@ -116,7 +162,29 @@ final class User
 
     public static function getId(): int
     {
+        if (self::$apiScope !== null && self::$user && isset(self::$user['user_id'])) {
+            return (int)self::$user['user_id'];
+        }
+
         return Session::userId();
+    }
+
+    /**
+     * Check whether the current API token explicitly allows one API action.
+     */
+    public static function canApiAction(string $plugin, string $action): bool
+    {
+        if (self::$apiScope === null) {
+            return false;
+        }
+
+        $plugin = trim($plugin);
+        $action = trim($action);
+        if ($plugin === '' || $action === '') {
+            return false;
+        }
+
+        return isset(self::$apiScope['actions'][$plugin . '.' . $action]);
     }
 
     public static function isGuest(): bool
@@ -189,6 +257,10 @@ final class User
             return false;
         }
 
+        if (!self::apiAllowsContent($contentType, $handler)) {
+            return false;
+        }
+
         $groupId ??= self::currentGroupId();
         if (self::isRoot($groupId)) {
             return true;
@@ -219,18 +291,25 @@ final class User
 
         $groupId ??= self::currentGroupId();
         if (self::isRoot($groupId)) {
-            return array_map('intval', \DB::getArr('SELECT ct_id FROM content_types ORDER BY ct_id'));
-        }
-
-        $bag = self::getAclBag($groupId);
-        $ids = [];
-        foreach ($bag['content_types_by_id'] as $contentTypeId => $handlers) {
-            if (isset($handlers[$handler])) {
-                $ids[] = (int)$contentTypeId;
+            $ids = array_map('intval', \DB::getArr('SELECT ct_id FROM content_types ORDER BY ct_id'));
+        } else {
+            $bag = self::getAclBag($groupId);
+            $ids = [];
+            foreach ($bag['content_types_by_id'] as $contentTypeId => $handlers) {
+                if (isset($handlers[$handler])) {
+                    $ids[] = (int)$contentTypeId;
+                }
             }
         }
 
-        return $ids;
+        if (self::$apiScope === null) {
+            return $ids;
+        }
+
+        return array_values(array_filter(
+            $ids,
+            static fn(int $contentTypeId): bool => self::apiAllowsContent($contentTypeId, $handler)
+        ));
     }
 
     public static function clearAclCache(?int $groupId = null): void
@@ -254,6 +333,76 @@ final class User
     {
         \Cache::del('usergroups:' . $groupId);
         self::clearAclCache($groupId);
+    }
+
+    private static function apiAllowsContent(int|string $contentType, string $handler): bool
+    {
+        if (self::$apiScope === null) {
+            return true;
+        }
+
+        $bucket = is_int($contentType) || ctype_digit((string)$contentType)
+            ? self::$apiScope['content_by_id'][(int)$contentType] ?? null
+            : self::$apiScope['content_by_name'][(string)$contentType] ?? null;
+
+        return is_array($bucket) && isset($bucket[$handler]);
+    }
+
+    /**
+     * Build fast lookup maps from restrictions stored with one API token.
+     *
+     * @return array{actions:array<string,true>,content_by_id:array<int,array<string,true>>,content_by_name:array<string,array<string,true>>}
+     */
+    private static function compileApiScope(array $restrictions): array
+    {
+        $actions = [];
+        foreach (is_array($restrictions['actions'] ?? null) ? $restrictions['actions'] : [] as $action) {
+            $action = trim((string)$action);
+            if ($action !== '') {
+                $actions[$action] = true;
+            }
+        }
+
+        $requestedContent = [];
+        foreach (is_array($restrictions['content'] ?? null) ? $restrictions['content'] : [] as $type => $handlers) {
+            if (!is_string($type) || !is_array($handlers)) {
+                continue;
+            }
+
+            $type = trim($type);
+            if ($type === '') {
+                continue;
+            }
+
+            foreach ($handlers as $handler) {
+                $handler = trim((string)$handler);
+                if ($handler !== '') {
+                    $requestedContent[$type][$handler] = true;
+                }
+            }
+        }
+
+        $contentById = [];
+        $contentByName = [];
+        if ($requestedContent !== []) {
+            $rows = \DB::query('SELECT ct_id, system_name FROM content_types');
+            while ($row = \DB::fetchRow($rows)) {
+                $name = (string)$row['system_name'];
+                if (!isset($requestedContent[$name])) {
+                    continue;
+                }
+
+                $handlers = $requestedContent[$name];
+                $contentById[(int)$row['ct_id']] = $handlers;
+                $contentByName[$name] = $handlers;
+            }
+        }
+
+        return [
+            'actions' => $actions,
+            'content_by_id' => $contentById,
+            'content_by_name' => $contentByName,
+        ];
     }
 
     private static function currentGroupId(): int

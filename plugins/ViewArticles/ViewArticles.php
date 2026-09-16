@@ -15,6 +15,7 @@ if(!IN_KAMI) die();
 class ViewArticles extends \Core\BasePlugin {
 
 	public function view(array $instance_params = []) {
+		$this->addCss('/plugins/ViewArticles/assets/view-articles.css');
 		$item = $this->routedItem();
 
 		if($item && (
@@ -33,6 +34,7 @@ class ViewArticles extends \Core\BasePlugin {
 		return $this->render("article-page", $item['data']);
 	}
 	public function list(array $instance_params = []): string {
+		$this->addCss('/plugins/ViewArticles/assets/view-articles.css');
 		$itemsPerPageOptions = $this->itemsPerPageOptions();
 		$hasItemsPerPageOverride = array_key_exists('items_per_page', $instance_params)
 			&& $instance_params['items_per_page'] !== null
@@ -181,7 +183,7 @@ class ViewArticles extends \Core\BasePlugin {
 				'params' => [
 					'value' => (string)$value,
 					'label' => $value === 0
-						? $this->escape($this->phrases['all'] ?? 'All')
+						? \Core\Html::escape($this->phrases['all'] ?? 'All')
 						: (string)$value,
 					'selected' => $value === $selected ? ' selected' : '',
 				],
@@ -189,11 +191,11 @@ class ViewArticles extends \Core\BasePlugin {
 		}
 
 		return $this->render('items-per-page-selector', [
-			'action_url' => $this->escape(\Core\Request::path()),
-			'select_name' => $this->escape(
+			'action_url' => \Core\Html::escape(\Core\Request::path()),
+			'select_name' => \Core\Html::escape(
 				\Core\Request::buildKey('items_per_page', $this->prefix)
 			),
-			'label' => $this->escape($this->phrases['items_per_page'] ?? 'Items per page'),
+			'label' => \Core\Html::escape($this->phrases['items_per_page'] ?? 'Items per page'),
 			'options' => $renderedOptions,
 		]);
 	}
@@ -216,22 +218,22 @@ class ViewArticles extends \Core\BasePlugin {
 
 		$published = $publishedAt !== ''
 			? $this->render('article-card-date', [
-				'datetime' => $this->escape($publishedAt),
-				'date' => $this->escape($this->formatter()->dateTime($publishedAt)),
+				'datetime' => \Core\Html::escape($publishedAt),
+				'date' => \Core\Html::escape($this->formatter()->dateTime($publishedAt)),
 			])
 			: '';
 		$previewHtml = $preview !== ''
 			? $this->render('article-card-preview', [
-				'url' => $this->escape($this->articleUrl($article)),
-				'preview' => $this->escape($preview),
-				'alt' => $this->escape((string)($article['title'] ?? '')),
+				'url' => \Core\Html::escape($this->articleUrl($article)),
+				'preview' => \Core\Html::escape($preview),
+				'alt' => \Core\Html::escape((string)($article['title'] ?? '')),
 			])
 			: '';
 
 		return [
-			'url' => $this->escape($this->articleUrl($article)),
-			'title' => $this->escape((string)($article['title'] ?? '')),
-			'summary' => $this->escape((string)($data['summary'] ?? '')),
+			'url' => \Core\Html::escape($this->articleUrl($article)),
+			'title' => \Core\Html::escape((string)($article['title'] ?? '')),
+			'summary' => \Core\Html::escape((string)($data['summary'] ?? '')),
 			'published_at' => $published,
 			'preview' => $previewHtml,
 		];
@@ -250,7 +252,7 @@ class ViewArticles extends \Core\BasePlugin {
 			$category = \Core\Content::getItem($primaryCategory);
 			$pageId = (int)($category['data']['category_page'] ?? 0);
 			if ($pageId > 0) {
-				$pageSlug = (string)(getDomainPages(DOMAIN_ID)[$pageId] ?? '');
+				$pageSlug = (string)(\Core\PageRegistry::forDomain(DOMAIN_ID)[$pageId] ?? '');
 			}
 		}
 
@@ -274,11 +276,7 @@ class ViewArticles extends \Core\BasePlugin {
 		return $plugin;
 	}
 
-	private function escape(string $value): string {
-		return htmlspecialchars($value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
-	}
-
-	private function pagination(): \Plugins\Pagination\Pagination {
+private function pagination(): \Plugins\Pagination\Pagination {
 		$plugin = $this->plugins->get('Pagination');
 		if (!$plugin instanceof \Plugins\Pagination\Pagination) {
 			throw new \RuntimeException('Pagination plugin is not available.');

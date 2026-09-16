@@ -1,0 +1,33 @@
+.kc-account-menu,
+.kc-auth-entry {
+  position: relative;
+}
+
+.kc-dropdown {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 300;
+  min-width: 260px;
+  padding: 8px;
+  border: 1px solid var(--kc-border, #D1D5DB);
+  border-radius: var(--kc-radius-md, 10px);
+  background: var(--kc-bg, #fff);
+  box-shadow: var(--kc-shadow-md, 0 12px 30px rgb(0 0 0 / 25%));
+}
+
+.kc-user-status {
+  display: flex;
+  align-items: center;
+}
+
+@media (max-width: 960px) {
+  span.kc-user-name {
+	display: none;
+  }
+
+
+  .kc-user-status {
+	  order: 2;
+	}
+}

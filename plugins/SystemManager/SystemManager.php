@@ -15,21 +15,23 @@ namespace Plugins\SystemManager;
 use Core\Request;
 use Core\SecretStore;
 use Plugins\Forms\Forms;
+use Plugins\Formatter\Formatter;
 
 if (!defined('IN_KAMI')) die();
 
 final class SystemManager extends \Core\BasePlugin
 {
     private ?Forms $forms = null;
+    private ?Formatter $formatter = null;
     private ?array $declarations = null;
 
     public function overview(array $instanceParams = []): string
     {
         return $this->render('overview', [
-            'settings_url' => $this->url('settings'),
-            'languages_url' => $this->url('languages'),
-            'domains_url' => $this->url('domains'),
-            'secrets_url' => $this->url('secrets'),
+            'settings_url' => $this->actionUrl('settings'),
+            'languages_url' => $this->actionUrl('languages'),
+            'domains_url' => $this->actionUrl('domains'),
+            'secrets_url' => $this->actionUrl('secrets'),
         ]);
     }
 
@@ -75,10 +77,15 @@ final class SystemManager extends \Core\BasePlugin
 
         \Cache::del('globals:settings');
 
-        return $this->renderSettings(
-            $this->notice($this->phrase('settings_saved', 'System settings saved.')),
-            $values
-        );
+        if ($notifications = $this->plugins->get('Notifications')) {
+            $notifications->store(
+                \Core\User::getId(),
+                $this->phrase('settings_saved', 'System settings saved.'),
+                'success'
+            );
+        }
+
+        return \Core\Response::seeOther($this->actionUrl('settings'));
     }
 
     public function languages(array $instanceParams = []): string
@@ -138,9 +145,15 @@ final class SystemManager extends \Core\BasePlugin
             throw new \RuntimeException('Failed to update system languages.');
         }
 
-        return $this->renderLanguages(
-            $this->notice($this->phrase('languages_saved', 'System languages saved.'))
-        );
+        if ($notifications = $this->plugins->get('Notifications')) {
+            $notifications->store(
+                \Core\User::getId(),
+                $this->phrase('languages_saved', 'System languages saved.'),
+                'success'
+            );
+        }
+
+        return \Core\Response::seeOther($this->actionUrl('languages'));
     }
 
     public function domains(array $instanceParams = []): string
@@ -155,7 +168,7 @@ final class SystemManager extends \Core\BasePlugin
 
         $html = '';
         while ($row = \DB::fetchRow($rows)) {
-            $config = $this->decodeJson($row['domain_config'] ?? null);
+            $config = \Core\Utils\JsonTool::decodeArray($row['domain_config'] ?? null);
             $languages = is_array($config['languages'] ?? null)
                 ? implode(', ', $config['languages'])
                 : '';
@@ -164,18 +177,18 @@ final class SystemManager extends \Core\BasePlugin
                 : '';
 
             $html .= $this->render('domain-row', [
-                'domain_name' => $this->escape((string)$row['domain_name']),
-                'theme' => $this->escape((string)($row['theme_name'] ?? '—')),
-                'languages' => $this->escape($languages ?: '—'),
+                'domain_name' => \Core\Html::escape((string)$row['domain_name']),
+                'theme' => \Core\Html::escape((string)($row['theme_name'] ?? '—')),
+                'languages' => \Core\Html::escape($languages ?: '—'),
                 'root_badge' => $rootBadge,
-                'edit_url' => $this->url('domainEdit', ['domainId' => (int)$row['domain_id']]),
+                'edit_url' => $this->actionUrl('domainEdit', ['domainId' => (int)$row['domain_id']]),
             ]);
         }
 
         return $this->render('domains', [
             'domain_rows' => $html,
-            'create_url' => $this->url('domainEdit'),
-            'back_url' => $this->url('overview'),
+            'create_url' => $this->actionUrl('domainEdit'),
+            'back_url' => $this->actionUrl('overview'),
         ]);
     }
 
@@ -230,7 +243,7 @@ final class SystemManager extends \Core\BasePlugin
             throw new \InvalidArgumentException('Domain name is already used as an alias.');
         }
 
-        $config = $existing ? $this->decodeJson($existing['domain_config'] ?? null) : [];
+        $config = $existing ? \Core\Utils\JsonTool::decodeArray($existing['domain_config'] ?? null) : [];
 
         foreach ($this->declarations() as $name => $declaration) {
             $scope = (string)($declaration['scope'] ?? '');
@@ -267,7 +280,7 @@ final class SystemManager extends \Core\BasePlugin
 
         \DB::beginTransaction();
         try {
-            $json = $this->json($config);
+            $json = \Core\Utils\JsonTool::encode($config, false);
 
             if ($existing) {
                 $result = \DB::query(
@@ -314,9 +327,16 @@ final class SystemManager extends \Core\BasePlugin
         \Cache::del('globals:domains');
         \Cache::del('d_' . $domainId . ':config');
 
-        return $this->renderDomainEditor(
-            $domainId,
-            $this->notice($this->phrase('domain_saved', 'Domain saved.'))
+        if ($notifications = $this->plugins->get('Notifications')) {
+            $notifications->store(
+                \Core\User::getId(),
+                $this->phrase('domain_saved', 'Domain saved.'),
+                'success'
+            );
+        }
+
+        return \Core\Response::seeOther(
+            $this->actionUrl('domainEdit', ['domainId' => $domainId])
         );
     }
 
@@ -342,9 +362,15 @@ final class SystemManager extends \Core\BasePlugin
 
         SecretStore::set($namespace, $name, $value, $domainId);
 
-        return $this->renderSecrets(
-            $this->notice($this->phrase('secret_saved', 'Secret saved.'))
-        );
+        if ($notifications = $this->plugins->get('Notifications')) {
+            $notifications->store(
+                \Core\User::getId(),
+                $this->phrase('secret_saved', 'Secret saved.'),
+                'success'
+            );
+        }
+
+        return \Core\Response::seeOther($this->actionUrl('secrets'));
     }
 
     public function secretDelete(array $instanceParams = []): string
@@ -357,9 +383,15 @@ final class SystemManager extends \Core\BasePlugin
 
         SecretStore::delete($namespace, $name, $domainId);
 
-        return $this->renderSecrets(
-            $this->notice($this->phrase('secret_deleted', 'Secret deleted.'))
-        );
+        if ($notifications = $this->plugins->get('Notifications')) {
+            $notifications->store(
+                \Core\User::getId(),
+                $this->phrase('secret_deleted', 'Secret deleted.'),
+                'success'
+            );
+        }
+
+        return \Core\Response::seeOther($this->actionUrl('secrets'));
     }
 
     private function renderSettings(string $notice = '', ?array $submittedValues = null): string
@@ -385,14 +417,14 @@ final class SystemManager extends \Core\BasePlugin
 
             $fields .= $this->render('setting-row', [
                 'field' => $field,
-                'description' => $this->escape($this->settingDescription($name, $declaration)),
+                'description' => \Core\Html::escape($this->settingDescription($name, $declaration)),
             ]);
         }
 
         return $this->render('settings', [
             'settings_fields' => $fields,
-            'save_url' => $this->url('settingsSave'),
-            'back_url' => $this->url('overview'),
+            'save_url' => $this->actionUrl('settingsSave'),
+            'back_url' => $this->actionUrl('overview'),
             'notice' => $notice,
         ]);
     }
@@ -407,7 +439,7 @@ final class SystemManager extends \Core\BasePlugin
             throw new \RuntimeException('Domain not found.');
         }
 
-        $config = $domain ? $this->decodeJson($domain['domain_config'] ?? null) : [];
+        $config = $domain ? \Core\Utils\JsonTool::decodeArray($domain['domain_config'] ?? null) : [];
         $propertyFields = '';
         $propertyFields .= $this->render('setting-row', [
             'field' => $this->forms()->renderField([
@@ -469,7 +501,7 @@ final class SystemManager extends \Core\BasePlugin
                 'value' => $aliases,
                 'rows' => 4,
             ]),
-            'description' => $this->escape($this->phrase('aliases_help', 'One hostname per line.')),
+            'description' => \Core\Html::escape($this->phrase('aliases_help', 'One hostname per line.')),
         ]);
 
         $domainFields = '';
@@ -487,7 +519,7 @@ final class SystemManager extends \Core\BasePlugin
                         $value,
                         'domain_settings[' . $name . ']'
                     ),
-                    'description' => $this->escape($this->settingDescription($name, $declaration)),
+                    'description' => \Core\Html::escape($this->settingDescription($name, $declaration)),
                 ]);
                 continue;
             }
@@ -497,7 +529,7 @@ final class SystemManager extends \Core\BasePlugin
                 $globalValue = GLOBAL_SETTINGS[$name] ?? $declaration['default'] ?? null;
                 $value = $hasOverride ? $config[$name] : $globalValue;
                 $overrideFields .= $this->render('override-row', [
-                    'override_name' => $this->escape('overrides[' . $name . ']'),
+                    'override_name' => \Core\Html::escape('overrides[' . $name . ']'),
                     'checked' => $hasOverride ? ' checked' : '',
                     'field' => $this->settingField(
                         $name,
@@ -508,14 +540,14 @@ final class SystemManager extends \Core\BasePlugin
                             ? ['domain_ids' => [$domainId]]
                             : []
                     ),
-                    'description' => $this->escape($this->settingDescription($name, $declaration)),
-                    'global_value' => $this->escape($this->displayValue($globalValue)),
+                    'description' => \Core\Html::escape($this->settingDescription($name, $declaration)),
+                    'global_value' => \Core\Html::escape($this->displayValue($globalValue)),
                 ]);
             }
         }
 
         return $this->render('domain-edit', [
-            'page_title' => $this->escape(
+            'page_title' => \Core\Html::escape(
                 $domain
                     ? $this->phrase('edit_domain', 'Edit domain') . ': ' . (string)$domain['domain_name']
                     : $this->phrase('new_domain', 'New domain')
@@ -524,8 +556,8 @@ final class SystemManager extends \Core\BasePlugin
             'property_fields' => $propertyFields,
             'domain_fields' => $domainFields,
             'override_fields' => $overrideFields,
-            'save_url' => $this->url('domainSave'),
-            'back_url' => $this->url('domains'),
+            'save_url' => $this->actionUrl('domainSave'),
+            'back_url' => $this->actionUrl('domains'),
             'notice' => $notice,
         ]);
     }
@@ -566,7 +598,7 @@ final class SystemManager extends \Core\BasePlugin
             'options' => $scopeOptions,
         ]);
         $secretFields .= '<div class="form-field"><label for="sm-secret-value">'
-            . $this->escape($this->phrase('secret_value', 'Secret value'))
+            . \Core\Html::escape($this->phrase('secret_value', 'Secret value'))
             . '</label><textarea id="sm-secret-value" name="secret_value" required></textarea></div>';
 
         $rows = \DB::query(
@@ -582,29 +614,29 @@ final class SystemManager extends \Core\BasePlugin
                 : ($domainNames[$domainId] ?? ('Domain #' . $domainId));
 
             $secretRows .= $this->render('secret-row', [
-                'namespace' => $this->escape((string)$row['namespace']),
-                'namespace_attr' => $this->escape((string)$row['namespace']),
-                'secret_name' => $this->escape((string)$row['secret_name']),
-                'secret_name_attr' => $this->escape((string)$row['secret_name']),
-                'scope' => $this->escape($scope),
-                'updated' => $this->escape((string)$row['updated_at']),
+                'namespace' => \Core\Html::escape((string)$row['namespace']),
+                'namespace_attr' => \Core\Html::escape((string)$row['namespace']),
+                'secret_name' => \Core\Html::escape((string)$row['secret_name']),
+                'secret_name_attr' => \Core\Html::escape((string)$row['secret_name']),
+                'scope' => \Core\Html::escape($scope),
+                'updated' => \Core\Html::escape($this->formatter()->dateTime($row['updated_at'] ?? null)),
                 'domain_id' => $domainId === null ? '' : (string)$domainId,
-                'delete_url' => $this->url('secretDelete'),
+                'delete_url' => $this->actionUrl('secretDelete'),
                 'confirm' => $this->escapeJs($this->phrase('confirm_delete_secret', 'Delete this stored secret?')),
             ]);
         }
 
         if ($secretRows === '') {
             $secretRows = '<tr><td colspan="5" class="admin-empty-state">'
-                . $this->escape($this->phrase('no_secrets', 'No secrets stored.'))
+                . \Core\Html::escape($this->phrase('no_secrets', 'No secrets stored.'))
                 . '</td></tr>';
         }
 
         return $this->render('secrets', [
             'secret_fields' => $secretFields,
             'secret_rows' => $secretRows,
-            'save_url' => $this->url('secretSave'),
-            'back_url' => $this->url('overview'),
+            'save_url' => $this->actionUrl('secretSave'),
+            'back_url' => $this->actionUrl('overview'),
             'notice' => $notice,
         ]);
     }
@@ -821,7 +853,7 @@ final class SystemManager extends \Core\BasePlugin
         );
         $options = [];
         while ($row = \DB::fetchRow($rows)) {
-            $translation = getTranslation((string)$row['uuid']) ?? [];
+            $translation = \Core\Translation::get((string)$row['uuid']) ?? [];
             $title = (string)($translation['title'] ?? $row['system_name']);
             $options[] = [
                 'value' => (int)$row['usergroup_id'],
@@ -850,21 +882,21 @@ final class SystemManager extends \Core\BasePlugin
             $usageText = $locked ? implode(', ', $domains) : '—';
 
             $languageRows .= $this->render('language-row', [
-                'language_name' => $this->escape((string)$row['lang_name']),
-                'language_code' => $this->escape($code),
+                'language_name' => \Core\Html::escape((string)$row['lang_name']),
+                'language_code' => \Core\Html::escape($code),
                 'checked' => $active ? ' checked' : '',
                 'disabled' => $locked ? ' disabled' : '',
                 'required_value' => $locked
-                    ? '<input type="hidden" name="active_languages[]" value="' . $this->escape($code) . '">'
+                    ? '<input type="hidden" name="active_languages[]" value="' . \Core\Html::escape($code) . '">'
                     : '',
-                'used_by' => $this->escape($usageText),
+                'used_by' => \Core\Html::escape($usageText),
             ]);
         }
 
         return $this->render('languages', [
             'language_rows' => $languageRows,
-            'save_url' => $this->url('languagesSave'),
-            'back_url' => $this->url('overview'),
+            'save_url' => $this->actionUrl('languagesSave'),
+            'back_url' => $this->actionUrl('overview'),
             'notice' => $notice,
         ]);
     }
@@ -878,7 +910,7 @@ final class SystemManager extends \Core\BasePlugin
         );
 
         while ($row = \DB::fetchRow($rows)) {
-            $config = $this->decodeJson($row['domain_config'] ?? null);
+            $config = \Core\Utils\JsonTool::decodeArray($row['domain_config'] ?? null);
             $languages = is_array($config['languages'] ?? null)
                 ? $config['languages']
                 : [];
@@ -923,7 +955,7 @@ final class SystemManager extends \Core\BasePlugin
         $rows = \DB::query('SELECT theme_id, uuid, system_name FROM themes');
         $options = [];
         while ($row = \DB::fetchRow($rows)) {
-            $translation = getTranslation((string)$row['uuid']) ?? [];
+            $translation = \Core\Translation::get((string)$row['uuid']) ?? [];
             $options[] = [
                 'value' => (int)$row['theme_id'],
                 'label' => (string)($translation['title'] ?? $row['system_name']),
@@ -1009,18 +1041,9 @@ final class SystemManager extends \Core\BasePlugin
             return $this->declarations;
         }
 
-        $path = __DIR__ . '/system_settings.json';
-        $raw = file_get_contents($path);
-        if ($raw === false) {
-            throw new \RuntimeException('Unable to read SystemManager settings declaration.');
-        }
-
-        $decoded = json_decode($raw, true, 512, JSON_THROW_ON_ERROR);
-        if (!is_array($decoded)) {
-            throw new \RuntimeException('Invalid SystemManager settings declaration.');
-        }
-
-        return $this->declarations = $decoded;
+        return $this->declarations = \Core\Utils\JsonTool::loadFile(
+            __DIR__ . '/system_settings.json'
+        );
     }
 
     private function forms(): Forms
@@ -1032,13 +1055,22 @@ final class SystemManager extends \Core\BasePlugin
         return $plugin;
     }
 
+    private function formatter(): Formatter
+    {
+        $plugin = $this->formatter ??= $this->plugins->get('Formatter');
+        if (!$plugin instanceof Formatter) {
+            throw new \RuntimeException('Formatter plugin is not available.');
+        }
+        return $plugin;
+    }
+
     private function encodeGlobalValue(mixed $value): string
     {
         if (is_bool($value)) {
             return $value ? '1' : '0';
         }
         if (is_array($value)) {
-            return $this->json($value);
+            return \Core\Utils\JsonTool::encode($value, false);
         }
         return (string)$value;
     }
@@ -1075,45 +1107,16 @@ final class SystemManager extends \Core\BasePlugin
         return (string)($this->phrases[$key] ?? $fallback);
     }
 
-    private function url(string $action, array $params = []): string
-    {
-        $url = '/' . PAGE_SLUG . '/' . $this->prefix . '-action/' . $action;
-        foreach ($params as $key => $value) {
-            $url .= '/' . $this->prefix . '-' . $key . '/' . rawurlencode((string)$value);
-        }
-        return $url;
-    }
-
     private function notice(string $message, string $kind = 'success'): string
     {
-        return '<div class="admin-notice admin-notice-' . $this->escape($kind) . '">'
-            . $this->escape($message)
+        return '<div class="admin-notice admin-notice-' . \Core\Html::escape($kind) . '">'
+            . \Core\Html::escape($message)
             . '</div>';
     }
 
-    private function decodeJson(mixed $value): array
-    {
-        if (is_array($value)) {
-            return $value;
-        }
-        if (!is_string($value) || trim($value) === '') {
-            return [];
-        }
-        $decoded = json_decode($value, true);
-        return is_array($decoded) ? $decoded : [];
-    }
 
-    private function json(array $value): string
-    {
-        return json_encode($value, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR);
-    }
 
-    private function escape(string $value): string
-    {
-        return htmlspecialchars($value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
-    }
-
-    private function escapeJs(string $value): string
+private function escapeJs(string $value): string
     {
         return str_replace(
             ["\\", "'", "\r", "\n", '</'],

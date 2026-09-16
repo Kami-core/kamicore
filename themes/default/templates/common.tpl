@@ -14,13 +14,15 @@
 
     {{head_plugins}}
 
+    {{system_css}}
+    {{assets_css}}
+
 	<link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Commissioner:wght@100..900&display=swap" rel="stylesheet">
-
-    {{system_css}}
     <link rel="stylesheet" href="/themes/default/assets/css/default.css">
     {{system_js}}
+    {{assets_js}}
 <!-- /kami:template -->
 
 <!-- kami:template bodyheader -->
@@ -43,14 +45,11 @@
 <!-- /kami:template -->
 
 <!-- kami:template admin-pageheader -->
-	<link rel="stylesheet" href="/assets/admin/css/admin.css">
+	<link rel="stylesheet" href="/themes/default/assets/css/admin.css">
 
-    <script src="/assets/admin/js/common.js" defer></script>
     <script src="themes/default/assets/js/admin.js" defer></script>
 
     <script>
-        window.Admin = window.Admin || {};
-
         if (localStorage.getItem('kami.admin.sidebar.collapsed') === '1') {
 			document.documentElement.classList.add('admin-sidebar-collapsed');
 		}
@@ -76,11 +75,6 @@
 <!-- /kami:template -->
 
 <!-- kami:template admin-form -->
-<script src="/third-party/frontend/quill/quill.js"></script>
-<link href="/third-party/frontend/quill/quill.snow.css" rel="stylesheet">
-
-<script src="/assets/admin/js/quill-init.js"></script>
-
 <form action="{{action}}" method={{method}}>
 
 {{fields}}

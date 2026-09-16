@@ -23,7 +23,11 @@ class ContentManager extends \Core\BasePlugin {
 	 * @var array<string, array<int, string>>
 	 */
 	private const FIELD_LEGACY_NAMES = ['static_content_body' => ['content']];
+	private const API_ITEMS_DEFAULT_LIMIT = 20;
+	private const API_ITEMS_MAX_LIMIT = 100;
+
 	public function typeList($context_vars) {
+		$this->addCss('/plugins/ContentManager/assets/content-manager.css');
 
 		$types = [];
 
@@ -37,7 +41,7 @@ class ContentManager extends \Core\BasePlugin {
 				'select count(*) from content_items where ct_id=$1',
 				[(int)$row['ct_id']]
 			);
-			$translation = getTranslation($row['uuid']) ?? [];
+			$translation = \Core\Translation::get($row['uuid']) ?? [];
 			$types[] = [
 				"type_id" => $row['ct_id'],
 				"title" => $translation['title'] ?? ucwords(str_replace(['_', '-'], ' ', $row['system_name'])),
@@ -49,16 +53,8 @@ class ContentManager extends \Core\BasePlugin {
 		}
 		$types = \Core\Translation::sortByTitle($types, 'title', null);
 
-		$typesJson = json_encode(
-			$types,
-			JSON_UNESCAPED_UNICODE
-			| JSON_UNESCAPED_SLASHES
-			| JSON_HEX_TAG
-			| JSON_HEX_AMP
-			| JSON_HEX_APOS
-			| JSON_HEX_QUOT
-		) ?: '[]';
-		$uiText = json_encode([
+		$typesJson = \Core\Utils\JsonTool::encodeForHtml($types);
+		$uiText = \Core\Utils\JsonTool::encodeForHtml([
 			'typeCount' => $this->phrases['type_count'] ?? '{count} content types',
 			'noTypes' => $this->phrases['no_content_types'] ?? 'No content types found.',
 			'openItems' => $this->phrases['open_items'] ?? 'Open items',
@@ -69,8 +65,7 @@ class ContentManager extends \Core\BasePlugin {
 			'deleteFailed' => $this->phrases['delete_content_type_failed']
 				?? 'Failed to delete the content type.',
 			'typeDeleted' => $this->phrases['content_type_deleted'] ?? 'Content type deleted.',
-		], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES
-			| JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?: '{}';
+		]) ?: '{}';
 
 		$managerTools = '';
 		if ($this->isRoot()) {
@@ -78,21 +73,13 @@ class ContentManager extends \Core\BasePlugin {
 				. PAGE_SLUG . '/cm-action/fieldList">'
 				. '<svg class="icon icon-menu icon-sm"></svg>'
 				. '<span>'
-				. htmlspecialchars(
-					$this->phrases['manage_fields'] ?? 'Fields',
-					ENT_QUOTES,
-					'UTF-8'
-				)
+				. \Core\Html::escape($this->phrases['manage_fields'] ?? 'Fields')
 				. '</span></a>'
 				. '<a class="admin-button admin-button-secondary" href="/'
 				. PAGE_SLUG . '/cm-action/typeManagerList">'
 				. '<svg class="icon icon-settings icon-sm"></svg>'
 				. '<span>'
-				. htmlspecialchars(
-					$this->phrases['manage_type_managers'] ?? 'Type managers',
-					ENT_QUOTES,
-					'UTF-8'
-				)
+				. \Core\Html::escape($this->phrases['manage_type_managers'] ?? 'Type managers')
 				. '</span></a>';
 		}
 
@@ -106,6 +93,7 @@ class ContentManager extends \Core\BasePlugin {
 	}
 
 	public function fieldList($contextVars): string {
+		$this->addCss('/plugins/ContentManager/assets/content-manager.css');
 		if (!$this->isRoot()) {
 			return $this->notice(
 				$this->phrases['root_only'] ?? 'Root access required.',
@@ -116,11 +104,11 @@ class ContentManager extends \Core\BasePlugin {
 		$usageByField = [];
 		$typeRows = \DB::query('select ct_id, uuid, system_name, schema from content_types');
 		while ($type = \DB::fetchRow($typeRows)) {
-			$schema = $this->decodeJsonObject($type['schema'] ?? null);
+			$schema = \Core\Utils\JsonTool::decodeArray($type['schema'] ?? null);
 			$fields = is_array($schema['fields'] ?? null) ? $schema['fields'] : [];
 			if ($fields === []) continue;
 
-			$translation = getTranslation((string)$type['uuid']) ?? [];
+			$translation = \Core\Translation::get((string)$type['uuid']) ?? [];
 			$title = (string)($translation['title'] ?? $type['system_name']);
 			foreach (array_keys($fields) as $fieldName) {
 				$usageByField[(string)$fieldName][(int)$type['ct_id']] = $title;
@@ -145,7 +133,7 @@ class ContentManager extends \Core\BasePlugin {
 			. "join field_types ft on ft.type_id=f.type_id"
 		);
 		while ($field = \DB::fetchRow($rows)) {
-			$translation = getTranslation((string)$field['uuid']) ?? [];
+			$translation = \Core\Translation::get((string)$field['uuid']) ?? [];
 			$usageMap = $usageByField[(string)$field['system_name']] ?? [];
 			$usageCount = count($usageMap);
 			$usage = \Core\Translation::sortByTitle(array_map(
@@ -172,12 +160,8 @@ class ContentManager extends \Core\BasePlugin {
 		$fields = \Core\Translation::sortByTitle($fields, 'title', 'system_name');
 
 		return $this->render('fields-list', [
-			'fields_json' => json_encode(
-				$fields,
-				JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES
-				| JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT
-			) ?: '[]',
-			'ui_text' => $this->json([
+			'fields_json' => \Core\Utils\JsonTool::encodeForHtml($fields),
+			'ui_text' => \Core\Utils\JsonTool::encode([
 				'fieldCount' => $this->phrases['field_count'] ?? '{count} fields',
 				'noFields' => $this->phrases['no_fields'] ?? 'No fields found.',
 				'unused' => $this->phrases['field_unused'] ?? 'Unused',
@@ -194,13 +178,14 @@ class ContentManager extends \Core\BasePlugin {
 				'deleted' => $this->phrases['field_deleted'] ?? 'Field deleted.',
 				'usedLock' => $this->phrases['field_used_lock']
 					?? 'Detach this field from all content types before deleting it.',
-			]),
+			], false),
 			'back_link' => '/' . PAGE_SLUG . '/cm-action/typeList',
 			'delete_endpoint' => '/ajax/ContentManager/fieldDelete',
 		]);
 	}
 
 	public function typeManagerList($contextVars): string {
+		$this->addCss('/plugins/ContentManager/assets/content-manager.css');
 		if (!$this->isRoot()) {
 			return $this->accessDeniedNotice();
 		}
@@ -211,7 +196,7 @@ class ContentManager extends \Core\BasePlugin {
 			from plugins'
 		);
 		while ($plugin = \DB::fetchRow($pluginRows)) {
-			$translation = getTranslation($plugin['uuid']) ?? [];
+			$translation = \Core\Translation::get($plugin['uuid']) ?? [];
 			$plugins[] = [
 				'id' => (int)$plugin['plugin_id'],
 				'name' => (string)$plugin['system_name'],
@@ -234,13 +219,9 @@ class ContentManager extends \Core\BasePlugin {
 				on default_manager.plugin_id=ct.default_manager_plugin_id'
 		);
 		while ($type = \DB::fetchRow($typeRows)) {
-			$translation = getTranslation($type['uuid']) ?? [];
+			$translation = \Core\Translation::get($type['uuid']) ?? [];
 			$options = '<option value="">'
-				. htmlspecialchars(
-					$this->phrases['no_manager'] ?? 'No manager',
-					ENT_QUOTES,
-					'UTF-8'
-				)
+				. \Core\Html::escape($this->phrases['no_manager'] ?? 'No manager')
 				. '</option>';
 
 			foreach ($plugins as $plugin) {
@@ -252,7 +233,7 @@ class ContentManager extends \Core\BasePlugin {
 					$label .= ' — ' . ($this->phrases['inactive'] ?? 'inactive');
 				}
 				$options .= '<option value="' . $plugin['id'] . '"' . $selected . '>'
-					. htmlspecialchars($label, ENT_QUOTES, 'UTF-8')
+					. \Core\Html::escape($label)
 					. '</option>';
 			}
 
@@ -260,46 +241,25 @@ class ContentManager extends \Core\BasePlugin {
 				'template' => 'type-manager-row',
 				'params' => [
 					'type_id' => (int)$type['ct_id'],
-					'type_title' => htmlspecialchars(
-						(string)($translation['title']
-							?? ucwords(str_replace(['_', '-'], ' ', $type['system_name']))),
-						ENT_QUOTES,
-						'UTF-8'
-					),
-					'system_name' => htmlspecialchars(
-						(string)$type['system_name'],
-						ENT_QUOTES,
-						'UTF-8'
-					),
-					'owner_name' => htmlspecialchars(
-						(string)($type['owner_name']
-							?? ($this->phrases['no_owner'] ?? 'No owner')),
-						ENT_QUOTES,
-						'UTF-8'
-					),
-					'default_manager' => htmlspecialchars(
-						(string)($type['default_manager_name']
-							?? ($this->phrases['no_manager'] ?? 'No manager')),
-						ENT_QUOTES,
-						'UTF-8'
-					),
+					'type_title' => \Core\Html::escape((string)($translation['title']
+							?? ucwords(str_replace(['_', '-'], ' ', $type['system_name'])))),
+					'system_name' => \Core\Html::escape((string)$type['system_name']),
+					'owner_name' => \Core\Html::escape((string)($type['owner_name']
+							?? ($this->phrases['no_owner'] ?? 'No owner'))),
+					'default_manager' => \Core\Html::escape((string)($type['default_manager_name']
+							?? ($this->phrases['no_manager'] ?? 'No manager'))),
 					'manager_options' => $options,
-					'override_label' => htmlspecialchars(
-						!empty($type['manager_overridden'])
+					'override_label' => \Core\Html::escape(!empty($type['manager_overridden'])
 							? ($this->phrases['overridden'] ?? 'Overridden')
 							: ($type['plugin_id'] === null
 								? ($this->phrases['manual_default'] ?? 'Manual default')
-								: ($this->phrases['from_manifest'] ?? 'From manifest')),
-							ENT_QUOTES,
-							'UTF-8'
-						),
+								: ($this->phrases['from_manifest'] ?? 'From manifest'))),
 					'override_class' => !empty($type['manager_overridden'])
 						? ' cm-manager-badge-overridden'
 						: '',
-					'default_source' => htmlspecialchars(
-						$type['plugin_id'] === null
+					'default_source' => \Core\Html::escape($type['plugin_id'] === null
 							? ($this->phrases['manual_default'] ?? 'Manual default')
-							: ($this->phrases['from_manifest'] ?? 'From manifest'), ENT_QUOTES, 'UTF-8'),
+							: ($this->phrases['from_manifest'] ?? 'From manifest')),
 					'reset_disabled' => empty($type['manager_overridden'])
 						? ' disabled'
 						: '',
@@ -311,7 +271,7 @@ class ContentManager extends \Core\BasePlugin {
 			html_entity_decode((string)($b['params']['type_title'] ?? ''), ENT_QUOTES, 'UTF-8')
 		));
 
-		$uiText = json_encode([
+		$uiText = \Core\Utils\JsonTool::encodeForHtml([
 			'saving' => $this->phrases['saving_manager'] ?? 'Saving…',
 			'saveFailed' => $this->phrases['manager_save_failed']
 				?? 'Failed to save the content type manager.',
@@ -320,8 +280,7 @@ class ContentManager extends \Core\BasePlugin {
 			'fromManifest' => $this->phrases['from_manifest'] ?? 'From manifest',
 			'manualDefault' => $this->phrases['manual_default'] ?? 'Manual default',
 			'overridden' => $this->phrases['overridden'] ?? 'Overridden',
-		], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES
-			| JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?: '{}';
+		]) ?: '{}';
 
 		return $this->render('type-managers', [
 			'manager_rows' => $rows,
@@ -333,10 +292,10 @@ class ContentManager extends \Core\BasePlugin {
 	public function typeManagerUpdate(?array $data): string {
 		if (!$this->isRoot()) {
 			\Core\Response::addHeader('HTTP/1.1 403 Forbidden');
-			return $this->json([
+			return \Core\Utils\JsonTool::encode([
 				'status' => 'error',
 				'error' => $this->phrases['root_only'] ?? 'Root access required.',
-			]);
+			], false);
 		}
 
 		$data = array_replace($data ?? [], \Core\Request::all());
@@ -348,10 +307,10 @@ class ContentManager extends \Core\BasePlugin {
 		);
 		if (!$type) {
 			\Core\Response::addHeader('HTTP/1.1 404 Not Found');
-			return $this->json([
+			return \Core\Utils\JsonTool::encode([
 				'status' => 'error',
 				'error' => $this->phrases['content_type_not_found'] ?? 'Content type not found.',
-			]);
+			], false);
 		}
 
 		if ($mode === 'reset') {
@@ -368,17 +327,17 @@ class ContentManager extends \Core\BasePlugin {
 				'select 1 from plugins where plugin_id=$1',
 				[$managerId]
 			))) {
-				return $this->json([
+				return \Core\Utils\JsonTool::encode([
 					'status' => 'error',
 					'error' => $this->phrases['manager_not_found'] ?? 'Manager plugin not found.',
-				]);
+				], false);
 			}
 			$overridden = true;
 		} else {
-			return $this->json([
+			return \Core\Utils\JsonTool::encode([
 				'status' => 'error',
 				'error' => $this->phrases['invalid_manager_mode'] ?? 'Invalid manager update mode.',
-			]);
+			], false);
 		}
 
 		try {
@@ -387,17 +346,17 @@ class ContentManager extends \Core\BasePlugin {
 				'manager_overridden' => $overridden,
 			]);
 		} catch (\Throwable $error) {
-			return $this->json([
+			return \Core\Utils\JsonTool::encode([
 				'status' => 'error',
 				'error' => $error->getMessage(),
-			]);
+			], false);
 		}
 
 		$managerName = $managerId !== null
 			? \DB::getOne('select system_name from plugins where plugin_id=$1', [$managerId])
 			: null;
 
-		return $this->json([
+		return \Core\Utils\JsonTool::encode([
 			'status' => 'ok',
 			'manager_id' => $managerId,
 			'manager_name' => $managerName,
@@ -405,10 +364,11 @@ class ContentManager extends \Core\BasePlugin {
 			'message' => $mode === 'reset'
 				? ($this->phrases['manager_reset'] ?? 'Default manager restored.')
 				: ($this->phrases['manager_saved'] ?? 'Manager saved.'),
-		]);
+		], false);
 	}
 
 	public function typeEdit($context_vars) {
+		$this->addCss('/plugins/ContentManager/assets/content-manager.css');
 		$data = $this->params(['type'], \Core\Request::getPrefixedParams($this->prefix));
 		$typeId = (int)($data['type'] ?? 0);
 		$type = null;
@@ -425,13 +385,13 @@ class ContentManager extends \Core\BasePlugin {
 					'error'
 				);
 			}
-			$schema = $this->decodeJsonObject($type['schema'] ?? null);
+			$schema = \Core\Utils\JsonTool::decodeArray($type['schema'] ?? null);
 			$schema['fields'] = is_array($schema['fields'] ?? null)
 				? $schema['fields']
 				: [];
 		}
 
-		$translation = $type ? (getTranslation($type['uuid']) ?? []) : [];
+		$translation = $type ? (\Core\Translation::get($type['uuid']) ?? []) : [];
 		$resolvedFields = $type
 			? \Core\Content::getStructure($typeId)
 			: [];
@@ -453,7 +413,7 @@ class ContentManager extends \Core\BasePlugin {
 			if (!$field) continue;
 
 			$attachedNames[] = (string)$fieldName;
-			$fieldTranslation = getTranslation($field['uuid']) ?? [];
+			$fieldTranslation = \Core\Translation::get($field['uuid']) ?? [];
 			$resolvedField = is_array($resolvedFields[$fieldName] ?? null)
 				? $resolvedFields[$fieldName]
 				: $fieldConfig;
@@ -461,12 +421,12 @@ class ContentManager extends \Core\BasePlugin {
 				'template' => 'type-field-row',
 				'params' => [
 					'field_id' => (int)$field['field_id'],
-					'field_name' => $this->escape((string)$fieldName),
-					'field_title' => $this->escape((string)(
+					'field_name' => \Core\Html::escape((string)$fieldName),
+					'field_title' => \Core\Html::escape((string)(
 						$resolvedField['title'] ?? $fieldTranslation['title'] ?? $fieldName
 					)),
-					'field_description' => $this->escape((string)($resolvedField['description'] ?? '')),
-					'field_type' => $this->escape((string)$field['type_name']),
+					'field_description' => \Core\Html::escape((string)($resolvedField['description'] ?? '')),
+					'field_type' => \Core\Html::escape((string)$field['type_name']),
 					'field_order' => (int)($fieldConfig['displayorder'] ?? 0),
 					'edit_link' => '/' . PAGE_SLUG
 						. "/cm-action/fieldEdit/cm-type/{$typeId}/cm-field/{$field['field_id']}",
@@ -475,7 +435,7 @@ class ContentManager extends \Core\BasePlugin {
 		}
 
 		$availableOptions = '<option value="">'
-			. $this->escape($this->phrases['select_existing_field'] ?? 'Select a field…')
+			. \Core\Html::escape($this->phrases['select_existing_field'] ?? 'Select a field…')
 			. '</option>';
 		$availableFields = [];
 		$fieldResult = \DB::query(
@@ -487,7 +447,7 @@ class ContentManager extends \Core\BasePlugin {
 		while ($field = \DB::fetchRow($fieldResult)) {
 			if (in_array($field['system_name'], $attachedNames, true)) continue;
 
-			$fieldTranslation = getTranslation($field['uuid']) ?? [];
+			$fieldTranslation = \Core\Translation::get($field['uuid']) ?? [];
 			$availableFields[] = [
 				'value' => (int)$field['field_id'],
 				'title' => (string)($fieldTranslation['title'] ?? $field['system_name']),
@@ -499,11 +459,11 @@ class ContentManager extends \Core\BasePlugin {
 		foreach ($availableFields as $field) {
 			$label = $field['title'] . " ({$field['system_name']}: {$field['type_name']})";
 			$availableOptions .= '<option value="' . $field['value'] . '">'
-				. $this->escape($label) . '</option>';
+				. \Core\Html::escape($label) . '</option>';
 		}
 
 		$parentOptions = '<option value="">'
-			. $this->escape($this->phrases['no_parent_type'] ?? 'No parent type')
+			. \Core\Html::escape($this->phrases['no_parent_type'] ?? 'No parent type')
 			. '</option>';
 		$parents = [];
 		$parentResult = \DB::query(
@@ -511,7 +471,7 @@ class ContentManager extends \Core\BasePlugin {
 			[$typeId]
 		);
 		while ($parent = \DB::fetchRow($parentResult)) {
-			$parentTranslation = getTranslation($parent['uuid']) ?? [];
+			$parentTranslation = \Core\Translation::get($parent['uuid']) ?? [];
 			$parents[] = [
 				'value' => (int)$parent['ct_id'],
 				'title' => (string)($parentTranslation['title'] ?? $parent['system_name']),
@@ -522,7 +482,7 @@ class ContentManager extends \Core\BasePlugin {
 		foreach ($parents as $parent) {
 			$selected = (int)($type['parent_id'] ?? 0) === $parent['value'] ? ' selected' : '';
 			$parentOptions .= '<option value="' . $parent['value'] . '"' . $selected . '>'
-				. $this->escape($parent['title']) . '</option>';
+				. \Core\Html::escape($parent['title']) . '</option>';
 		}
 
 		$titleFieldOptions = $this->fieldReferenceOptions(
@@ -542,13 +502,13 @@ class ContentManager extends \Core\BasePlugin {
 			: '';
 
 		return $this->render('type-edit', [
-			'page_title' => $this->escape($typeId > 0
+			'page_title' => \Core\Html::escape($typeId > 0
 				? ($this->phrases['edit_content_type'] ?? 'Edit content type')
 				: ($this->phrases['create_content_type'] ?? 'Create content type')),
 			'type_id' => $typeId,
-			'system_name' => $this->escape((string)($type['system_name'] ?? '')),
-			'title' => $this->escape((string)($translation['title'] ?? '')),
-			'description' => $this->escape((string)($translation['description'] ?? '')),
+			'system_name' => \Core\Html::escape((string)($type['system_name'] ?? '')),
+			'title' => \Core\Html::escape((string)($translation['title'] ?? '')),
+			'description' => \Core\Html::escape((string)($translation['description'] ?? '')),
 			'has_slug_checked' => !empty($type['has_slug']) ? ' checked' : '',
 			'parent_options' => $parentOptions,
 			'title_field_options' => $titleFieldOptions,
@@ -560,7 +520,7 @@ class ContentManager extends \Core\BasePlugin {
 			'back_link' => '/' . PAGE_SLUG . '/cm-action/typeList',
 			'save_action' => '/' . PAGE_SLUG . '/cm-action/typeSave',
 			'declarative_notice' => $declarativeNotice,
-			'ui_text' => $this->json([
+			'ui_text' => \Core\Utils\JsonTool::encode([
 				'confirmDetach' => $this->phrases['confirm_detach_field']
 					?? 'Remove this field from the structure?',
 				'deleteField' => $this->phrases['delete_field_globally'] ?? 'Delete field globally',
@@ -568,7 +528,7 @@ class ContentManager extends \Core\BasePlugin {
 					?? 'Delete this field globally? This action cannot be undone.',
 				'operationFailed' => $this->phrases['structure_operation_failed']
 					?? 'Failed to update the structure.',
-			]),
+			], false),
 		]);
 	}
 
@@ -595,7 +555,7 @@ class ContentManager extends \Core\BasePlugin {
 			$existing = $typeId > 0
 				? \DB::getRow('select * from content_types where ct_id=$1', [$typeId])
 				: null;
-			$schema = $existing ? $this->decodeJsonObject($existing['schema'] ?? null) : ['fields' => []];
+			$schema = $existing ? \Core\Utils\JsonTool::decodeArray($existing['schema'] ?? null) : ['fields' => []];
 			$fields = is_array($schema['fields'] ?? null) ? $schema['fields'] : [];
 			$schema['fields'] = $fields;
 			$schema['title_field'] = $this->validFieldReference($data['title_field'] ?? null, $fields);
@@ -631,9 +591,16 @@ class ContentManager extends \Core\BasePlugin {
 			return $this->notice($error->getMessage(), 'error');
 		}
 
-		return js_redirect(
-			'/' . PAGE_SLUG . "/cm-action/typeEdit/cm-type/{$typeId}",
-			$this->phrases['content_type_saved'] ?? 'Content type saved.'
+		if ($notifications = $this->plugins->get('Notifications')) {
+			$notifications->store(
+				\Core\User::getId(),
+				$this->phrases['content_type_saved'] ?? 'Content type saved.',
+				'success'
+			);
+		}
+
+		return \Core\Response::seeOther(
+			'/' . PAGE_SLUG . "/cm-action/typeEdit/cm-type/{$typeId}"
 		);
 	}
 
@@ -642,24 +609,25 @@ class ContentManager extends \Core\BasePlugin {
 		$typeId = (int)($data['cm-type'] ?? $data['ct_id'] ?? 0);
 		if (!$this->managesContentType($typeId)) {
 			\Core\Response::addHeader('HTTP/1.1 403 Forbidden');
-			return $this->json(['status' => 'error', 'error' =>
+			return \Core\Utils\JsonTool::encode(['status' => 'error', 'error' =>
 				$this->phrases['content_type_access_denied']
-					?? 'This content type is managed by another plugin.']);
+					?? 'This content type is managed by another plugin.'], false);
 		}
 
 		try {
 			\Core\ContentStructure::deleteContentType($typeId);
 		} catch (\Throwable $error) {
-			return $this->json(['status' => 'error', 'error' => $error->getMessage()]);
+			return \Core\Utils\JsonTool::encode(['status' => 'error', 'error' => $error->getMessage()], false);
 		}
 
-		return $this->json([
+		return \Core\Utils\JsonTool::encode([
 			'status' => 'ok',
 			'message' => $this->phrases['content_type_deleted'] ?? 'Content type deleted.',
-		]);
+		], false);
 	}
 
 	public function globalFieldEdit($contextVars): string {
+		$this->addCss('/plugins/ContentManager/assets/content-manager.css');
 		if (!$this->isRoot()) {
 			return $this->notice(
 				$this->phrases['root_only'] ?? 'Root access required.',
@@ -676,19 +644,19 @@ class ContentManager extends \Core\BasePlugin {
 			return $this->notice($this->phrases['field_not_found'] ?? 'Field not found.', 'error');
 		}
 
-		$globalSettings = $this->decodeJsonObject($field['field_settings'] ?? null);
+		$globalSettings = \Core\Utils\JsonTool::decodeArray($field['field_settings'] ?? null);
 		$globalParams = is_array($globalSettings['params'] ?? null)
 			? $globalSettings['params']
 			: [];
 		unset($globalSettings['params']);
-		$translation = getTranslation((string)$field['uuid']) ?? [];
+		$translation = \Core\Translation::get((string)$field['uuid']) ?? [];
 
 		$typeOptions = '';
 		$fieldTypes = [];
 		$fieldTypeRows = [];
 		$typeResult = \DB::query('select type_id, uuid, system_name from field_types');
 		while ($fieldType = \DB::fetchRow($typeResult)) {
-			$typeTranslation = getTranslation((string)$fieldType['uuid']) ?? [];
+			$typeTranslation = \Core\Translation::get((string)$fieldType['uuid']) ?? [];
 			$fieldType['title'] = (string)($typeTranslation['title'] ?? $fieldType['system_name']);
 			$fieldTypeRows[] = $fieldType;
 		}
@@ -698,9 +666,9 @@ class ContentManager extends \Core\BasePlugin {
 				? ' selected'
 				: '';
 			$typeOptions .= '<option value="' . (int)$fieldType['type_id'] . '"'
-				. ' data-type-name="' . $this->escape((string)$fieldType['system_name']) . '"'
-				. $selected . '>' . $this->escape((string)$fieldType['title'])
-				. ' (' . $this->escape((string)$fieldType['system_name']) . ')</option>';
+				. ' data-type-name="' . \Core\Html::escape((string)$fieldType['system_name']) . '"'
+				. $selected . '>' . \Core\Html::escape((string)$fieldType['title'])
+				. ' (' . \Core\Html::escape((string)$fieldType['system_name']) . ')</option>';
 			$fieldTypes[] = \Core\Content::getFieldType((int)$fieldType['type_id']);
 		}
 
@@ -717,17 +685,17 @@ class ContentManager extends \Core\BasePlugin {
 		);
 
 		return $this->render('global-field-edit', [
-			'page_title' => $this->escape($this->phrases['edit_global_field'] ?? 'Edit global field'),
+			'page_title' => \Core\Html::escape($this->phrases['edit_global_field'] ?? 'Edit global field'),
 			'field_id' => $fieldId,
-			'system_name' => $this->escape((string)$field['system_name']),
-			'title' => $this->escape((string)($translation['title'] ?? $field['system_name'])),
-			'description' => $this->escape((string)($translation['description'] ?? '')),
+			'system_name' => \Core\Html::escape((string)$field['system_name']),
+			'title' => \Core\Html::escape((string)($translation['title'] ?? $field['system_name'])),
+			'description' => \Core\Html::escape((string)($translation['description'] ?? '')),
 			'field_type_options' => $typeOptions,
 			'field_parameters' => $parameterGroups,
 			'indexed_checked' => !empty($globalSettings['indexed']) ? ' checked' : '',
 			'unique_checked' => !empty($globalSettings['unique']) ? ' checked' : '',
 			'translatable_checked' => !empty($globalSettings['translatable']) ? ' checked' : '',
-			'usage_notice' => $this->escape(str_replace(
+			'usage_notice' => \Core\Html::escape(str_replace(
 				'{count}',
 				(string)$uses,
 				$this->phrases['field_usage_count'] ?? 'Used in {count} content types.'
@@ -813,13 +781,19 @@ class ContentManager extends \Core\BasePlugin {
 			return $this->notice($error->getMessage(), 'error');
 		}
 
-		return js_redirect(
-			'/' . PAGE_SLUG . '/cm-action/fieldList',
-			$this->phrases['global_field_saved'] ?? 'Global field saved.'
-		);
+		if ($notifications = $this->plugins->get('Notifications')) {
+			$notifications->store(
+				\Core\User::getId(),
+				$this->phrases['global_field_saved'] ?? 'Global field saved.',
+				'success'
+			);
+		}
+
+		return \Core\Response::seeOther('/' . PAGE_SLUG . '/cm-action/fieldList');
 	}
 
 	public function fieldEdit($contextVars): string {
+		$this->addCss('/plugins/ContentManager/assets/content-manager.css');
 		$data = $this->params(['type', 'field'], \Core\Request::getPrefixedParams($this->prefix));
 		$typeId = (int)($data['type'] ?? 0);
 		$fieldId = (int)($data['field'] ?? 0);
@@ -831,7 +805,7 @@ class ContentManager extends \Core\BasePlugin {
 		if (!$type) {
 			return $this->notice($this->phrases['content_type_not_found'] ?? 'Content type not found.', 'error');
 		}
-		$schema = $this->decodeJsonObject($type['schema'] ?? null);
+		$schema = \Core\Utils\JsonTool::decodeArray($type['schema'] ?? null);
 		$schemaFields = is_array($schema['fields'] ?? null) ? $schema['fields'] : [];
 
 		if ($fieldId > 0) {
@@ -849,8 +823,8 @@ class ContentManager extends \Core\BasePlugin {
 
 			$local = is_array($schemaFields[$fieldName] ?? null) ? $schemaFields[$fieldName] : [];
 			$localSettings = is_array($local['settings'] ?? null) ? $local['settings'] : [];
-			$globalTranslation = getTranslation((string)$field['uuid']) ?? [];
-			$typeTranslation = getTranslation((string)$type['uuid']) ?? [];
+			$globalTranslation = \Core\Translation::get((string)$field['uuid']) ?? [];
+			$typeTranslation = \Core\Translation::get((string)$type['uuid']) ?? [];
 			$localTranslation = is_array($typeTranslation['schema']['fields'][$fieldName] ?? null)
 				? $typeTranslation['schema']['fields'][$fieldName]
 				: [];
@@ -864,19 +838,19 @@ class ContentManager extends \Core\BasePlugin {
 			}
 
 			return $this->render('field-attachment-edit', [
-				'page_title' => $this->escape($this->phrases['edit_field'] ?? 'Edit field'),
+				'page_title' => \Core\Html::escape($this->phrases['edit_field'] ?? 'Edit field'),
 				'field_id' => $fieldId,
 				'type_id' => $typeId,
-				'system_name' => $this->escape($fieldName),
-				'field_type' => $this->escape((string)$fieldType['system_name']),
-				'title' => $this->escape((string)(
+				'system_name' => \Core\Html::escape($fieldName),
+				'field_type' => \Core\Html::escape((string)$fieldType['system_name']),
+				'title' => \Core\Html::escape((string)(
 					$localTranslation['title'] ?? $globalTranslation['title'] ?? $fieldName
 				)),
-				'description' => $this->escape((string)(
+				'description' => \Core\Html::escape((string)(
 					$localTranslation['description'] ?? $globalTranslation['description'] ?? ''
 				)),
 				'search_weight_options' => $searchWeightOptions,
-				'default_value' => $this->escape((string)($local['default'] ?? '')),
+				'default_value' => \Core\Html::escape((string)($local['default'] ?? '')),
 				'required_checked' => !empty($localSettings['required']) ? ' checked' : '',
 				'multiple_checked' => !empty($localSettings['multiple']) ? ' checked' : '',
 				'hidden_checked' => !empty($localSettings['hidden']) ? ' checked' : '',
@@ -891,16 +865,16 @@ class ContentManager extends \Core\BasePlugin {
 		$fieldTypeRows = [];
 		$typeResult = \DB::query('select type_id, uuid, system_name from field_types');
 		while ($fieldType = \DB::fetchRow($typeResult)) {
-			$typeTranslation = getTranslation((string)$fieldType['uuid']) ?? [];
+			$typeTranslation = \Core\Translation::get((string)$fieldType['uuid']) ?? [];
 			$fieldType['title'] = (string)($typeTranslation['title'] ?? $fieldType['system_name']);
 			$fieldTypeRows[] = $fieldType;
 		}
 		$fieldTypeRows = \Core\Translation::sortByTitle($fieldTypeRows);
 		foreach ($fieldTypeRows as $fieldType) {
 			$typeOptions .= '<option value="' . (int)$fieldType['type_id'] . '"'
-				. ' data-type-name="' . $this->escape((string)$fieldType['system_name']) . '">'
-				. $this->escape((string)$fieldType['title'])
-				. ' (' . $this->escape((string)$fieldType['system_name']) . ')</option>';
+				. ' data-type-name="' . \Core\Html::escape((string)$fieldType['system_name']) . '">'
+				. \Core\Html::escape((string)$fieldType['title'])
+				. ' (' . \Core\Html::escape((string)$fieldType['system_name']) . ')</option>';
 			$fieldTypes[] = \Core\Content::getFieldType((int)$fieldType['type_id']);
 		}
 
@@ -911,7 +885,7 @@ class ContentManager extends \Core\BasePlugin {
 		}
 
 		return $this->render('field-edit', [
-			'page_title' => $this->escape($this->phrases['create_field'] ?? 'Create field'),
+			'page_title' => \Core\Html::escape($this->phrases['create_field'] ?? 'Create field'),
 			'field_id' => 0,
 			'type_id' => $typeId,
 			'system_name' => '',
@@ -944,7 +918,7 @@ class ContentManager extends \Core\BasePlugin {
 		if (!$type) {
 			return $this->notice($this->phrases['content_type_not_found'] ?? 'Content type not found.', 'error');
 		}
-		$schema = $this->decodeJsonObject($type['schema'] ?? null);
+		$schema = \Core\Utils\JsonTool::decodeArray($type['schema'] ?? null);
 		$schemaFields = is_array($schema['fields'] ?? null) ? $schema['fields'] : [];
 
 		if ($fieldId > 0) {
@@ -994,7 +968,7 @@ class ContentManager extends \Core\BasePlugin {
 				unset($local['default']);
 			}
 
-			$globalTranslation = getTranslation((string)$field['uuid']) ?? [];
+			$globalTranslation = \Core\Translation::get((string)$field['uuid']) ?? [];
 			try {
 				\DB::beginTransaction();
 				\Core\ContentStructure::configureField($typeId, $fieldId, $local);
@@ -1012,9 +986,16 @@ class ContentManager extends \Core\BasePlugin {
 				return $this->notice($error->getMessage(), 'error');
 			}
 
-			return js_redirect(
-				'/' . PAGE_SLUG . "/cm-action/typeEdit/cm-type/{$typeId}",
-				$this->phrases['field_saved'] ?? 'Field saved.'
+			if ($notifications = $this->plugins->get('Notifications')) {
+				$notifications->store(
+					\Core\User::getId(),
+					$this->phrases['field_saved'] ?? 'Field saved.',
+					'success'
+				);
+			}
+
+			return \Core\Response::seeOther(
+				'/' . PAGE_SLUG . "/cm-action/typeEdit/cm-type/{$typeId}"
 			);
 		}
 
@@ -1103,9 +1084,16 @@ class ContentManager extends \Core\BasePlugin {
 			return $this->notice($error->getMessage(), 'error');
 		}
 
-		return js_redirect(
-			'/' . PAGE_SLUG . "/cm-action/typeEdit/cm-type/{$typeId}",
-			$this->phrases['field_saved'] ?? 'Field saved.'
+		if ($notifications = $this->plugins->get('Notifications')) {
+			$notifications->store(
+				\Core\User::getId(),
+				$this->phrases['field_saved'] ?? 'Field saved.',
+				'success'
+			);
+		}
+
+		return \Core\Response::seeOther(
+			'/' . PAGE_SLUG . "/cm-action/typeEdit/cm-type/{$typeId}"
 		);
 	}
 
@@ -1117,17 +1105,17 @@ class ContentManager extends \Core\BasePlugin {
 
 		$field = \DB::getRow('select uuid from fields where field_id=$1', [$fieldId]);
 		if (!$field) {
-			return $this->json(['status' => 'error', 'error' =>
-				$this->phrases['field_not_found'] ?? 'Field not found.']);
+			return \Core\Utils\JsonTool::encode(['status' => 'error', 'error' =>
+				$this->phrases['field_not_found'] ?? 'Field not found.'], false);
 		}
 		try {
 			\Core\ContentStructure::attachField($typeId, $fieldId);
 		} catch (\Throwable $error) {
-			return $this->json(['status' => 'error', 'error' => $error->getMessage()]);
+			return \Core\Utils\JsonTool::encode(['status' => 'error', 'error' => $error->getMessage()], false);
 		}
 
-		return $this->json(['status' => 'ok', 'reload' => true,
-			'message' => $this->phrases['field_attached'] ?? 'Field added to the structure.']);
+		return \Core\Utils\JsonTool::encode(['status' => 'ok', 'reload' => true,
+			'message' => $this->phrases['field_attached'] ?? 'Field added to the structure.'], false);
 	}
 
 	public function fieldDetach(?array $input): string {
@@ -1139,11 +1127,11 @@ class ContentManager extends \Core\BasePlugin {
 		try {
 			\Core\ContentStructure::detachField($typeId, $fieldId);
 		} catch (\Throwable $error) {
-			return $this->json(['status' => 'error', 'error' => $error->getMessage()]);
+			return \Core\Utils\JsonTool::encode(['status' => 'error', 'error' => $error->getMessage()], false);
 		}
 
-		return $this->json(['status' => 'ok', 'message' =>
-			$this->phrases['field_detached'] ?? 'Field removed from the structure.']);
+		return \Core\Utils\JsonTool::encode(['status' => 'ok', 'message' =>
+			$this->phrases['field_detached'] ?? 'Field removed from the structure.'], false);
 	}
 
 	public function fieldMove(?array $input): string {
@@ -1156,19 +1144,19 @@ class ContentManager extends \Core\BasePlugin {
 		try {
 			\Core\ContentStructure::moveField($typeId, $fieldId, $direction);
 		} catch (\Throwable $error) {
-			return $this->json(['status' => 'error', 'error' => $error->getMessage()]);
+			return \Core\Utils\JsonTool::encode(['status' => 'error', 'error' => $error->getMessage()], false);
 		}
 
-		return $this->json(['status' => 'ok', 'reload' => true]);
+		return \Core\Utils\JsonTool::encode(['status' => 'ok', 'reload' => true], false);
 	}
 
 	public function fieldDelete(?array $input): string {
 		if (!$this->isRoot()) {
 			\Core\Response::addHeader('HTTP/1.1 403 Forbidden');
-			return $this->json([
+			return \Core\Utils\JsonTool::encode([
 				'status' => 'error',
 				'error' => $this->phrases['root_only'] ?? 'Root access required.',
-			]);
+			], false);
 		}
 
 		$data = array_replace($input ?? [], \Core\Request::all());
@@ -1176,13 +1164,14 @@ class ContentManager extends \Core\BasePlugin {
 		try {
 			\Core\ContentStructure::deleteField($fieldId);
 		} catch (\Throwable $error) {
-			return $this->json(['status' => 'error', 'error' => $error->getMessage()]);
+			return \Core\Utils\JsonTool::encode(['status' => 'error', 'error' => $error->getMessage()], false);
 		}
 
-		return $this->json(['status' => 'ok', 'message' =>
-			$this->phrases['field_deleted'] ?? 'Field deleted.']);
+		return \Core\Utils\JsonTool::encode(['status' => 'ok', 'message' =>
+			$this->phrases['field_deleted'] ?? 'Field deleted.'], false);
 	}
 	public function itemList($context_vars) {
+		$this->addCss('/plugins/ContentManager/assets/content-manager.css');
 		$data = $this->params(['type', 'page', 'q'], \Core\Request::getPrefixedParams($this->prefix));
 
 		$page = max(1, (int)($data['page'] ?? 1));
@@ -1220,8 +1209,8 @@ class ContentManager extends \Core\BasePlugin {
 				'template' => 'item-row',
 				'params' => [
 					'item_id' => (int)$row['item_id'],
-					'title' => htmlspecialchars($title, ENT_QUOTES, 'UTF-8'),
-					'title_attribute' => htmlspecialchars($title, ENT_QUOTES, 'UTF-8'),
+					'title' => \Core\Html::escape($title),
+					'title_attribute' => \Core\Html::escape($title),
 					'edit_link' => "/" . PAGE_SLUG
 						. "/cm-action/itemEdit/cm-type/{$data['type']}/cm-id/{$row['item_id']}",
 					'delete_link' => "/ajax/ContentManager/itemDelete/cm-id/{$row['item_id']}",
@@ -1247,28 +1236,20 @@ class ContentManager extends \Core\BasePlugin {
 		$params['item_rows'] = $items_list;
 		$params['pagination'] = $pagination_html;
 		$params['items_count'] = $totals;
-		$params['items_summary'] = htmlspecialchars(
-			str_replace(
+		$params['items_summary'] = \Core\Html::escape(str_replace(
 				'{count}',
 				(string)$totals,
 				$this->phrases['item_count'] ?? '{count} items'
-			),
-			ENT_QUOTES,
-			'UTF-8'
-		);
-		$params['type_name'] = htmlspecialchars(
-			(string)$content_type['title'],
-			ENT_QUOTES,
-			'UTF-8'
-		);
+			));
+		$params['type_name'] = \Core\Html::escape((string)$content_type['title']);
 
 		$params['create_link'] = "/" . PAGE_SLUG
 			. "/cm-action/itemEdit/cm-type/{$data['type']}";
 		$params['search_link'] = "/" . PAGE_SLUG
 			. "/cm-action/itemList/cm-type/{$data['type']}";
 		$params['types_link'] = "/" . PAGE_SLUG . '/cm-action/typeList';
-		$params['q'] = htmlspecialchars($query, ENT_QUOTES, 'UTF-8');
-		$params['ui_text'] = json_encode([
+		$params['q'] = \Core\Html::escape($query);
+		$params['ui_text'] = \Core\Utils\JsonTool::encodeForHtml([
 			'itemCount' => $this->phrases['item_count'] ?? '{count} items',
 			'noItems' => $this->phrases['no_items'] ?? 'No content items found.',
 			'confirmDeleteItem' => $this->phrases['confirm_delete_item']
@@ -1276,13 +1257,13 @@ class ContentManager extends \Core\BasePlugin {
 			'itemDeleted' => $this->phrases['item_deleted'] ?? 'Item deleted.',
 			'deleteFailed' => $this->phrases['delete_item_failed']
 				?? 'Failed to delete item.',
-		], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES
-			| JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?: '{}';
+		]) ?: '{}';
 
 		return $this->render('items-list', $params);
 	}
 
 	public function itemEdit($context_vars) {
+		$this->addCss('/plugins/ContentManager/assets/content-manager.css');
 		$data = $this->params(['type', 'id'], \Core\Request::getPrefixedParams($this->prefix));
 		$type = \Core\Content::getContentType($data['type']);
 		if (!$this->managesContentType((int)$type['ct_id'])) {
@@ -1294,11 +1275,7 @@ class ContentManager extends \Core\BasePlugin {
 			$item = \Core\Content::getItem($id);
 			if (!$item || (int)$item['ct_id'] !== (int)$type['ct_id']) {
 				return '<div class="kc-notice kc-notice-error">'
-					. htmlspecialchars(
-						$this->phrases['item_not_found'] ?? 'Content item not found.',
-						ENT_QUOTES,
-						'UTF-8'
-					)
+					. \Core\Html::escape($this->phrases['item_not_found'] ?? 'Content item not found.')
 					. '</div>';
 			}
 			$item_title = (string)($item['title'] ?? "Item #{$id}");
@@ -1327,11 +1304,7 @@ class ContentManager extends \Core\BasePlugin {
 
 		$params = [
 			'form' => $form,
-			'title' => htmlspecialchars(
-				"{$type['title']}: {$item_title}",
-				ENT_QUOTES,
-				'UTF-8'
-			),
+			'title' => \Core\Html::escape("{$type['title']}: {$item_title}"),
 			'back_link' => "/" . PAGE_SLUG
 				. "/cm-action/itemList/cm-type/{$data['type']}",
 		];
@@ -1401,8 +1374,33 @@ class ContentManager extends \Core\BasePlugin {
 					}
 				}
 			}
+
+			$field['value'] = $this->convertDateTimeFieldValue(
+				$fieldType,
+				$field['params'],
+				$field['value'] ?? null,
+				false
+			);
+
 			$formFields[$fieldName] = $field;
 		}
+
+		$allowedParentTypes = \Core\User::getAllowedContentTypeIds('view');
+		$formFields['parent_id'] = [
+			'name' => 'parent_id',
+			'title' => $this->phrases['parent_item'] ?? 'Parent item',
+			'description' => $this->phrases['parent_item_help']
+				?? 'Optional parent content item.',
+			'type' => 'item_id',
+			'value' => $item['parent_id'] ?? null,
+			'settings' => ['multiple' => false],
+			'params' => [
+				// An empty content_types list means "no filter" in Forms, so use
+				// an impossible ID when the current user cannot view any types.
+				'content_types' => $allowedParentTypes !== [] ? $allowedParentTypes : [-1],
+				'exclude_ids' => !empty($item['item_id']) ? [(int)$item['item_id']] : [],
+			],
+		];
 
 		if (!empty($contentType['has_slug'])) {
 			$formFields['item_slug'] = [
@@ -1510,8 +1508,8 @@ class ContentManager extends \Core\BasePlugin {
 			$hidden = $typeId === $selectedTypeId ? '' : ' hidden disabled';
 			$html .= '<fieldset class="cm-parameter-group" data-field-parameters="'
 				. $typeId . '"' . $hidden . '><legend>'
-				. $this->escape($this->phrases['field_type_parameters'] ?? 'Type parameters')
-				. ': ' . $this->escape((string)$fieldType['system_name'])
+				. \Core\Html::escape($this->phrases['field_type_parameters'] ?? 'Type parameters')
+				. ': ' . \Core\Html::escape((string)$fieldType['system_name'])
 				. '</legend><div class="cm-form-grid cm-parameter-grid">'
 				. $controls . '</div></fieldset>';
 		}
@@ -1561,17 +1559,14 @@ class ContentManager extends \Core\BasePlugin {
 			$attributes['rows'] = $attributes['rows'] ?? 8;
 			$attributes['class'] .= ' cm-code-input';
 			$encoded = is_array($value)
-				? json_encode(
-					$value,
-					JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT
-				)
+				? \Core\Utils\JsonTool::encode($value, true)
 				: (string)($value ?? '');
 			$control = '<textarea' . $this->renderHtmlAttributes($attributes) . '>'
-				. $this->escape($encoded ?: '') . '</textarea>';
+				. \Core\Html::escape($encoded ?: '') . '</textarea>';
 		} elseif ($type === 'textarea') {
 			$attributes['rows'] = $attributes['rows'] ?? 4;
 			$control = '<textarea' . $this->renderHtmlAttributes($attributes) . '>'
-				. $this->escape((string)($value ?? '')) . '</textarea>';
+				. \Core\Html::escape((string)($value ?? '')) . '</textarea>';
 		} elseif (in_array($type, ['content_type_id', 'field_id', 'select'], true)) {
 			if ($multiple) $attributes['multiple'] = true;
 			$control = '<select' . $this->renderHtmlAttributes($attributes) . '>'
@@ -1594,9 +1589,9 @@ class ContentManager extends \Core\BasePlugin {
 		}
 
 		$help = $description !== ''
-			? '<small>' . $this->escape($description) . '</small>'
+			? '<small>' . \Core\Html::escape($description) . '</small>'
 			: '';
-		return '<label class="cm-field"><span>' . $this->escape($title)
+		return '<label class="cm-field"><span>' . \Core\Html::escape($title)
 			. ($required ? ' *' : '') . '</span>' . $control . $help . '</label>';
 	}
 
@@ -1611,7 +1606,7 @@ class ContentManager extends \Core\BasePlugin {
 		while ($row = \DB::fetchRow($result)) {
 			$fieldType = \Core\Content::getFieldType((int)$row['type_id']);
 			if (empty($fieldType['type_settings']['compound_component'])) continue;
-			$translation = getTranslation((string)$row['uuid']) ?? [];
+			$translation = \Core\Translation::get((string)$row['uuid']) ?? [];
 			$typeOptions[] = [
 				'value' => (string)$row['system_name'],
 				'label' => (string)($translation['title'] ?? $row['system_name']),
@@ -1631,7 +1626,7 @@ class ContentManager extends \Core\BasePlugin {
 			if (empty($settings['indexed']) || (string)($field['root_type_name'] ?? '') !== 'text') {
 				continue;
 			}
-			$translation = getTranslation((string)$row['uuid']) ?? [];
+			$translation = \Core\Translation::get((string)$row['uuid']) ?? [];
 			$sourceOptions[] = [
 				'value' => (string)$row['system_name'],
 				'label' => (string)($translation['title'] ?? $row['system_name'])
@@ -1651,10 +1646,7 @@ class ContentManager extends \Core\BasePlugin {
 			);
 		}
 		$template = $this->renderCompoundComponentRow('', [], $typeOptions, $sourceOptions);
-		$hiddenValue = $this->escape(json_encode(
-			$components,
-			JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES
-		) ?: '{}');
+		$hiddenValue = \Core\Html::escape(\Core\Utils\JsonTool::encode($components, false));
 		$inputName = 'params[' . $name . ']';
 		$title = $this->fieldParameterText(
 			(string)($definition['title'] ?? ''),
@@ -1666,24 +1658,24 @@ class ContentManager extends \Core\BasePlugin {
 		);
 
 		return '<fieldset class="cm-field cm-field-wide cm-compound-builder" data-compound-builder'
-			. ' data-duplicate-name-message="' . $this->escape(
+			. ' data-duplicate-name-message="' . \Core\Html::escape(
 				$this->phrases['compound_component_name_duplicate']
 					?? 'Compound component names must be unique.'
 			) . '"'
-			. ' data-invalid-options-message="' . $this->escape(
+			. ' data-invalid-options-message="' . \Core\Html::escape(
 				$this->phrases['compound_select_options_invalid']
 					?? 'Options must be a valid JSON array.'
 			) . '">'
-			. '<legend>' . $this->escape($title) . '</legend>'
-			. '<input type="hidden" name="' . $this->escape($inputName)
+			. '<legend>' . \Core\Html::escape($title) . '</legend>'
+			. '<input type="hidden" name="' . \Core\Html::escape($inputName)
 			. '" value="' . $hiddenValue . '" data-compound-value>'
 			. '<div class="cm-compound-components" data-compound-components>' . $rows . '</div>'
 			. '<template data-compound-template>' . $template . '</template>'
 			. '<button class="admin-button admin-button-secondary admin-button-small" '
 			. 'type="button" data-compound-add>'
-			. $this->escape($this->phrases['compound_add_component'] ?? 'Add component')
+			. \Core\Html::escape($this->phrases['compound_add_component'] ?? 'Add component')
 			. '</button>'
-			. ($description !== '' ? '<small>' . $this->escape($description) . '</small>' : '')
+			. ($description !== '' ? '<small>' . \Core\Html::escape($description) . '</small>' : '')
 			. $this->compoundBuilderScript()
 			. '</fieldset>';
 	}
@@ -1699,9 +1691,9 @@ class ContentManager extends \Core\BasePlugin {
 		$optionsHtml = '';
 		foreach ($typeOptions as $option) {
 			$selected = $option['value'] === $type ? ' selected' : '';
-			$optionsHtml .= '<option value="' . $this->escape((string)$option['value']) . '"'
-				. ' data-root="' . $this->escape((string)$option['root']) . '"'
-				. $selected . '>' . $this->escape((string)$option['label']) . '</option>';
+			$optionsHtml .= '<option value="' . \Core\Html::escape((string)$option['value']) . '"'
+				. ' data-root="' . \Core\Html::escape((string)$option['root']) . '"'
+				. $selected . '>' . \Core\Html::escape((string)$option['label']) . '</option>';
 		}
 
 		$sources = array_map('strval', is_array($params['source_fields'] ?? null)
@@ -1709,61 +1701,58 @@ class ContentManager extends \Core\BasePlugin {
 		$sourceHtml = '';
 		foreach ($sourceOptions as $option) {
 			$selected = in_array((string)$option['value'], $sources, true) ? ' selected' : '';
-			$sourceHtml .= '<option value="' . $this->escape((string)$option['value']) . '"'
-				. $selected . '>' . $this->escape((string)$option['label']) . '</option>';
+			$sourceHtml .= '<option value="' . \Core\Html::escape((string)$option['value']) . '"'
+				. $selected . '>' . \Core\Html::escape((string)$option['label']) . '</option>';
 		}
 
 		$selectOptions = is_array($params['options'] ?? null)
-			? json_encode(
-				$params['options'],
-				JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT
-			) ?: ''
+			? \Core\Utils\JsonTool::encode($params['options'], true)
 			: '';
 
 		return '<div class="cm-compound-component" data-compound-component>'
 			. '<div class="cm-form-grid">'
 			. '<label class="cm-field"><span>'
-			. $this->escape($this->phrases['compound_component_name'] ?? 'Component name')
+			. \Core\Html::escape($this->phrases['compound_component_name'] ?? 'Component name')
 			. '</span><input class="admin-input" type="text" data-component-name '
-			. 'pattern="[a-z][a-z0-9_]*" value="' . $this->escape($name) . '" required></label>'
+			. 'pattern="[a-z][a-z0-9_]*" value="' . \Core\Html::escape($name) . '" required></label>'
 			. '<label class="cm-field"><span>'
-			. $this->escape($this->phrases['field_type'] ?? 'Field type')
+			. \Core\Html::escape($this->phrases['field_type'] ?? 'Field type')
 			. '</span><select class="admin-input" data-component-type>' . $optionsHtml . '</select></label>'
 			. '</div>'
 			. '<div class="cm-settings-grid">'
 			. '<label><input type="checkbox" data-component-translatable'
 			. (!empty($component['translatable']) ? ' checked' : '') . '> '
-			. $this->escape($this->phrases['translatable'] ?? 'Translatable') . '</label>'
+			. \Core\Html::escape($this->phrases['translatable'] ?? 'Translatable') . '</label>'
 			. '<label><input type="checkbox" data-component-required'
 			. (!empty($component['required']) ? ' checked' : '') . '> '
-			. $this->escape($this->phrases['required'] ?? 'Required') . '</label>'
+			. \Core\Html::escape($this->phrases['required'] ?? 'Required') . '</label>'
 			. '</div>'
 			. '<div data-component-special="autocomplete">'
 			. '<label class="cm-field"><span>'
-			. $this->escape($this->phrases['field_parameter_source_fields'] ?? 'Suggestion source fields')
+			. \Core\Html::escape($this->phrases['field_parameter_source_fields'] ?? 'Suggestion source fields')
 			. '</span><select class="admin-input" multiple data-component-source-fields>'
 			. $sourceHtml . '</select></label></div>'
 			. '<div data-component-special="select">'
 			. '<label class="cm-field"><span>'
-			. $this->escape($this->phrases['field_parameter_options'] ?? 'Options (JSON)')
+			. \Core\Html::escape($this->phrases['field_parameter_options'] ?? 'Options (JSON)')
 			. '</span><textarea class="admin-input cm-code-input" rows="5" data-component-options>'
-			. $this->escape($selectOptions) . '</textarea></label></div>'
+			. \Core\Html::escape($selectOptions) . '</textarea></label></div>'
 			. '<div data-component-special="media" class="cm-form-grid">'
 			. '<label class="cm-field"><span>'
-			. $this->escape($this->phrases['field_parameter_media_root'] ?? 'Media root')
+			. \Core\Html::escape($this->phrases['field_parameter_media_root'] ?? 'Media root')
 			. '</span><input class="admin-input" type="text" data-component-media-root value="'
-			. $this->escape((string)($params['root'] ?? '')) . '"></label>'
+			. \Core\Html::escape((string)($params['root'] ?? '')) . '"></label>'
 			. '<label class="cm-field"><span>'
-			. $this->escape($this->phrases['field_parameter_media_accept'] ?? 'Accepted media')
+			. \Core\Html::escape($this->phrases['field_parameter_media_accept'] ?? 'Accepted media')
 			. '</span><input class="admin-input" type="text" data-component-media-accept value="'
-			. $this->escape((string)($params['accept'] ?? '')) . '"></label></div>'
+			. \Core\Html::escape((string)($params['accept'] ?? '')) . '"></label></div>'
 			. '<div class="admin-actions">'
 			. '<button class="admin-action-button" type="button" data-compound-up title="'
-			. $this->escape($this->phrases['move_up'] ?? 'Move up') . '">↑</button>'
+			. \Core\Html::escape($this->phrases['move_up'] ?? 'Move up') . '">↑</button>'
 			. '<button class="admin-action-button" type="button" data-compound-down title="'
-			. $this->escape($this->phrases['move_down'] ?? 'Move down') . '">↓</button>'
+			. \Core\Html::escape($this->phrases['move_down'] ?? 'Move down') . '">↓</button>'
 			. '<button class="admin-action-button" type="button" data-compound-remove title="'
-			. $this->escape($this->phrases['remove'] ?? 'Remove') . '">×</button>'
+			. \Core\Html::escape($this->phrases['remove'] ?? 'Remove') . '">×</button>'
 			. '</div></div>';
 	}
 
@@ -1908,7 +1897,7 @@ HTML;
 				'select ct_id, uuid, system_name from content_types'
 			);
 			while ($contentType = \DB::fetchRow($result)) {
-				$translation = getTranslation($contentType['uuid']) ?? [];
+				$translation = \Core\Translation::get($contentType['uuid']) ?? [];
 				$optionValue = ($definition['value'] ?? null) === 'system_name'
 					? (string)$contentType['system_name']
 					: (string)$contentType['ct_id'];
@@ -1925,7 +1914,7 @@ HTML;
 				. 'from fields field join field_types type on type.type_id=field.type_id'
 			);
 			while ($field = \DB::fetchRow($result)) {
-				$translation = getTranslation($field['uuid']) ?? [];
+				$translation = \Core\Translation::get($field['uuid']) ?? [];
 				$optionValue = ($definition['value'] ?? null) === 'system_name'
 					? (string)$field['system_name']
 					: (string)$field['field_id'];
@@ -1959,7 +1948,7 @@ HTML;
 				$optionAttributes['selected'] = true;
 			}
 			$html .= '<option' . $this->renderHtmlAttributes($optionAttributes) . '>'
-				. $this->escape((string)$option['label']) . '</option>';
+				. \Core\Html::escape((string)$option['label']) . '</option>';
 		}
 		return $html;
 	}
@@ -1984,7 +1973,7 @@ HTML;
 				continue;
 			}
 			if (!is_scalar($value)) continue;
-			$html .= ' ' . $name . '="' . $this->escape((string)$value) . '"';
+			$html .= ' ' . $name . '="' . \Core\Html::escape((string)$value) . '"';
 		}
 		return $html;
 	}
@@ -2173,21 +2162,11 @@ HTML;
 		return $plugin;
 	}
 
-	private function escape(string $value): string {
-		return htmlspecialchars($value, ENT_QUOTES, 'UTF-8');
+private function notice(string $message, string $kind = 'success'): string {
+		return '<div class="admin-notice admin-notice-' . \Core\Html::escape($kind) . '">'
+			. \Core\Html::escape($message) . '</div>';
 	}
 
-	private function notice(string $message, string $kind = 'success'): string {
-		return '<div class="admin-notice admin-notice-' . $this->escape($kind) . '">'
-			. $this->escape($message) . '</div>';
-	}
-
-	private function decodeJsonObject(mixed $value): array {
-		if (is_array($value)) return $value;
-		if (!is_string($value) || $value === '') return [];
-		$decoded = json_decode($value, true);
-		return is_array($decoded) ? $decoded : [];
-	}
 
 	private function fieldReferenceOptions(array $fields, string $selectedName): string {
 		$items = [];
@@ -2202,8 +2181,8 @@ HTML;
 		$options = '<option value="">—</option>';
 		foreach ($items as $item) {
 			$selected = $item['value'] === $selectedName ? ' selected' : '';
-			$options .= '<option value="' . $this->escape($item['value']) . '"'
-				. $selected . '>' . $this->escape($item['label']) . '</option>';
+			$options .= '<option value="' . \Core\Html::escape($item['value']) . '"'
+				. $selected . '>' . \Core\Html::escape($item['label']) . '</option>';
 		}
 		return $options;
 	}
@@ -2222,7 +2201,7 @@ HTML;
 		string $globalDescription
 	): void {
 		$language = defined('LANG') ? LANG : DOMAIN_CONFIG['default_language'];
-		$translation = getTranslation($contentTypeUuid, $language) ?? [];
+		$translation = \Core\Translation::get($contentTypeUuid, $language) ?? [];
 		$schema = is_array($translation['schema'] ?? null) ? $translation['schema'] : [];
 		$fields = is_array($schema['fields'] ?? null) ? $schema['fields'] : [];
 		$local = is_array($fields[$fieldName] ?? null) ? $fields[$fieldName] : [];
@@ -2257,7 +2236,7 @@ HTML;
 				. 'on conflict (entity_uuid, lang_code)
 '
 				. 'do update set translated_data=excluded.translated_data',
-				[$uuid, $language, $this->json($translation)]
+				[$uuid, $language, \Core\Utils\JsonTool::encode($translation, false)]
 			);
 		}
 		\Cache::del("globals:{$uuid}_{$language}");
@@ -2266,14 +2245,14 @@ HTML;
 
 	private function upsertTranslation(string $uuid, array $data): void {
 		$language = defined('LANG') ? LANG : DOMAIN_CONFIG['default_language'];
-		$current = getTranslation($uuid, $language) ?? [];
+		$current = \Core\Translation::get($uuid, $language) ?? [];
 		$translation = array_replace($current, $data);
 		\DB::query(
 			'insert into translations(entity_uuid, lang_code, translated_data)
 			values($1, $2, $3)
 			on conflict (entity_uuid, lang_code)
 			do update set translated_data=excluded.translated_data',
-			[$uuid, $language, $this->json($translation)]
+			[$uuid, $language, \Core\Utils\JsonTool::encode($translation, false)]
 		);
 		\Cache::del("globals:{$uuid}_{$language}");
 	}
@@ -2288,9 +2267,9 @@ HTML;
 
 	private function forbiddenJson(): string {
 		\Core\Response::addHeader('HTTP/1.1 403 Forbidden');
-		return $this->json(['status' => 'error', 'error' =>
+		return \Core\Utils\JsonTool::encode(['status' => 'error', 'error' =>
 			$this->phrases['content_type_access_denied']
-				?? 'This content type is managed by another plugin.']);
+				?? 'This content type is managed by another plugin.'], false);
 	}
 
 	private function fieldUsedOutsideManager(string $fieldName): bool {
@@ -2320,21 +2299,11 @@ HTML;
 
 	private function accessDeniedNotice(): string {
 		return '<div class="kc-notice kc-notice-error">'
-			. htmlspecialchars(
-				$this->phrases['content_type_access_denied']
-					?? 'This content type is managed by another plugin.',
-				ENT_QUOTES,
-				'UTF-8'
-			)
+			. \Core\Html::escape($this->phrases['content_type_access_denied']
+					?? 'This content type is managed by another plugin.')
 			. '</div>';
 	}
 
-	private function json(array $data): string {
-		return json_encode(
-			$data,
-			JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES
-		) ?: '{"status":"error"}';
-	}
 
 	public function itemSave($context_vars) {
 		$data = $this->params(['type', 'id'], \Core\Request::getPrefixedParams($this->prefix));
@@ -2343,18 +2312,40 @@ HTML;
 		if (!$this->managesContentType((int)$type['ct_id'])) {
 			return $this->accessDeniedNotice();
 		}
+		$form_data = $this->normalizeDateTimeFormData($type, $form_data);
 		$item_data = ['plugin_id' => $this->id];
+		$item_id = isset($data['id']) ? (int)$data['id'] : 0;
+		$parentId = $this->nullablePositiveInt($form_data['parent_id'] ?? null);
+		$form_data['parent_id'] = $parentId;
 
-		if (isset($data['id'])) {
-			$item_id = (int)$data['id'];
+		if ($parentId !== null) {
+			$parent = \Core\Content::getItem($parentId);
+			$allowedParentTypes = array_fill_keys(
+				\Core\User::getAllowedContentTypeIds('view'),
+				true
+			);
+			if ($parent === [] || !isset($allowedParentTypes[(int)($parent['ct_id'] ?? 0)])) {
+				return $this->notice(
+					$this->phrases['invalid_parent_item']
+						?? 'The selected parent item is not available.',
+					'error'
+				);
+			}
+
+			if ($item_id > 0 && $this->wouldCreateItemCycle($item_id, $parentId)) {
+				return $this->notice(
+					$this->phrases['parent_item_cycle']
+						?? 'The selected parent would create a hierarchy cycle.',
+					'error'
+				);
+			}
+		}
+
+		if ($item_id > 0) {
 			$item = \Core\Content::getItem($item_id);
 			if (!$item || (int)$item['ct_id'] !== (int)$type['ct_id']) {
 				return '<div class="kc-notice kc-notice-error">'
-					. htmlspecialchars(
-						$this->phrases['item_not_found'] ?? 'Content item not found.',
-						ENT_QUOTES,
-						'UTF-8'
-					)
+					. \Core\Html::escape($this->phrases['item_not_found'] ?? 'Content item not found.')
 					. '</div>';
 			}
 		} else {
@@ -2363,62 +2354,835 @@ HTML;
 
 		\Core\Content::update($item_id, $form_data);
 
-		return js_redirect(
-			"/".PAGE_SLUG
+		if ($notifications = $this->plugins->get('Notifications')) {
+			$notifications->store(
+				\Core\User::getId(),
+				$this->phrases['item_saved'] ?? 'Item saved.',
+				'success'
+			);
+		}
+
+		return \Core\Response::seeOther(
+			"/" . PAGE_SLUG
 			. "/{$this->prefix}-action/itemList"
 			. "/{$this->prefix}-type/{$type['ct_id']}"
 		);
 	}
-	public function listTypes(array $data = []): string {
-		return '';
+	private function normalizeDateTimeFormData(array $contentType, array $data): array {
+		$fields = is_array($contentType['schema']['fields'] ?? null)
+			? $contentType['schema']['fields']
+			: [];
+
+		foreach ($fields as $fieldName => $field) {
+			if (!is_string($fieldName) || !is_array($field) || !array_key_exists($fieldName, $data)) {
+				continue;
+			}
+
+			$definition = \Core\Content::getField($fieldName);
+			$fieldType = \Core\Content::getFieldType((int)$definition['type_id']);
+			$globalSettings = is_array($definition['field_settings'] ?? null)
+				? $definition['field_settings']
+				: [];
+			$globalParams = is_array($globalSettings['params'] ?? null)
+				? $globalSettings['params']
+				: [];
+			$params = $this->effectiveFieldParams($fieldType, $globalParams, $field);
+
+			$data[$fieldName] = $this->convertDateTimeFieldValue(
+				$fieldType,
+				$params,
+				$data[$fieldName],
+				true
+			);
+		}
+
+		return $data;
 	}
 
-	public function getType(array $data = []): string {
-		return '';
+	private function convertDateTimeFieldValue(
+		array $fieldType,
+		array $params,
+		mixed $value,
+		bool $toStorage
+	): mixed {
+		if ($this->isDateTimeFieldType($fieldType)) {
+			if (is_array($value)) {
+				return array_map(
+					fn(mixed $item): mixed => $this->convertDateTimeScalar($item, $toStorage),
+					$value
+				);
+			}
+			return $this->convertDateTimeScalar($value, $toStorage);
+		}
+
+		if ((string)($fieldType['root_type_name'] ?? '') !== 'compound' || !is_array($value)) {
+			return $value;
+		}
+
+		$components = is_array($params['components'] ?? null) ? $params['components'] : [];
+		if ($components === []) {
+			return $value;
+		}
+
+		$convertRow = function (array $row) use ($components, $toStorage): array {
+			foreach ($components as $componentName => $component) {
+				if (
+					!is_string($componentName)
+					|| !is_array($component)
+					|| !array_key_exists($componentName, $row)
+				) {
+					continue;
+				}
+
+				$componentType = \Core\Content::getFieldType(
+					(string)($component['type'] ?? 'string')
+				);
+				if (!$this->isDateTimeFieldType($componentType)) {
+					continue;
+				}
+
+				$row[$componentName] = $this->convertDateTimeScalar(
+					$row[$componentName],
+					$toStorage
+				);
+			}
+			return $row;
+		};
+
+		$componentNames = array_fill_keys(array_keys($components), true);
+		$isSingleRow = false;
+		foreach ($value as $key => $_item) {
+			if (is_string($key) && isset($componentNames[$key])) {
+				$isSingleRow = true;
+				break;
+			}
+		}
+
+		if ($isSingleRow) {
+			return $convertRow($value);
+		}
+
+		foreach ($value as $key => $row) {
+			if (is_array($row)) {
+				$value[$key] = $convertRow($row);
+			}
+		}
+		return $value;
 	}
 
-	public function searchItems(array $data = []): string {
-		return '';
+	private function isDateTimeFieldType(array $fieldType): bool {
+		return (string)($fieldType['system_name'] ?? '') === 'datetime'
+			|| (string)($fieldType['type_settings']['input']['template'] ?? '') === 'datetime_input';
 	}
 
-	public function getItem(array $data = []): string {
-		return '';
+	private function convertDateTimeScalar(mixed $value, bool $toStorage): mixed {
+		if ($value === null || $value === '') {
+			return '';
+		}
+		if (!is_scalar($value)) {
+			return $value;
+		}
+
+		return $toStorage
+			? \Core\Date::storage((string)$value)
+			: \Core\Date::format((string)$value, 'Y-m-d\\TH:i:s');
 	}
 
-	public function createItem(array $data = []): string {
-		return '';
+	private function nullablePositiveInt(mixed $value): ?int {
+		if ($value === null || $value === '' || !is_numeric($value)) {
+			return null;
+		}
+
+		$value = (int)$value;
+		return $value > 0 ? $value : null;
 	}
 
-	public function updateItem(array $data = []): string {
-		return '';
+	private function wouldCreateItemCycle(int $itemId, int $parentId): bool {
+		if ($itemId === $parentId) {
+			return true;
+		}
+
+		return (bool)\DB::getOne(
+			'WITH RECURSIVE descendants AS (
+				SELECT child.item_id, ARRAY[child.item_id]::bigint[] AS path
+				FROM content_items child
+				WHERE child.parent_id=$1
+
+				UNION ALL
+
+				SELECT child.item_id, parent.path || child.item_id
+				FROM content_items child
+				JOIN descendants parent ON child.parent_id=parent.item_id
+				WHERE NOT child.item_id=ANY(parent.path)
+			)
+			SELECT 1 FROM descendants WHERE item_id=$2 LIMIT 1',
+			[$itemId, $parentId]
+		);
 	}
 
-	public function deleteItem(array $data = []): string {
-		return '';
+	private function apiContentType(string $identifier): ?array {
+		if (ctype_digit($identifier)) {
+			return \DB::getRow(
+				'SELECT ct_id, uuid, system_name FROM content_types WHERE ct_id=$1',
+				[(int)$identifier]
+			) ?: null;
+		}
+		if (preg_match(
+			'/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i',
+			$identifier
+		)) {
+			return \DB::getRow(
+				'SELECT ct_id, uuid, system_name FROM content_types WHERE uuid=$1',
+				[$identifier]
+			) ?: null;
+		}
+
+		return \DB::getRow(
+			'SELECT ct_id, uuid, system_name FROM content_types WHERE system_name=$1',
+			[$identifier]
+		) ?: null;
 	}
 
-	public function updateType(array $data = []): string {
-		return '';
+	private function apiNonNegativeInt(mixed $value, string $name): int {
+		$value = is_string($value) ? trim($value) : $value;
+		if (!is_int($value) && !(is_string($value) && ctype_digit($value))) {
+			throw new \Core\PluginActionException(
+				"{$name} must be a non-negative integer.",
+				\Core\PluginActionException::BAD_REQUEST
+			);
+		}
+
+		$number = (int)$value;
+		if ($number < 0) {
+			throw new \Core\PluginActionException(
+				"{$name} must be a non-negative integer.",
+				\Core\PluginActionException::BAD_REQUEST
+			);
+		}
+		return $number;
 	}
 
-	public function attachField(array $data = []): string {
-		return '';
+	private function apiPositiveInt(mixed $value, string $name): int {
+		$number = $this->apiNonNegativeInt($value, $name);
+		if ($number < 1) {
+			throw new \Core\PluginActionException(
+				"{$name} must be a positive integer.",
+				\Core\PluginActionException::BAD_REQUEST
+			);
+		}
+		return $number;
 	}
 
-	public function detachField(array $data = []): string {
-		return '';
+	private function assertApiFilterField(array $structure, string $fieldName, bool $range): void {
+		$field = $structure[$fieldName] ?? null;
+		if (!is_array($field)) {
+			throw new \Core\PluginActionException(
+				"Unknown field '{$fieldName}' for this content type.",
+				\Core\PluginActionException::BAD_REQUEST
+			);
+		}
+		if (empty($field['settings']['indexed'])) {
+			throw new \Core\PluginActionException(
+				"Field '{$fieldName}' is not indexed and cannot be used as a simple filter.",
+				\Core\PluginActionException::BAD_REQUEST
+			);
+		}
+		if (!$range) {
+			return;
+		}
+
+		$definition = \Core\Content::getField($fieldName);
+		if (!in_array((string)($definition['root_type_name'] ?? ''), ['number', 'date', 'time'], true)) {
+			throw new \Core\PluginActionException(
+				"Field '{$fieldName}' does not support range filtering.",
+				\Core\PluginActionException::BAD_REQUEST
+			);
+		}
 	}
 
-	public function reorderFields(array $data = []): string {
-		return '';
+	private function apiItem(array $item): array {
+		$domains = [];
+		if (is_string($item['domains'] ?? null) && trim((string)$item['domains']) !== '') {
+			$domains = array_map('intval', \DB::convertArr((string)$item['domains']));
+		} elseif (is_array($item['domains'] ?? null)) {
+			$domains = array_map('intval', $item['domains']);
+		}
+
+		return [
+			'item_id' => (int)$item['item_id'],
+			'uuid' => (string)$item['item_uuid'],
+			'ct_id' => (int)$item['ct_id'],
+			'type' => (string)($item['content_type_name'] ?? ''),
+			'author_id' => isset($item['author_id']) ? (int)$item['author_id'] : null,
+			'plugin_id' => isset($item['plugin_id']) ? (int)$item['plugin_id'] : null,
+			'slug' => $item['item_slug'] !== null ? (string)$item['item_slug'] : null,
+			'parent_id' => isset($item['parent_id']) ? (int)$item['parent_id'] : null,
+			'created_at' => (string)($item['created_at'] ?? ''),
+			'updated_at' => (string)($item['updated_at'] ?? ''),
+			'domain_scope' => (int)($item['domain_scope'] ?? 0),
+			'domains' => $domains,
+			'settings' => \Core\Utils\JsonTool::decodeArray($item['item_settings'] ?? null),
+			'data' => is_array($item['data'] ?? null) ? $item['data'] : [],
+			'title' => $item['title'] ?? null,
+			'summary' => $item['summary'] ?? null,
+		];
+	}
+
+	public function listTypes(array $data = []): array {
+		$allowedTypeIds = \Core\User::getAllowedContentTypeIds('view');
+		if ($allowedTypeIds === []) {
+			return ['content_types' => []];
+		}
+
+		$contentTypes = [];
+		$result = \DB::query(
+			'SELECT ct.ct_id, ct.uuid, ct.system_name, ct.schema, ct.has_slug,
+			        parent.system_name AS parent_name,
+			        owner.system_name AS owner_name,
+			        default_manager.system_name AS default_manager_name,
+			        manager.system_name AS manager_name,
+			        ct.manager_overridden
+			 FROM content_types ct
+			 LEFT JOIN content_types parent ON parent.ct_id=ct.parent_id
+			 LEFT JOIN plugins owner ON owner.plugin_id=ct.plugin_id
+			 LEFT JOIN plugins default_manager ON default_manager.plugin_id=ct.default_manager_plugin_id
+			 LEFT JOIN plugins manager ON manager.plugin_id=ct.manager_plugin_id
+			 WHERE ct.ct_id=ANY($1::int[])
+			 ORDER BY ct.system_name',
+			[\DB::prepareIdArray($allowedTypeIds)]
+		);
+
+		while ($row = \DB::fetchRow($result)) {
+			$contentTypes[] = [
+				'ct_id' => (int)$row['ct_id'],
+				'uuid' => (string)$row['uuid'],
+				'system_name' => (string)$row['system_name'],
+				'parent' => $row['parent_name'] !== null ? (string)$row['parent_name'] : null,
+				'has_slug' => (bool)$row['has_slug'],
+				'owner' => $row['owner_name'] !== null ? (string)$row['owner_name'] : null,
+				'default_manager' => $row['default_manager_name'] !== null
+					? (string)$row['default_manager_name']
+					: null,
+				'manager' => $row['manager_name'] !== null ? (string)$row['manager_name'] : null,
+				'manager_overridden' => (bool)$row['manager_overridden'],
+				'own_schema' => \Core\Utils\JsonTool::decodeArray($row['schema'] ?? null),
+			];
+		}
+
+		return ['content_types' => $contentTypes];
+	}
+
+	public function getType(array $data = []): array {
+		$identifier = trim((string)($data['type'] ?? ''));
+		if ($identifier === '') {
+			throw new \Core\PluginActionException(
+				'Content type not found.',
+				\Core\PluginActionException::NOT_FOUND
+			);
+		}
+
+		if (ctype_digit($identifier)) {
+			$where = 'ct.ct_id=$1';
+			$params = [(int)$identifier];
+		} elseif (preg_match(
+			'/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i',
+			$identifier
+		)) {
+			$where = 'ct.uuid=$1';
+			$params = [$identifier];
+		} else {
+			$where = 'ct.system_name=$1';
+			$params = [$identifier];
+		}
+
+		$row = \DB::getRow(
+			'SELECT ct.*, parent.system_name AS parent_name,
+			        owner.system_name AS owner_name,
+			        default_manager.system_name AS default_manager_name,
+			        manager.system_name AS manager_name
+			 FROM content_types ct
+			 LEFT JOIN content_types parent ON parent.ct_id=ct.parent_id
+			 LEFT JOIN plugins owner ON owner.plugin_id=ct.plugin_id
+			 LEFT JOIN plugins default_manager ON default_manager.plugin_id=ct.default_manager_plugin_id
+			 LEFT JOIN plugins manager ON manager.plugin_id=ct.manager_plugin_id
+			 WHERE ' . $where . '
+			 LIMIT 1',
+			$params
+		);
+
+		if (!$row) {
+			throw new \Core\PluginActionException(
+				'Content type not found.',
+				\Core\PluginActionException::NOT_FOUND
+			);
+		}
+
+		if (!\Core\User::canContent((int)$row['ct_id'], 'view')) {
+			throw new \Core\PluginActionException(
+				'Content type access denied.',
+				\Core\PluginActionException::FORBIDDEN
+			);
+		}
+
+		$effective = \Core\Content::getContentType((int)$row['ct_id']);
+
+		return [
+			'content_type' => [
+				'ct_id' => (int)$row['ct_id'],
+				'uuid' => (string)$row['uuid'],
+				'system_name' => (string)$row['system_name'],
+				'parent' => $row['parent_name'] !== null ? (string)$row['parent_name'] : null,
+				'has_slug' => (bool)$row['has_slug'],
+				'owner' => $row['owner_name'] !== null ? (string)$row['owner_name'] : null,
+				'default_manager' => $row['default_manager_name'] !== null
+					? (string)$row['default_manager_name']
+					: null,
+				'manager' => $row['manager_name'] !== null ? (string)$row['manager_name'] : null,
+				'manager_overridden' => (bool)$row['manager_overridden'],
+				'title' => (string)($effective['title'] ?? $row['system_name']),
+				'description' => $effective['description'] ?? null,
+				'own_schema' => \Core\Utils\JsonTool::decodeArray($row['schema'] ?? null),
+				'effective_schema' => is_array($effective['schema'] ?? null)
+					? $effective['schema']
+					: [],
+			],
+		];
+	}
+
+	public function listFieldTypes(array $data = []): array {
+		$fieldTypes = [];
+		$result = \DB::query(
+			'SELECT ft.type_id, ft.uuid, ft.system_name, ft.type_settings,
+			        parent.system_name AS parent_name
+			 FROM field_types ft
+			 LEFT JOIN field_types parent ON parent.type_id=ft.parent_id
+			 ORDER BY ft.system_name'
+		);
+
+		while ($row = \DB::fetchRow($result)) {
+			$fieldTypes[] = [
+				'type_id' => (int)$row['type_id'],
+				'uuid' => (string)$row['uuid'],
+				'system_name' => (string)$row['system_name'],
+				'parent' => $row['parent_name'] !== null ? (string)$row['parent_name'] : null,
+				'own_settings' => \Core\Utils\JsonTool::decodeArray($row['type_settings'] ?? null),
+			];
+		}
+
+		return ['field_types' => $fieldTypes];
+	}
+
+	public function getFieldType(array $data = []): array {
+		$identifier = trim((string)($data['type'] ?? ''));
+		if ($identifier === '') {
+			throw new \Core\PluginActionException(
+				'Field type not found.',
+				\Core\PluginActionException::NOT_FOUND
+			);
+		}
+
+		if (ctype_digit($identifier)) {
+			$row = \DB::getRow(
+				'SELECT * FROM field_types WHERE type_id=$1',
+				[(int)$identifier]
+			);
+		} elseif (preg_match(
+			'/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i',
+			$identifier
+		)) {
+			$row = \DB::getRow(
+				'SELECT * FROM field_types WHERE uuid=$1',
+				[$identifier]
+			);
+		} else {
+			$row = \DB::getRow(
+				'SELECT * FROM field_types WHERE system_name=$1',
+				[$identifier]
+			);
+		}
+
+		if (!$row) {
+			throw new \Core\PluginActionException(
+				'Field type not found.',
+				\Core\PluginActionException::NOT_FOUND
+			);
+		}
+
+		$inheritanceChain = [];
+		$visited = [];
+		$current = $row;
+		while ($current) {
+			$currentId = (int)$current['type_id'];
+			if (isset($visited[$currentId])) {
+				throw new \RuntimeException('Circular field type inheritance detected.');
+			}
+			$visited[$currentId] = true;
+			$inheritanceChain[] = (string)$current['system_name'];
+
+			$parentId = (int)($current['parent_id'] ?? 0);
+			$current = $parentId > 0
+				? \DB::getRow('SELECT * FROM field_types WHERE type_id=$1', [$parentId])
+				: false;
+		}
+		$inheritanceChain = array_reverse($inheritanceChain);
+
+		$parentName = count($inheritanceChain) > 1
+			? $inheritanceChain[count($inheritanceChain) - 2]
+			: null;
+		$effective = \Core\Content::getFieldType((int)$row['type_id']);
+
+		return [
+			'field_type' => [
+				'type_id' => (int)$row['type_id'],
+				'uuid' => (string)$row['uuid'],
+				'system_name' => (string)$row['system_name'],
+				'parent' => $parentName !== null ? (string)$parentName : null,
+				'inheritance_chain' => $inheritanceChain,
+				'own_settings' => \Core\Utils\JsonTool::decodeArray($row['type_settings'] ?? null),
+				'effective_settings' => is_array($effective['type_settings'] ?? null)
+					? $effective['type_settings']
+					: [],
+			],
+		];
+	}
+
+	public function listFields(array $data = []): array {
+		$fields = [];
+		$result = \DB::query(
+			'SELECT f.field_id, f.uuid, f.system_name, f.field_settings,
+			        ft.system_name AS type_name, fv.variant_name
+			 FROM fields f
+			 JOIN field_types ft ON ft.type_id=f.type_id
+			 LEFT JOIN field_variants fv ON fv.variant_id=f.variant_id
+			 ORDER BY f.system_name'
+		);
+
+		while ($row = \DB::fetchRow($result)) {
+			$fields[] = [
+				'field_id' => (int)$row['field_id'],
+				'uuid' => (string)$row['uuid'],
+				'system_name' => (string)$row['system_name'],
+				'type' => (string)$row['type_name'],
+				'variant' => $row['variant_name'] !== null ? (string)$row['variant_name'] : null,
+				'own_settings' => \Core\Utils\JsonTool::decodeArray($row['field_settings'] ?? null),
+			];
+		}
+
+		return ['fields' => $fields];
+	}
+
+	public function getField(array $data = []): array {
+		$identifier = trim((string)($data['field'] ?? ''));
+		if ($identifier === '') {
+			throw new \Core\PluginActionException(
+				'Field not found.',
+				\Core\PluginActionException::NOT_FOUND
+			);
+		}
+
+		if (ctype_digit($identifier)) {
+			$where = 'f.field_id=$1';
+			$params = [(int)$identifier];
+		} elseif (preg_match(
+			'/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i',
+			$identifier
+		)) {
+			$where = 'f.uuid=$1';
+			$params = [$identifier];
+		} else {
+			$where = 'f.system_name=$1';
+			$params = [$identifier];
+		}
+
+		$row = \DB::getRow(
+			'SELECT f.*, ft.system_name AS type_name, fv.variant_name
+			 FROM fields f
+			 JOIN field_types ft ON ft.type_id=f.type_id
+			 LEFT JOIN field_variants fv ON fv.variant_id=f.variant_id
+			 WHERE ' . $where . '
+			 LIMIT 1',
+			$params
+		);
+
+		if (!$row) {
+			throw new \Core\PluginActionException(
+				'Field not found.',
+				\Core\PluginActionException::NOT_FOUND
+			);
+		}
+
+		$field = \Core\Content::getField((int)$row['field_id']);
+		$fieldType = \Core\Content::getFieldType((int)$row['type_id']);
+		$ownSettings = \Core\Utils\JsonTool::decodeArray($row['field_settings'] ?? null);
+
+		$typeSettings = is_array($field['type_settings'] ?? null)
+			? $field['type_settings']
+			: [];
+		$parameterDefinitions = is_array($typeSettings['parameters'] ?? null)
+			? $typeSettings['parameters']
+			: [];
+		unset($typeSettings['parameters']);
+
+		$globalSettings = $ownSettings;
+		$globalParams = is_array($globalSettings['params'] ?? null)
+			? $globalSettings['params']
+			: [];
+		unset($globalSettings['params']);
+
+		$effectiveSettings = array_replace($typeSettings, $globalSettings);
+		$effectiveParams = $this->fieldParameterDefaults($parameterDefinitions);
+		$effectiveParams = array_replace($effectiveParams, $globalParams);
+		$effectiveParams = array_intersect_key($effectiveParams, $parameterDefinitions);
+		if ($effectiveParams !== []) {
+			$effectiveSettings['params'] = $effectiveParams;
+		}
+
+		return [
+			'field' => [
+				'field_id' => (int)$row['field_id'],
+				'uuid' => (string)$row['uuid'],
+				'system_name' => (string)$row['system_name'],
+				'type' => (string)$row['type_name'],
+				'variant' => $row['variant_name'] !== null ? (string)$row['variant_name'] : null,
+				'root_type' => (string)($fieldType['root_type_name'] ?? $row['type_name']),
+				'own_settings' => $ownSettings,
+				'effective_settings' => $effectiveSettings,
+			],
+		];
+	}
+
+	public function searchItems(array $data = []): array {
+		return [];
+	}
+
+	public function getItems(array $data = []): array {
+		$typeIdentifier = trim((string)($data['type'] ?? ''));
+		if ($typeIdentifier === '') {
+			throw new \Core\PluginActionException(
+				'Content type is required.',
+				\Core\PluginActionException::BAD_REQUEST
+			);
+		}
+
+		$contentType = $this->apiContentType($typeIdentifier);
+		if (!$contentType) {
+			throw new \Core\PluginActionException(
+				'Content type not found.',
+				\Core\PluginActionException::NOT_FOUND
+			);
+		}
+		if (!\Core\User::canContent((int)$contentType['ct_id'], 'view')) {
+			throw new \Core\PluginActionException(
+				'Content type access denied.',
+				\Core\PluginActionException::FORBIDDEN
+			);
+		}
+
+		$offset = $this->apiNonNegativeInt($data['offset'] ?? 0, 'offset');
+		$limit = $this->apiPositiveInt(
+			$data['limit'] ?? self::API_ITEMS_DEFAULT_LIMIT,
+			'limit'
+		);
+		if ($limit > self::API_ITEMS_MAX_LIMIT) {
+			throw new \Core\PluginActionException(
+				'Limit exceeds the maximum allowed value.',
+				\Core\PluginActionException::BAD_REQUEST
+			);
+		}
+
+		$structure = \Core\Content::getContentType((int)$contentType['ct_id'])['schema']['fields'] ?? [];
+		$filters = [];
+		$reserved = ['type', 'offset', 'limit', 'field', 'from', 'to'];
+
+		foreach ($data as $name => $value) {
+			if (!is_string($name) || in_array($name, $reserved, true)) {
+				continue;
+			}
+			$this->assertApiFilterField($structure, $name, false);
+			if (is_array($value) || is_object($value)) {
+				throw new \Core\PluginActionException(
+					"Filter '{$name}' must contain a scalar value.",
+					\Core\PluginActionException::BAD_REQUEST
+				);
+			}
+			$filters[] = [
+				'field' => $name,
+				'mode' => 'eq',
+				'value' => $value,
+			];
+		}
+
+		$rangeField = trim((string)($data['field'] ?? ''));
+		$hasFrom = array_key_exists('from', $data);
+		$hasTo = array_key_exists('to', $data);
+		if ($rangeField !== '' || $hasFrom || $hasTo) {
+			if ($rangeField === '' || (!$hasFrom && !$hasTo)) {
+				throw new \Core\PluginActionException(
+					'Range filter requires field and at least one of from/to.',
+					\Core\PluginActionException::BAD_REQUEST
+				);
+			}
+			$this->assertApiFilterField($structure, $rangeField, true);
+
+			if ($hasFrom) {
+				if (is_array($data['from']) || is_object($data['from'])) {
+					throw new \Core\PluginActionException(
+						'Range value from must be scalar.',
+						\Core\PluginActionException::BAD_REQUEST
+					);
+				}
+				$filters[] = ['field' => $rangeField, 'mode' => 'gte', 'value' => $data['from']];
+			}
+			if ($hasTo) {
+				if (is_array($data['to']) || is_object($data['to'])) {
+					throw new \Core\PluginActionException(
+						'Range value to must be scalar.',
+						\Core\PluginActionException::BAD_REQUEST
+					);
+				}
+				$filters[] = ['field' => $rangeField, 'mode' => 'lte', 'value' => $data['to']];
+			}
+		}
+
+		try {
+			$result = \Core\Content::search(
+				[(int)$contentType['ct_id']],
+				'substr',
+				null,
+				$filters,
+				null,
+				$offset,
+				$limit
+			);
+		} catch (\InvalidArgumentException $e) {
+			throw new \Core\PluginActionException(
+				$e->getMessage(),
+				\Core\PluginActionException::BAD_REQUEST
+			);
+		}
+
+		$items = [];
+		foreach ($result['ids'] as $itemId) {
+			$item = \Core\Content::getItem((int)$itemId);
+			if ($item !== []) {
+				$items[] = $this->apiItem($item);
+			}
+		}
+
+		return [
+			'items' => $items,
+			'pagination' => [
+				'offset' => $offset,
+				'limit' => $limit,
+				'total' => (int)$result['totals'],
+			],
+		];
+	}
+
+	public function getItem(array $data = []): array {
+		$identifiers = [];
+		foreach (['id', 'uuid', 'slug'] as $name) {
+			if (array_key_exists($name, $data) && trim((string)$data[$name]) !== '') {
+				$identifiers[$name] = trim((string)$data[$name]);
+			}
+		}
+		if (count($identifiers) !== 1) {
+			throw new \Core\PluginActionException(
+				'Exactly one of id, uuid or slug is required.',
+				\Core\PluginActionException::BAD_REQUEST
+			);
+		}
+
+		$name = array_key_first($identifiers);
+		$value = $identifiers[$name];
+		if ($name === 'id') {
+			if (!ctype_digit($value) || (int)$value < 1) {
+				throw new \Core\PluginActionException(
+					'Invalid item ID.',
+					\Core\PluginActionException::BAD_REQUEST
+				);
+			}
+			$where = 'item_id=$1';
+			$params = [(int)$value];
+		} elseif ($name === 'uuid') {
+			if (!preg_match(
+				'/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i',
+				$value
+			)) {
+				throw new \Core\PluginActionException(
+					'Invalid item UUID.',
+					\Core\PluginActionException::BAD_REQUEST
+				);
+			}
+			$where = 'item_uuid=$1';
+			$params = [$value];
+		} else {
+			$where = 'item_slug=$1';
+			$params = [$value];
+		}
+
+		$row = \DB::getRow(
+			'SELECT item_id, ct_id FROM content_items WHERE ' . $where . ' LIMIT 1',
+			$params
+		);
+		if (!$row) {
+			throw new \Core\PluginActionException(
+				'Content item not found.',
+				\Core\PluginActionException::NOT_FOUND
+			);
+		}
+		if (!\Core\User::canContent((int)$row['ct_id'], 'view')) {
+			throw new \Core\PluginActionException(
+				'Content item access denied.',
+				\Core\PluginActionException::FORBIDDEN
+			);
+		}
+
+		$item = \Core\Content::getItem((int)$row['item_id']);
+		if ($item === []) {
+			throw new \Core\PluginActionException(
+				'Content item not found.',
+				\Core\PluginActionException::NOT_FOUND
+			);
+		}
+
+		return ['item' => $this->apiItem($item)];
+	}
+
+	public function createItem(array $data = []): array {
+		return [];
+	}
+
+	public function updateItem(array $data = []): array {
+		return [];
+	}
+
+	public function deleteItem(array $data = []): array {
+		return [];
+	}
+
+	public function updateType(array $data = []): array {
+		return [];
+	}
+
+	public function attachField(array $data = []): array {
+		return [];
+	}
+
+	public function detachField(array $data = []): array {
+		return [];
+	}
+
+	public function reorderFields(array $data = []): array {
+		return [];
 	}
 	public function itemDelete(?array $data): string {
 		$itemId = (int)($data['cm-id'] ?? 0);
 		if ($itemId < 1) {
-			return json_encode([
+			return \Core\Utils\JsonTool::encode([
 				'status' => 'error',
 				'error' => $this->phrases['invalid_item'] ?? 'Invalid content item.',
-			], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+			], false);
 		}
 
 		$item = \DB::getRow(
@@ -2426,32 +3190,32 @@ HTML;
 			[$itemId]
 		);
 		if (!$item) {
-			return $this->json([
+			return \Core\Utils\JsonTool::encode([
 				'status' => 'error',
 				'error' => $this->phrases['item_not_found']
 					?? 'Content item not found.',
-			]);
+			], false);
 		}
 		if (!$this->managesContentType((int)$item['ct_id'])) {
 			\Core\Response::addHeader('HTTP/1.1 403 Forbidden');
-			return $this->json([
+			return \Core\Utils\JsonTool::encode([
 				'status' => 'error',
 				'error' => $this->phrases['content_type_access_denied']
 					?? 'This content type is managed by another plugin.',
-			]);
+			], false);
 		}
 
 		if (!\Core\Content::delete($itemId)) {
-			return json_encode([
+			return \Core\Utils\JsonTool::encode([
 				'status' => 'error',
 				'error' => $this->phrases['item_not_found']
 					?? 'Content item not found.',
-			], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+			], false);
 		}
 
-		return json_encode([
+		return \Core\Utils\JsonTool::encode([
 			'status' => 'ok',
 			'message' => $this->phrases['item_deleted'] ?? 'Item deleted.',
-		], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+		], false);
 	}
 }

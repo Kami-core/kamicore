@@ -19,6 +19,7 @@ class PageManager extends \Core\BasePlugin {
 	private ?\Plugins\Forms\Forms $forms = null;
 
 	public function list():string {
+		$this->addCss('/plugins/PageManager/assets/page-manager.css');
 		// Domain selection is rendered client-side, but this path parameter belongs to the list route.
 		$this->param('domainId');
 
@@ -53,6 +54,9 @@ class PageManager extends \Core\BasePlugin {
 		]);
 
 		$data['domain_select'] = $domain_select;
+		$data['create_action'] = $this->managerUrl('createPage');
+		$data['recipe_create_action'] = $this->managerUrl('createPageFromRecipe');
+		$data['page_route'] = \Core\Utils\JsonTool::encodeForHtml($this->managerUrl());
 
 		$recipes = $this->getRecipes();
 		$recipeOptions = [[
@@ -79,20 +83,17 @@ class PageManager extends \Core\BasePlugin {
 			'attributes' => ['class' => 'admin-input'],
 			'options' => $recipeOptions,
 		]);
-		$data['recipe_meta'] = json_encode(
-			$recipeMeta,
-			JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES
-		) ?: '{}';
+		$data['recipe_meta'] = \Core\Utils\JsonTool::encodeForHtml($recipeMeta);
 		$data['recipe_create_disabled'] = $recipes === [] ? ' disabled' : '';
 		$data['recipe_tools'] = \Core\User::isRoot()
 			? '<a class="admin-button admin-button-secondary" href="'
 				. $this->managerUrl('recipes') . '">'
 				. '<svg class="icon icon-settings icon-sm"></svg><span>'
-				. htmlspecialchars($this->phrases['page_recipes'] ?? 'Page recipes', ENT_QUOTES, 'UTF-8')
+				. \Core\Html::escape($this->phrases['page_recipes'] ?? 'Page recipes')
 				. '</span></a>'
 			: '';
 
-		$data['ui_text'] = json_encode([
+		$data['ui_text'] = \Core\Utils\JsonTool::encodeForHtml([
 			'selectDomain' => $this->phrases['select_domain_to_view_pages'] ?? 'Select a domain to view its pages',
 			'noDomain' => $this->phrases['no_domain_selected'] ?? 'No domain selected',
 			'noPages' => $this->phrases['no_pages'] ?? 'No pages found.',
@@ -112,7 +113,7 @@ class PageManager extends \Core\BasePlugin {
 				'many' => $this->phrases['page_count_many'] ?? '{count} pages',
 				'other' => $this->phrases['page_count_other'] ?? '{count} pages',
 			],
-		], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT);
+		]);
 
 		$content = $this->render("pages", $data);
 
@@ -120,6 +121,7 @@ class PageManager extends \Core\BasePlugin {
 	}
 
 	public function edit($context_vars) {
+		$this->addCss('/plugins/PageManager/assets/page-manager.css');
 		$data = \Core\Request::all();
 		$pageId = (int)$this->param('pageId', $data['pgm-pageId'] ?? 0);
 		$page = \DB::getRow(
@@ -136,40 +138,31 @@ class PageManager extends \Core\BasePlugin {
 			return '<div class="kc-notice kc-notice-error">Page not found.</div>';
 		}
 
-		$pageTranslation = getTranslation($page['uuid']) ?? [];
-		$layoutTranslation = getTranslation($page['layout_uuid']) ?? [];
-		$wrappers = $this->decodeJsonArray($page['wrappers'] ?? null);
+		$pageTranslation = \Core\Translation::get($page['uuid']) ?? [];
+		$layoutTranslation = \Core\Translation::get($page['layout_uuid']) ?? [];
+		$wrappers = \Core\Utils\JsonTool::decodeArray($page['wrappers'] ?? null);
 		$this->sortWrappers($wrappers);
 
 		$pageData = $page;
-		$pageData['page_title'] = htmlspecialchars(
-			(string)($pageTranslation['title']
-				?? ucwords(str_replace(['_', '-'], ' ', $page['system_name']))),
-			ENT_QUOTES,
-			'UTF-8'
-		);
-		$pageData['page_slug'] = htmlspecialchars(
-			(string)$page['page_slug'],
-			ENT_QUOTES,
-			'UTF-8'
-		);
-		$pageData['layout_title'] = htmlspecialchars(
-			(string)($layoutTranslation['title'] ?? $page['layout_system_name'] ?? ''),
-			ENT_QUOTES,
-			'UTF-8'
-		);
+		$pageData['page_title'] = \Core\Html::escape((string)($pageTranslation['title']
+				?? ucwords(str_replace(['_', '-'], ' ', $page['system_name']))));
+		$pageData['page_slug'] = \Core\Html::escape((string)$page['page_slug']);
+		$pageData['layout_title'] = \Core\Html::escape((string)($layoutTranslation['title'] ?? $page['layout_system_name'] ?? ''));
 		$pageData['layout_field'] = $this->renderLayoutSelect(
 			(int)$page['domain_id'],
 			(int)$page['layout_id'],
 			'page-layout-id'
 		);
 		$pageData['layout_preview'] = $this->loadLayoutPreview($page, $wrappers);
-		$pageData['back_url'] = '/admin-pages/pgm-domainId/' . (int)$page['domain_id'];
-		$pageData['back_label'] = htmlspecialchars(
-			(string)($this->phrases['back_to_pages'] ?? 'Back to pages'),
-			ENT_QUOTES,
-			'UTF-8'
+		$pageData['save_action'] = $this->managerUrl(
+			'save',
+			['pgm-pageId' => $pageId]
 		);
+		$pageData['back_url'] = $this->managerUrl(
+			'list',
+			['pgm-domainId' => (int)$page['domain_id']]
+		);
+		$pageData['back_label'] = \Core\Html::escape((string)($this->phrases['back_to_pages'] ?? 'Back to pages'));
 		$pageData['cancel_url'] = $pageData['back_url'];
 		$pageData['layout_data_url'] = '/ajax/PageManager/pageLayoutData/pgm-pageId/' . $pageId;
 		$pageData['parent_field'] = $this->forms()->renderField([
@@ -185,7 +178,7 @@ class PageManager extends \Core\BasePlugin {
 			],
 		]);
 
-		$pageSettings = $this->decodeJsonArray($page['page_settings'] ?? null);
+		$pageSettings = \Core\Utils\JsonTool::decodeArray($page['page_settings'] ?? null);
 		$lifecycleSettings = is_array($pageSettings['lifecycle_plugins'] ?? null)
 			? $pageSettings['lifecycle_plugins']
 			: [];
@@ -208,13 +201,9 @@ class PageManager extends \Core\BasePlugin {
 			'multiple' => true,
 			'params' => $lifecycleFieldParams,
 		]);
-		$pageData['lifecycle_plugins_help'] = htmlspecialchars(
-			$this->phrases['lifecycle_plugins_help']
-				?? 'Page-level overrides for plugins initialized outside wrappers.',
-			ENT_QUOTES,
-			'UTF-8'
-		);
-		$pageData['builder_text'] = json_encode([
+		$pageData['lifecycle_plugins_help'] = \Core\Html::escape($this->phrases['lifecycle_plugins_help']
+				?? 'Page-level overrides for plugins initialized outside wrappers.');
+		$pageData['builder_text'] = \Core\Utils\JsonTool::encodeForHtml([
 			'dragHere' => $this->phrases['drag_plugins_here'] ?? 'Drag plugins here',
 			'loadingLayout' => $this->phrases['loading_layout'] ?? 'Loading page layout…',
 			'layoutLoaded' => $this->phrases['layout_loaded'] ?? 'Layout loaded',
@@ -227,7 +216,7 @@ class PageManager extends \Core\BasePlugin {
 			'pluginSettingsFailed' => $this->phrases['plugin_settings_load_failed'] ?? 'Failed to load plugin settings. Please try again.',
 			'removePlugin' => $this->phrases['remove_plugin'] ?? 'Remove plugin',
 			'movePlugin' => $this->phrases['move_plugin'] ?? 'Move plugin',
-		], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT);
+		]);
 
 		$plugins = [];
 		$pluginRows = \DB::query(
@@ -238,16 +227,12 @@ class PageManager extends \Core\BasePlugin {
 			[(int)$page['domain_id']]
 		);
 		while ($plugin = \DB::fetchRow($pluginRows)) {
-			$pluginTranslation = getTranslation($plugin['uuid']) ?? [];
+			$pluginTranslation = \Core\Translation::get($plugin['uuid']) ?? [];
 			$plugins[] = [
 				'template' => 'plugin',
 				'params' => [
-					'plugin_name' => htmlspecialchars((string)$plugin['system_name'], ENT_QUOTES, 'UTF-8'),
-					'plugin_title' => htmlspecialchars(
-						(string)($pluginTranslation['title'] ?? $plugin['system_name']),
-						ENT_QUOTES,
-						'UTF-8'
-					),
+					'plugin_name' => \Core\Html::escape((string)$plugin['system_name']),
+					'plugin_title' => \Core\Html::escape((string)($pluginTranslation['title'] ?? $plugin['system_name'])),
 				]
 			];
 		}
@@ -263,8 +248,7 @@ class PageManager extends \Core\BasePlugin {
 	public function save($context_vars) {
 		$data = \Core\Request::all();
 		$pageId = (int)$this->param('pageId', $data['page_id'] ?? 0);
-		$layout = json_decode((string)($data['layout_json'] ?? '[]'), true);
-		$layout = is_array($layout) ? $layout : [];
+		$layout = \Core\Utils\JsonTool::decodeArray($data['layout_json'] ?? null);
 		$pagePlugins = [];
 
 		foreach ($layout as $wrapper) {
@@ -293,7 +277,7 @@ class PageManager extends \Core\BasePlugin {
 					'select config from plugins where system_name=$1',
 					[$pluginName]
 				);
-				$config = $this->decodeJsonArray($pluginRow['config'] ?? null);
+				$config = \Core\Utils\JsonTool::decodeArray($pluginRow['config'] ?? null);
 				$handlers = is_array($config['handlers'] ?? null) ? $config['handlers'] : [];
 				$handlerName = (string)($data['plugin_handler'][$instanceId]
 					?? $config['default_handler']
@@ -311,7 +295,7 @@ class PageManager extends \Core\BasePlugin {
 				];
 
 				foreach ($instanceParams as $name => $structure) {
-					$value = $data[$name][$instanceId]
+					$value = $data['plugin_params'][$instanceId][$name]
 						?? (is_array($structure) ? ($structure['default'] ?? null) : null);
 					$params[$name] = $this->normalizeInstanceParamValue($value, $structure);
 				}
@@ -342,7 +326,7 @@ class PageManager extends \Core\BasePlugin {
 			// Saving is the cleanup boundary for wrappers that do not exist in
 			// the selected layout. Their instances remain available in the UI
 			// as unplaced wrappers until the user saves the page.
-			$declaredWrappers = $this->decodeJsonArray($selectedLayout['wrappers'] ?? null);
+			$declaredWrappers = \Core\Utils\JsonTool::decodeArray($selectedLayout['wrappers'] ?? null);
 			$pagePlugins = array_intersect_key($pagePlugins, $declaredWrappers);
 
 			$parentId = $this->normalizeParentPageId(
@@ -368,7 +352,7 @@ class PageManager extends \Core\BasePlugin {
 			return $this->pageError($error->getMessage());
 		}
 
-		$pageSettings = $this->decodeJsonArray($page['page_settings'] ?? null);
+		$pageSettings = \Core\Utils\JsonTool::decodeArray($page['page_settings'] ?? null);
 		if ($lifecycleEnable === [] && $lifecycleDisable === []) {
 			unset($pageSettings['lifecycle_plugins']);
 		} else {
@@ -378,14 +362,8 @@ class PageManager extends \Core\BasePlugin {
 			];
 		}
 
-		$pluginsJson = json_encode(
-			$pagePlugins,
-			JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES
-		);
-		$pageSettingsJson = json_encode(
-			$pageSettings,
-			JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES
-		);
+		$pluginsJson = \Core\Utils\JsonTool::encode($pagePlugins, false);
+		$pageSettingsJson = \Core\Utils\JsonTool::encode($pageSettings, false);
 		\DB::query(
 			'update pages set page_slug=$1, parent_id=$2, layout_id=$3, page_plugins=$4, page_settings=$5::jsonb where page_id=$6',
 			[
@@ -398,9 +376,9 @@ class PageManager extends \Core\BasePlugin {
 			]
 		);
 
-		$translation = getTranslation($page['uuid']) ?? [];
+		$translation = \Core\Translation::get($page['uuid']) ?? [];
 		$translation['title'] = (string)($data['page_title'] ?? '');
-		$translationJson = json_encode($translation, JSON_UNESCAPED_UNICODE);
+		$translationJson = \Core\Utils\JsonTool::encode($translation, false);
 		\DB::query(
 			"insert into translations(entity_uuid, lang_code, translated_data)
 			values($1, $2, $3)
@@ -412,9 +390,16 @@ class PageManager extends \Core\BasePlugin {
 		\Cache::del('d_' . (int)$page['domain_id'] . ':page_' . $pageId);
 		\Cache::del('d_' . (int)$page['domain_id'] . ':pages');
 
-		return js_redirect(
-			'/' . PAGE_SLUG . '/pgm-action/edit/pgm-pageId/' . $pageId,
-			$this->phrases['page_saved'] ?? 'Page saved.'
+		if ($notifications = $this->plugins->get('Notifications')) {
+			$notifications->store(
+				\Core\User::getId(),
+				$this->phrases['page_saved'] ?? 'Page saved.',
+				'success'
+			);
+		}
+
+		return \Core\Response::seeOther(
+			'/' . PAGE_SLUG . '/pgm-action/edit/pgm-pageId/' . $pageId
 		);
 	}
 	public function resolveLayout(int $domainId, string $layoutName): ?array {
@@ -480,7 +465,7 @@ class PageManager extends \Core\BasePlugin {
 			);
 		}
 
-		$wrappers = $this->decodeJsonArray($layout['wrappers'] ?? null);
+		$wrappers = \Core\Utils\JsonTool::decodeArray($layout['wrappers'] ?? null);
 		$pagePlugins = [];
 		foreach ($wrappers as $wrapperName => $_wrapper) {
 			$pagePlugins[(string)$wrapperName] = [];
@@ -492,10 +477,7 @@ class PageManager extends \Core\BasePlugin {
 			'page_slug' => $slug,
 			'parent_id' => $parentId,
 			'layout_id' => (int)$layout['layout_id'],
-			'page_plugins' => json_encode(
-				$pagePlugins,
-				JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES
-			),
+			'page_plugins' => \Core\Utils\JsonTool::encode($pagePlugins, false),
 		], 'page_id, uuid');
 
 		if (!is_array($created)) {
@@ -531,7 +513,7 @@ class PageManager extends \Core\BasePlugin {
 				[
 					$created['uuid'],
 					$language,
-					json_encode(['title' => $title], JSON_UNESCAPED_UNICODE),
+					\Core\Utils\JsonTool::encode(['title' => $title], false),
 				]
 			);
 			\Cache::del("globals:{$created['uuid']}_{$language}");
@@ -569,7 +551,7 @@ class PageManager extends \Core\BasePlugin {
 			throw new \InvalidArgumentException('Wrapper name is required.');
 		}
 
-		$availableWrappers = $this->decodeJsonArray($page['wrappers'] ?? null);
+		$availableWrappers = \Core\Utils\JsonTool::decodeArray($page['wrappers'] ?? null);
 		if (!array_key_exists($wrapper, $availableWrappers)) {
 			throw new \RuntimeException(
 				"Wrapper {$wrapper} does not exist on page {$pageId}."
@@ -581,7 +563,7 @@ class PageManager extends \Core\BasePlugin {
 			throw new \InvalidArgumentException('Plugin system name is required.');
 		}
 
-		$pagePlugins = $this->decodeJsonArray($page['page_plugins'] ?? null);
+		$pagePlugins = \Core\Utils\JsonTool::decodeArray($page['page_plugins'] ?? null);
 		foreach ($availableWrappers as $wrapperName => $_definition) {
 			$pagePlugins[(string)$wrapperName] = is_array($pagePlugins[$wrapperName] ?? null)
 				? $pagePlugins[$wrapperName]
@@ -593,10 +575,7 @@ class PageManager extends \Core\BasePlugin {
 
 		if (\DB::update(
 			'pages',
-			['page_plugins' => json_encode(
-				$pagePlugins,
-				JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES
-			)],
+			['page_plugins' => \Core\Utils\JsonTool::encode($pagePlugins, false)],
 			'page_id=$1',
 			[$pageId]
 		) === false) {
@@ -682,7 +661,7 @@ class PageManager extends \Core\BasePlugin {
 		}
 
 		$availableWrappers = $layout
-			? $this->decodeJsonArray($layout['wrappers'] ?? null)
+			? \Core\Utils\JsonTool::decodeArray($layout['wrappers'] ?? null)
 			: [];
 		$instances = [];
 
@@ -772,6 +751,7 @@ class PageManager extends \Core\BasePlugin {
 	}
 
 	public function recipes(array $contextVars = []): string {
+		$this->addCss('/plugins/PageManager/assets/page-manager.css');
 		$this->assertRecipeManagerAccess();
 		$requestedId = (int)$this->param('id', 0);
 		$editing = null;
@@ -789,10 +769,10 @@ class PageManager extends \Core\BasePlugin {
 			$rows[] = [
 				'template' => 'recipe-row',
 				'params' => [
-					'recipe_key' => htmlspecialchars((string)$recipe['recipe_key'], ENT_QUOTES, 'UTF-8'),
-					'name' => htmlspecialchars((string)$recipe['name'], ENT_QUOTES, 'UTF-8'),
-					'description' => htmlspecialchars((string)($recipe['description'] ?? ''), ENT_QUOTES, 'UTF-8'),
-					'layout' => htmlspecialchars((string)$recipe['payload']['layout'], ENT_QUOTES, 'UTF-8'),
+					'recipe_key' => \Core\Html::escape((string)$recipe['recipe_key']),
+					'name' => \Core\Html::escape((string)$recipe['name']),
+					'description' => \Core\Html::escape((string)($recipe['description'] ?? '')),
+					'layout' => \Core\Html::escape((string)$recipe['payload']['layout']),
 					'edit_url' => $this->managerUrl('recipes', ['pgm-id' => (int)$recipe['recipe_id']]),
 					'delete_url' => $this->managerUrl('recipeDelete', ['pgm-id' => (int)$recipe['recipe_id']]),
 				],
@@ -807,13 +787,10 @@ class PageManager extends \Core\BasePlugin {
 				'params' => [],
 			]],
 			'recipe_id' => (string)($editing['recipe_id'] ?? 0),
-			'recipe_key' => htmlspecialchars((string)($editing['recipe_key'] ?? ''), ENT_QUOTES, 'UTF-8'),
-			'name' => htmlspecialchars((string)($editing['name'] ?? ''), ENT_QUOTES, 'UTF-8'),
-			'description' => htmlspecialchars((string)($editing['description'] ?? ''), ENT_QUOTES, 'UTF-8'),
-			'payload' => htmlspecialchars(json_encode(
-				$payload,
-				JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES
-			) ?: '{}', ENT_QUOTES, 'UTF-8'),
+			'recipe_key' => \Core\Html::escape((string)($editing['recipe_key'] ?? '')),
+			'name' => \Core\Html::escape((string)($editing['name'] ?? '')),
+			'description' => \Core\Html::escape((string)($editing['description'] ?? '')),
+			'payload' => \Core\Html::escape(\Core\Utils\JsonTool::encode($payload, true)),
 			'save_action' => $this->managerUrl('recipeSave'),
 			'back_url' => $this->managerUrl(),
 		]);
@@ -843,11 +820,19 @@ class PageManager extends \Core\BasePlugin {
 			]);
 		} catch (\Throwable $error) {
 			return '<div class="kc-notice kc-notice-error">'
-				. htmlspecialchars($error->getMessage(), ENT_QUOTES, 'UTF-8')
+				. \Core\Html::escape($error->getMessage())
 				. '</div>';
 		}
 
-		return js_redirect($this->managerUrl('recipes'));
+		if ($notifications = $this->plugins->get('Notifications')) {
+			$notifications->store(
+				\Core\User::getId(),
+				$this->phrases['recipe_saved'] ?? 'Recipe saved.',
+				'success'
+			);
+		}
+
+		return \Core\Response::seeOther($this->managerUrl('recipes'));
 	}
 
 	public function recipeDelete(array $contextVars = []): string {
@@ -857,7 +842,15 @@ class PageManager extends \Core\BasePlugin {
 			return '<div class="kc-notice kc-notice-error">Failed to delete recipe.</div>';
 		}
 
-		return js_redirect($this->managerUrl('recipes'));
+		if ($notifications = $this->plugins->get('Notifications')) {
+			$notifications->store(
+				\Core\User::getId(),
+				$this->phrases['recipe_deleted'] ?? 'Recipe deleted.',
+				'success'
+			);
+		}
+
+		return \Core\Response::redirect($this->managerUrl('recipes'));
 	}
 
 	public function saveRecipe(array $recipe): int {
@@ -891,7 +884,7 @@ class PageManager extends \Core\BasePlugin {
 			'recipe_key' => $recipeKey,
 			'name' => $name,
 			'description' => $description !== '' ? $description : null,
-			'payload' => json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+			'payload' => \Core\Utils\JsonTool::encode($payload, false),
 			'updated_at' => date('Y-m-d H:i:s'),
 		];
 
@@ -948,7 +941,7 @@ class PageManager extends \Core\BasePlugin {
 				))
 				: 'Recipe cannot be resolved.';
 			return '<div class="kc-notice kc-notice-error">'
-				. htmlspecialchars($message, ENT_QUOTES, 'UTF-8')
+				. \Core\Html::escape($message)
 				. '</div>';
 		}
 
@@ -1011,11 +1004,21 @@ class PageManager extends \Core\BasePlugin {
 				throw new \RuntimeException('Failed to commit page recipe transaction.');
 			}
 
-			return js_redirect($this->managerUrl('edit', ['pgm-pageId' => (int)$page['page_id']]));
+			if ($notifications = $this->plugins->get('Notifications')) {
+				$notifications->store(
+					\Core\User::getId(),
+					$this->phrases['page_created'] ?? 'Page created.',
+					'success'
+				);
+			}
+
+			return \Core\Response::seeOther(
+				$this->managerUrl('edit', ['pgm-pageId' => (int)$page['page_id']])
+			);
 		} catch (\Throwable $error) {
 			\DB::rollBack();
 			return '<div class="kc-notice kc-notice-error">'
-				. htmlspecialchars($error->getMessage(), ENT_QUOTES, 'UTF-8')
+				. \Core\Html::escape($error->getMessage())
 				. '</div>';
 		}
 	}
@@ -1052,11 +1055,21 @@ class PageManager extends \Core\BasePlugin {
 			[
 				$pageUuid,
 				LANG,
-				json_encode(['title' => $data['title']], JSON_UNESCAPED_UNICODE),
+				\Core\Utils\JsonTool::encode(['title' => $data['title']], false),
 			]
 		);
 
-		return js_redirect("/admin-pages/pgm-action/edit/pgm-pageId/$pageId");
+		if ($notifications = $this->plugins->get('Notifications')) {
+			$notifications->store(
+				\Core\User::getId(),
+				$this->phrases['page_created'] ?? 'Page created.',
+				'success'
+			);
+		}
+
+		return \Core\Response::seeOther(
+			$this->managerUrl('edit', ['pgm-pageId' => $pageId])
+		);
 	}
 
 	private function savePage($pageData) {
@@ -1106,7 +1119,7 @@ class PageManager extends \Core\BasePlugin {
 	private function prepareRecipe(array $row): array {
 		$row['recipe_id'] = (int)$row['recipe_id'];
 		$row['payload'] = $this->normalizeRecipePayload(
-			$this->decodeJsonArray($row['payload'] ?? null)
+			\Core\Utils\JsonTool::decodeArray($row['payload'] ?? null)
 		);
 		return $row;
 	}
@@ -1118,28 +1131,25 @@ class PageManager extends \Core\BasePlugin {
 	}
 
 	private function managerUrl(string $action = 'list', array $params = []): string {
-		$url = '/' . trim((string)PAGE_SLUG, '/');
+		$url = LANG === (DOMAIN_CONFIG['default_language'] ?? LANG)
+			? \Core\Url::path((string) PAGE_SLUG)
+			: \Core\Url::path((string) LANG, (string) PAGE_SLUG);
+
 		if ($action !== 'list') {
-			$url .= '/' . $this->prefix . '-action/' . rawurlencode($action);
-		}
-		foreach ($params as $name => $value) {
-			$url .= '/' . rawurlencode((string)$name) . '/' . rawurlencode((string)$value);
-		}
-		return $url;
-	}
-
-	private function decodeJsonArray(mixed $value): array {
-		if (is_array($value)) {
-			return $value;
+			$url = \Core\Url::pathParams(
+				$url,
+				['action' => $action],
+				$this->prefix
+			);
 		}
 
-		$decoded = json_decode((string)($value ?? ''), true);
-		return is_array($decoded) ? $decoded : [];
+		return \Core\Url::pathParams($url, $params);
 	}
+
 
 	private function pageError(string $message): string {
 		return '<div class="kc-notice kc-notice-error">'
-			. htmlspecialchars($message, ENT_QUOTES, 'UTF-8')
+			. \Core\Html::escape($message)
 			. '</div>';
 	}
 
@@ -1178,7 +1188,17 @@ class PageManager extends \Core\BasePlugin {
 		int $domainId,
 		int $pageId = 0
 	): ?int {
-		$parentId = (int)($value ?? 0);
+		if ($value === null || $value === '' || $value === 0 || $value === '0') {
+			return null;
+		}
+
+		if (!is_int($value) && !(is_string($value) && ctype_digit($value))) {
+			throw new \InvalidArgumentException(
+				$this->phrases['invalid_parent_page'] ?? 'The selected parent page is invalid.'
+			);
+		}
+
+		$parentId = (int)$value;
 		if ($parentId < 1) {
 			return null;
 		}
@@ -1320,7 +1340,7 @@ class PageManager extends \Core\BasePlugin {
 		);
 
 		while ($layout = \DB::fetchRow($layouts)) {
-			$translated = getTranslation($layout['uuid']) ?? [];
+			$translated = \Core\Translation::get($layout['uuid']) ?? [];
 			$options[] = [
 				'label' => $translated['title'] ?? $layout['system_name'],
 				'value' => (int)$layout['layout_id'],
@@ -1364,7 +1384,7 @@ class PageManager extends \Core\BasePlugin {
 
 		$html = '<div class="pm-layout-preview pm-layout-preview-fallback">';
 		foreach ($wrappers as $wrapperName => $wrapper) {
-			$name = htmlspecialchars((string)$wrapperName, ENT_QUOTES, 'UTF-8');
+			$name = \Core\Html::escape((string)$wrapperName);
 			$html .= '<section class="pm-layout-zone">'
 				. '<header class="pm-zone-header">'
 				. '<strong data-wrapper-title></strong>'
@@ -1392,9 +1412,9 @@ class PageManager extends \Core\BasePlugin {
 			return '<div class="kc-notice kc-notice-error">Plugin configuration not found.</div>';
 		}
 
-		$config = $this->decodeJsonArray($pluginRow['config'] ?? null);
+		$config = \Core\Utils\JsonTool::decodeArray($pluginRow['config'] ?? null);
 		$handlers = is_array($config['handlers'] ?? null) ? $config['handlers'] : [];
-		$translation = getTranslation($pluginRow['uuid']) ?? [];
+		$translation = \Core\Translation::get($pluginRow['uuid']) ?? [];
 		$translatedHandlers = is_array($translation['handlers'] ?? null)
 			? $translation['handlers']
 			: [];
@@ -1468,7 +1488,7 @@ class PageManager extends \Core\BasePlugin {
 				unset($option);
 			}
 
-			$field['name'] = "{$fieldName}[{$instanceId}]";
+			$field['name'] = "plugin_params[{$instanceId}][{$fieldName}]";
 			$field['value'] = $instanceParams[$fieldName] ?? $field['default'] ?? null;
 			$form .= $this->forms()->renderField($field);
 		}
@@ -1493,6 +1513,7 @@ class PageManager extends \Core\BasePlugin {
 		return $this->plugins->get('Forms');
 	}
 	public function pageLayoutData(array $data): string {
+		$this->addCss('/plugins/PageManager/assets/page-manager.css');
 		$pageId = (int)($data['pgm-pageId'] ?? $data['page_id'] ?? 0);
 		$page = \DB::getRow(
 			'select page_id, domain_id, layout_id, page_plugins from pages where page_id=$1',
@@ -1500,26 +1521,26 @@ class PageManager extends \Core\BasePlugin {
 		);
 
 		if (!$page) {
-			return json_encode([
+			return \Core\Utils\JsonTool::encode([
 				'status' => 'error',
 				'error' => 'Page not found.',
-			]);
+			], false);
 		}
 
 		$layoutId = (int)($data['pgm-layoutId'] ?? $data['layout_id'] ?? $page['layout_id']);
 		$layout = $this->resolveLayoutById((int)$page['domain_id'], $layoutId);
 		if (!$layout) {
-			return json_encode([
+			return \Core\Utils\JsonTool::encode([
 				'status' => 'error',
 				'error' => $this->phrases['invalid_layout']
 					?? 'The selected layout is not available for this domain.',
-			]);
+			], false);
 		}
 
-		$declaredWrappers = $this->decodeJsonArray($layout['wrappers'] ?? null);
+		$declaredWrappers = \Core\Utils\JsonTool::decodeArray($layout['wrappers'] ?? null);
 		$this->sortWrappers($declaredWrappers);
-		$pagePlugins = $this->decodeJsonArray($page['page_plugins'] ?? null);
-		$layoutTranslation = getTranslation($layout['uuid']) ?? [];
+		$pagePlugins = \Core\Utils\JsonTool::decodeArray($page['page_plugins'] ?? null);
+		$layoutTranslation = \Core\Translation::get($layout['uuid']) ?? [];
 		$translatedWrappers = is_array($layoutTranslation['wrappers'] ?? null)
 			? $layoutTranslation['wrappers']
 			: [];
@@ -1554,7 +1575,7 @@ class PageManager extends \Core\BasePlugin {
 					[$pluginName]
 				);
 				$pluginTranslation = $pluginRow
-					? (getTranslation($pluginRow['uuid']) ?? [])
+					? (\Core\Translation::get($pluginRow['uuid']) ?? [])
 					: [];
 
 				try {
@@ -1570,24 +1591,16 @@ class PageManager extends \Core\BasePlugin {
 						E_USER_WARNING
 					);
 					$contextForm = '<div class="kc-notice kc-notice-error">'
-						. htmlspecialchars(
-							$this->phrases['plugin_settings_load_failed']
-								?? 'Failed to load plugin settings.',
-							ENT_QUOTES,
-							'UTF-8'
-						)
+						. \Core\Html::escape($this->phrases['plugin_settings_load_failed']
+								?? 'Failed to load plugin settings.')
 						. '</div>';
 				}
 
 				$pluginsHtml .= $this->render('wrapper_plugin', [
-					'plugin_name' => htmlspecialchars($pluginName, ENT_QUOTES, 'UTF-8'),
-					'plugin_title' => htmlspecialchars(
-						(string)($pluginTranslation['title'] ?? $pluginName),
-						ENT_QUOTES,
-						'UTF-8'
-					),
+					'plugin_name' => \Core\Html::escape($pluginName),
+					'plugin_title' => \Core\Html::escape((string)($pluginTranslation['title'] ?? $pluginName)),
 					'instance_id' => $instanceId,
-					'wrapper_name' => htmlspecialchars((string)$wrapperName, ENT_QUOTES, 'UTF-8'),
+					'wrapper_name' => \Core\Html::escape((string)$wrapperName),
 					'context_form' => $contextForm,
 				]);
 
@@ -1607,7 +1620,7 @@ class PageManager extends \Core\BasePlugin {
 			];
 		}
 
-		return json_encode([
+		return \Core\Utils\JsonTool::encode([
 			'status' => 'ok',
 			'layout_id' => $layoutId,
 			'layout_preview' => \Core\Renderer::finalize(
@@ -1615,10 +1628,11 @@ class PageManager extends \Core\BasePlugin {
 			),
 			'wrappers' => $wrappers,
 			'last_instance' => $instanceId - 1,
-		], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+		], false);
 	}
 
 	public function domainPages($data) {
+		$this->addCss('/plugins/PageManager/assets/page-manager.css');
 		$domainId = (int)($data['domain_id'] ?? 0);
 		$pages = [];
 		$page_rows = \DB::query(
@@ -1627,12 +1641,12 @@ class PageManager extends \Core\BasePlugin {
 			[$domainId]
 		);
 		while($row = \DB::fetchRow($page_rows)) {
-			$translated = getTranslation($row['uuid']);
+			$translated = \Core\Translation::get($row['uuid']);
 			$layout = \DB::getRow(
 				'select * from theme_layouts where layout_id=$1',
 				[(int)$row['layout_id']]
 			);
-			$layout_translated = getTranslation($layout['uuid']);
+			$layout_translated = \Core\Translation::get($layout['uuid']);
 			$pages[] = [
 				'id'          => (int)$row['page_id'],
 				'parent_id'   => $row['parent_id'] !== null ? (int)$row['parent_id'] : null,
@@ -1662,10 +1676,11 @@ class PageManager extends \Core\BasePlugin {
 			'error'  => ''
 		];
 
-		return json_encode($response);
+		return \Core\Utils\JsonTool::encode($response, false);
 	}
 
 	public function pluginContextForm($data) {
+		$this->addCss('/plugins/PageManager/assets/page-manager.css');
 		$instance_id = str_replace('plugin_', '', $data['instance_id']);
 
 		$plugin_name = $data['plugin'];

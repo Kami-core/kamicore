@@ -15,6 +15,7 @@ namespace Plugins\TranslationManager;
 use Core\Content;
 use Core\Request;
 use Plugins\Forms\Forms;
+use Plugins\Formatter\Formatter;
 use Plugins\Pagination\Pagination;
 use Plugins\TextProcessor\TextProcessor;
 
@@ -69,14 +70,16 @@ final class TranslationManager extends \Core\BasePlugin
 
     private ?Forms $forms = null;
     private ?Pagination $pagination = null;
+    private ?Formatter $formatter = null;
     private ?TextProcessor $processor = null;
 
     public function overview(array $instanceParams = []): string
     {
+        $this->addCss('/plugins/TranslationManager/assets/translation-manager.css');
         $systemCards = $this->render('system-card', [
             'title' => $this->phrase('system_dictionary', 'System dictionary'),
             'count' => $this->dictionaryPhraseCounts(),
-            'url' => $this->url('dictionaryEdit'),
+            'url' => $this->actionUrl('dictionaryEdit'),
         ]);
 
         foreach (self::SYSTEM_ENTITIES as $key => $config) {
@@ -84,7 +87,7 @@ final class TranslationManager extends \Core\BasePlugin
             $systemCards .= $this->render('system-card', [
                 'title' => $config['title'],
                 'count' => $count,
-                'url' => $this->url('systemList', ['entityType' => $key]),
+                'url' => $this->actionUrl('systemList', ['entityType' => $key]),
             ]);
         }
 
@@ -102,7 +105,7 @@ final class TranslationManager extends \Core\BasePlugin
                 'system_name' => $type['system_name'],
                 'count' => $stats['items'],
                 'phrase_counts' => $stats['phrases'],
-                'url' => $this->url('contentList', ['type' => $typeId]),
+                'url' => $this->actionUrl('contentList', ['type' => $typeId]),
             ]);
         }
 
@@ -114,6 +117,7 @@ final class TranslationManager extends \Core\BasePlugin
 
     public function dictionaryEdit(array $instanceParams = []): string
     {
+        $this->addCss('/plugins/TranslationManager/assets/translation-manager.css');
         return $this->renderDictionaryEditor();
     }
 
@@ -261,20 +265,31 @@ final class TranslationManager extends \Core\BasePlugin
             $this->deleteDictionaryKeys($deletedKeys);
         }
 
-        return $this->renderDictionaryEditor(
-            $sourceLanguage,
-            $targetLanguage,
-            null,
-            null,
-            trim((string) ($data['context'] ?? '')),
-            trim((string) ($data['instructions'] ?? '')),
-            trim((string) ($data['provider'] ?? '')),
-            $this->notice($this->phrase('dictionary_saved', 'System dictionary saved.'))
+        if ($notifications = $this->plugins->get('Notifications')) {
+            $notifications->store(
+                \Core\User::getId(),
+                $this->phrase('dictionary_saved', 'System dictionary saved.'),
+                'success'
+            );
+        }
+
+        $redirectParams = [
+            'source' => $sourceLanguage,
+            'target' => $targetLanguage,
+        ];
+        $provider = trim((string) ($data['provider'] ?? ''));
+        if ($provider !== '') {
+            $redirectParams['provider'] = $provider;
+        }
+
+        return \Core\Response::seeOther(
+            $this->actionUrl('dictionaryEdit', $redirectParams)
         );
     }
 
     public function systemList(array $instanceParams = []): string
     {
+        $this->addCss('/plugins/TranslationManager/assets/translation-manager.css');
         $data = $this->params(['entityType', 'source'], Request::getPrefixedParams($this->prefix));
         $entityType = (string) ($data['entityType'] ?? '');
         $config = $this->systemEntityConfig($entityType);
@@ -308,7 +323,7 @@ final class TranslationManager extends \Core\BasePlugin
                 'system_name' => $entity['system_name'],
                 'phrase_counts' => $phraseCounts[$entity['entity_uuid']] ?? '',
                 'batch_id' => $entity['entity_uuid'],
-                'url' => $this->url('systemEdit', [
+                'url' => $this->actionUrl('systemEdit', [
                     'entityType' => $entityType,
                     'uuid' => $entity['entity_uuid'],
                     'source' => $sourceLanguage,
@@ -319,18 +334,19 @@ final class TranslationManager extends \Core\BasePlugin
         return $this->render('system-list', [
             'title' => $config['title'],
             'language_select' => $this->languageSelect('source', $sourceLanguage),
-            'load_url' => $this->url('systemList', ['entityType' => $entityType]),
+            'load_url' => $this->actionUrl('systemList', ['entityType' => $entityType]),
             'items' => $items,
             'batch_panel' => $this->batchPanel('system', $sourceLanguage, [
                 'entity_type' => $entityType,
             ]),
-            'back_url' => $this->url('overview'),
-            'back_label' => $this->escape($this->phrase('back_to_translations', 'Back to translations')),
+            'back_url' => $this->actionUrl('overview'),
+            'back_label' => \Core\Html::escape($this->phrase('back_to_translations', 'Back to translations')),
         ]);
     }
 
     public function systemEdit(array $instanceParams = []): string
     {
+        $this->addCss('/plugins/TranslationManager/assets/translation-manager.css');
         return $this->renderSystemEditor();
     }
 
@@ -411,26 +427,38 @@ final class TranslationManager extends \Core\BasePlugin
 
         $this->saveExactTranslation($uuid, $targetLanguage, $target, $entityType);
 
-        return $this->renderSystemEditor(
-            $entityType,
-            $uuid,
-            $sourceLanguage,
-            $targetLanguage,
-            null,
-            trim((string) ($data['context'] ?? '')),
-            trim((string) ($data['instructions'] ?? '')),
-            trim((string) ($data['provider'] ?? '')),
-            $this->notice($this->phrase('saved', 'Translation saved.'))
+        if ($notifications = $this->plugins->get('Notifications')) {
+            $notifications->store(
+                \Core\User::getId(),
+                $this->phrase('saved', 'Translation saved.'),
+                'success'
+            );
+        }
+
+        $redirectParams = [
+            'entityType' => $entityType,
+            'uuid' => $uuid,
+            'source' => $sourceLanguage,
+            'target' => $targetLanguage,
+        ];
+        $provider = trim((string) ($data['provider'] ?? ''));
+        if ($provider !== '') {
+            $redirectParams['provider'] = $provider;
+        }
+
+        return \Core\Response::seeOther(
+            $this->actionUrl('systemEdit', $redirectParams)
         );
     }
 
     public function contentList(array $instanceParams = []): string
     {
+        $this->addCss('/plugins/TranslationManager/assets/translation-manager.css');
         $data = $this->params(['type', 'source', 'page'], Request::getPrefixedParams($this->prefix));
         $typeId = (int) ($data['type'] ?? 0);
         $sourceLanguage = $this->language((string) ($data['source'] ?? $this->defaultSourceLanguage()));
         $type = $this->translatableContentType($typeId);
-        $schema = $this->decodeJson($type['schema'] ?? null);
+        $schema = \Core\Utils\JsonTool::decodeArray($type['schema'] ?? null);
         $titleField = $schema['title_field'] ?? null;
 
         $page = max(1, (int) ($data['page'] ?? 1));
@@ -457,8 +485,8 @@ final class TranslationManager extends \Core\BasePlugin
 
         $items = '';
         foreach ($pageItems as $row) {
-            $common = $this->decodeJson($row['common_data'] ?? null);
-            $translated = $this->decodeJson($row['translated_data'] ?? null);
+            $common = \Core\Utils\JsonTool::decodeArray($row['common_data'] ?? null);
+            $translated = \Core\Utils\JsonTool::decodeArray($row['translated_data'] ?? null);
             $dataSet = array_replace($common, $translated);
             $title = $titleField && isset($dataSet[$titleField]) && is_scalar($dataSet[$titleField])
                 ? strip_tags((string) $dataSet[$titleField])
@@ -468,7 +496,7 @@ final class TranslationManager extends \Core\BasePlugin
                 'slug' => (string) ($row['item_slug'] ?? ''),
                 'phrase_counts' => $phraseCounts[(int) $row['item_id']] ?? '',
                 'batch_id' => (string) $row['item_id'],
-                'url' => $this->url('contentEdit', [
+                'url' => $this->actionUrl('contentEdit', [
                     'type' => $typeId,
                     'id' => $row['item_id'],
                     'source' => $sourceLanguage,
@@ -484,7 +512,7 @@ final class TranslationManager extends \Core\BasePlugin
         return $this->render('content-list', [
             'title' => (string) ($typeTranslation['title'] ?? $type['system_name']),
             'language_select' => $this->languageSelect('source', $sourceLanguage),
-            'load_url' => $this->url('contentList', ['type' => $typeId]),
+            'load_url' => $this->actionUrl('contentList', ['type' => $typeId]),
             'items' => $items,
             'batch_panel' => $this->batchPanel('content', $sourceLanguage, [
                 'type_id' => $typeId,
@@ -493,14 +521,14 @@ final class TranslationManager extends \Core\BasePlugin
                 page: $page,
                 perPage: $perPage,
                 total: $total,
-                base_url: $this->url('contentList', [
+                base_url: $this->actionUrl('contentList', [
                     'type' => $typeId,
                     'source' => $sourceLanguage,
                 ]),
                 options: ['page_param' => $this->prefix . '-page']
             ),
-            'back_url' => $this->url('overview'),
-            'back_label' => $this->escape($this->phrase('back_to_translations', 'Back to translations')),
+            'back_url' => $this->actionUrl('overview'),
+            'back_label' => \Core\Html::escape($this->phrase('back_to_translations', 'Back to translations')),
         ]);
     }
 
@@ -556,6 +584,7 @@ final class TranslationManager extends \Core\BasePlugin
 
     public function contentEdit(array $instanceParams = []): string
     {
+        $this->addCss('/plugins/TranslationManager/assets/translation-manager.css');
         return $this->renderContentEditor();
     }
 
@@ -637,16 +666,27 @@ final class TranslationManager extends \Core\BasePlugin
 
         Content::update($itemId, $values, $targetLanguage, [$sourceLanguage]);
 
-        return $this->renderContentEditor(
-            $typeId,
-            $itemId,
-            $sourceLanguage,
-            $targetLanguage,
-            null,
-            trim((string) ($data['context'] ?? '')),
-            trim((string) ($data['instructions'] ?? '')),
-            trim((string) ($data['provider'] ?? '')),
-            $this->notice($this->phrase('saved', 'Translation saved.'))
+        if ($notifications = $this->plugins->get('Notifications')) {
+            $notifications->store(
+                \Core\User::getId(),
+                $this->phrase('saved', 'Translation saved.'),
+                'success'
+            );
+        }
+
+        $redirectParams = [
+            'type' => $typeId,
+            'id' => $itemId,
+            'source' => $sourceLanguage,
+            'target' => $targetLanguage,
+        ];
+        $provider = trim((string) ($data['provider'] ?? ''));
+        if ($provider !== '') {
+            $redirectParams['provider'] = $provider;
+        }
+
+        return \Core\Response::seeOther(
+            $this->actionUrl('contentEdit', $redirectParams)
         );
     }
 
@@ -691,17 +731,17 @@ final class TranslationManager extends \Core\BasePlugin
         foreach ($keys as $key) {
             $token = $this->pathToken([$key]);
             $rows .= $this->render('dictionary-row', [
-                'phrase_key' => $this->escape($key),
-                'source_name' => $this->escape($this->prefix . '-source-value-' . $token),
-                'source_value' => $this->escape(
+                'phrase_key' => \Core\Html::escape($key),
+                'source_name' => \Core\Html::escape($this->prefix . '-source-value-' . $token),
+                'source_value' => \Core\Html::escape(
                     is_string($source[$key] ?? null) ? $source[$key] : ''
                 ),
-                'target_name' => $this->escape($this->prefix . '-target-value-' . $token),
-                'target_value' => $this->escape(
+                'target_name' => \Core\Html::escape($this->prefix . '-target-value-' . $token),
+                'target_value' => \Core\Html::escape(
                     is_string($target[$key] ?? null) ? $target[$key] : ''
                 ),
-                'delete_name' => $this->escape($this->prefix . '-delete-' . $token),
-                'delete_label' => $this->escape(
+                'delete_name' => \Core\Html::escape($this->prefix . '-delete-' . $token),
+                'delete_label' => \Core\Html::escape(
                     $this->phrase('delete_phrase', 'Delete phrase from all languages')
                 ),
             ]);
@@ -712,23 +752,23 @@ final class TranslationManager extends \Core\BasePlugin
 
         return $this->render('dictionary-edit', [
             'notice' => $notice,
-            'entity_title' => $this->escape(
+            'entity_title' => \Core\Html::escape(
                 $this->phrase('system_dictionary', 'System dictionary')
             ),
             'source_select' => $this->languageSelect('source', $sourceLanguage),
             'target_select' => $this->languageSelect('target', $targetLanguage),
             'provider_select' => $this->providerSelect($providerData, $provider),
-            'context' => $this->escape($context),
-            'instructions' => $this->escape($instructions),
+            'context' => \Core\Html::escape($context),
+            'instructions' => \Core\Html::escape($instructions),
             'rows' => $rows !== '' ? $rows : $this->notice(
                 $this->phrase('dictionary_empty', 'The system dictionary is empty.'),
                 'warning'
             ),
-            'reload_url' => $this->url('dictionaryEdit'),
-            'translate_url' => $this->url('dictionaryTranslate'),
-            'save_url' => $this->url('dictionarySave'),
-            'back_url' => $this->url('overview'),
-            'back_label' => $this->escape(
+            'reload_url' => $this->actionUrl('dictionaryEdit'),
+            'translate_url' => $this->actionUrl('dictionaryTranslate'),
+            'save_url' => $this->actionUrl('dictionarySave'),
+            'back_url' => $this->actionUrl('overview'),
+            'back_label' => \Core\Html::escape(
                 $this->phrase('back_to_translations', 'Back to translations')
             ),
         ]);
@@ -762,9 +802,9 @@ final class TranslationManager extends \Core\BasePlugin
                 : $this->getPath($target, $field['path']);
             $rows .= $this->render('translation-row', [
                 'label' => $field['label'],
-                'source_value' => $this->escape($field['value']),
+                'source_value' => \Core\Html::escape($field['value']),
                 'field_name' => $this->prefix . '-value-' . $token,
-                'target_value' => $this->escape(is_string($targetValue) ? $targetValue : ''),
+                'target_value' => \Core\Html::escape(is_string($targetValue) ? $targetValue : ''),
             ]);
         }
 
@@ -778,26 +818,26 @@ final class TranslationManager extends \Core\BasePlugin
             'source_select' => $this->languageSelect('source', $sourceLanguage),
             'target_select' => $this->languageSelect('target', $targetLanguage),
             'provider_select' => $this->providerSelect($providerData, $provider),
-            'context' => $this->escape($context),
-            'instructions' => $this->escape($instructions),
+            'context' => \Core\Html::escape($context),
+            'instructions' => \Core\Html::escape($instructions),
             'rows' => $rows !== '' ? $rows : $this->notice(
                 $this->phrase('no_source_translation', 'No exact source translation is available.'),
                 'warning'
             ),
-            'reload_url' => $this->url('systemEdit', [
+            'reload_url' => $this->actionUrl('systemEdit', [
                 'entityType' => $entityType,
                 'uuid' => $uuid,
             ]),
-            'translate_url' => $this->url('systemTranslate', [
+            'translate_url' => $this->actionUrl('systemTranslate', [
                 'entityType' => $entityType,
                 'uuid' => $uuid,
             ]),
-            'save_url' => $this->url('systemSave', [
+            'save_url' => $this->actionUrl('systemSave', [
                 'entityType' => $entityType,
                 'uuid' => $uuid,
             ]),
-            'back_url' => $this->url('systemList', ['entityType' => $entityType]),
-            'back_label' => $this->escape($this->phrase(
+            'back_url' => $this->actionUrl('systemList', ['entityType' => $entityType]),
+            'back_label' => \Core\Html::escape($this->phrase(
                 'back_to_' . $entityType,
                 'Back to ' . lcfirst((string) $config['title'])
             )),
@@ -841,16 +881,16 @@ final class TranslationManager extends \Core\BasePlugin
                 'params' => is_array($field['params'] ?? null) ? $field['params'] : [],
             ]);
             $rows .= $this->render('content-translation-row', [
-                'label' => $this->escape((string) ($field['title'] ?? $name)),
-                'source_value' => $this->escape(is_scalar($sourceValue) ? (string) $sourceValue : ''),
+                'label' => \Core\Html::escape((string) ($field['title'] ?? $name)),
+                'source_value' => \Core\Html::escape(is_scalar($sourceValue) ? (string) $sourceValue : ''),
                 'editor' => $editor,
             ]);
         }
 
-        $schema = $this->decodeJson($type['schema'] ?? null);
+        $schema = \Core\Utils\JsonTool::decodeArray($type['schema'] ?? null);
         $titleField = $schema['title_field'] ?? null;
         $sourceData = array_replace(
-            $this->decodeJson($item['common_data'] ?? null),
+            \Core\Utils\JsonTool::decodeArray($item['common_data'] ?? null),
             $source
         );
         $itemTitle = is_string($titleField)
@@ -864,27 +904,27 @@ final class TranslationManager extends \Core\BasePlugin
 
         return $this->render('content-edit', [
             'notice' => $notice,
-            'entity_title' => $this->escape($itemTitle),
+            'entity_title' => \Core\Html::escape($itemTitle),
             'source_select' => $this->languageSelect('source', $sourceLanguage),
             'target_select' => $this->languageSelect('target', $targetLanguage),
             'provider_select' => $this->providerSelect($providerData, $provider),
-            'context' => $this->escape($context),
-            'instructions' => $this->escape($instructions),
+            'context' => \Core\Html::escape($context),
+            'instructions' => \Core\Html::escape($instructions),
             'rows' => $rows,
-            'reload_url' => $this->url('contentEdit', [
+            'reload_url' => $this->actionUrl('contentEdit', [
                 'type' => $typeId,
                 'id' => $itemId,
             ]),
-            'translate_url' => $this->url('contentTranslate', [
+            'translate_url' => $this->actionUrl('contentTranslate', [
                 'type' => $typeId,
                 'id' => $itemId,
             ]),
-            'save_url' => $this->url('contentSave', [
+            'save_url' => $this->actionUrl('contentSave', [
                 'type' => $typeId,
                 'id' => $itemId,
             ]),
-            'back_url' => $this->url('contentList', ['type' => $typeId]),
-            'back_label' => $this->escape($this->phrase('back_to_content_items', 'Back to content items')),
+            'back_url' => $this->actionUrl('contentList', ['type' => $typeId]),
+            'back_label' => \Core\Html::escape($this->phrase('back_to_content_items', 'Back to content items')),
         ]);
     }
 
@@ -977,7 +1017,7 @@ final class TranslationManager extends \Core\BasePlugin
 
     private function loadExactTranslation(string $uuid, string $language): array
     {
-        return $this->decodeJson(\DB::getOne(
+        return \Core\Utils\JsonTool::decodeArray(\DB::getOne(
             'SELECT translated_data FROM translations WHERE entity_uuid=$1 AND lang_code=$2',
             [$uuid, $language]
         ));
@@ -999,7 +1039,7 @@ final class TranslationManager extends \Core\BasePlugin
                  DO UPDATE SET
                      translated_data=EXCLUDED.translated_data,
                      updated_at=EXCLUDED.updated_at',
-                [$uuid, $language, $this->json($data)]
+                [$uuid, $language, \Core\Utils\JsonTool::encode($data, false)]
             );
         }
         \Cache::del("globals:{$uuid}_{$language}");
@@ -1035,7 +1075,7 @@ final class TranslationManager extends \Core\BasePlugin
 
     private function pathToken(array $path): string
     {
-        return rtrim(strtr(base64_encode($this->json($path)), '+/', '-_'), '=');
+        return rtrim(strtr(base64_encode(\Core\Utils\JsonTool::encode($path, false)), '+/', '-_'), '=');
     }
 
     private function pathFromToken(string $token): array
@@ -1048,7 +1088,7 @@ final class TranslationManager extends \Core\BasePlugin
         if (!is_string($decoded)) {
             return [];
         }
-        $path = json_decode($decoded, true);
+        $path = \Core\Utils\JsonTool::decodeArray($decoded);
         return is_array($path) ? $path : [];
     }
 
@@ -1099,28 +1139,29 @@ final class TranslationManager extends \Core\BasePlugin
 
     private function batchPanel(string $kind, string $sourceLanguage, array $context): string
     {
+        $this->addJs('/plugins/TranslationManager/assets/batch.js');
         $providerData = $this->processor()->getProviders('translate');
         $provider = (string) ($providerData['default'] ?? '');
         $targetLanguage = $this->defaultTargetLanguage($sourceLanguage);
 
         return $this->render('batch-panel', [
-            'kind' => $this->escape($kind),
-            'source_language' => $this->escape($sourceLanguage),
-            'source_code' => $this->escape(strtoupper($sourceLanguage)),
+            'kind' => \Core\Html::escape($kind),
+            'source_language' => \Core\Html::escape($sourceLanguage),
+            'source_code' => \Core\Html::escape(strtoupper($sourceLanguage)),
             'type_id' => (string) ((int) ($context['type_id'] ?? 0)),
-            'entity_type' => $this->escape((string) ($context['entity_type'] ?? '')),
+            'entity_type' => \Core\Html::escape((string) ($context['entity_type'] ?? '')),
             'target_select' => $this->languageSelect('batch-target', $targetLanguage),
             'provider_select' => $this->providerSelect($providerData, $provider, 'batch-provider'),
             'endpoint' => '/ajax/TranslationManager/batchTranslate',
-            'running_label' => $this->escape($this->phrase('batch_running', 'Translating...')),
-            'done_label' => $this->escape($this->phrase('batch_done', 'Done.')),
-            'stopped_label' => $this->escape($this->phrase('batch_stopped', 'Stopped.')),
-            'stopping_label' => $this->escape($this->phrase('batch_stopping', 'Stopping...')),
-            'select_items_label' => $this->escape($this->phrase(
+            'running_label' => \Core\Html::escape($this->phrase('batch_running', 'Translating...')),
+            'done_label' => \Core\Html::escape($this->phrase('batch_done', 'Done.')),
+            'stopped_label' => \Core\Html::escape($this->phrase('batch_stopped', 'Stopped.')),
+            'stopping_label' => \Core\Html::escape($this->phrase('batch_stopping', 'Stopping...')),
+            'select_items_label' => \Core\Html::escape($this->phrase(
                 'batch_select_items',
                 'Select at least one item.'
             )),
-            'languages_differ_label' => $this->escape($this->phrase(
+            'languages_differ_label' => \Core\Html::escape($this->phrase(
                 'batch_languages_differ',
                 'Source and target languages must be different.'
             )),
@@ -1193,8 +1234,8 @@ final class TranslationManager extends \Core\BasePlugin
 
         foreach ($contentRows as $row) {
             $itemId = (int) $row['item_id'];
-            $source = $this->decodeJson($row['source_data'] ?? null);
-            $target = $this->decodeJson($row['target_data'] ?? null);
+            $source = \Core\Utils\JsonTool::decodeArray($row['source_data'] ?? null);
+            $target = \Core\Utils\JsonTool::decodeArray($row['target_data'] ?? null);
             $hasMissing = false;
 
             foreach ($fields as $name => $field) {
@@ -1490,10 +1531,7 @@ final class TranslationManager extends \Core\BasePlugin
 
     private function batchJson(array $data): string
     {
-        return json_encode(
-            $data,
-            JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR
-        );
+        return \Core\Utils\JsonTool::encode($data, false);
     }
 
     private function contentItemPhraseCounts(array $items): array
@@ -1588,7 +1626,7 @@ final class TranslationManager extends \Core\BasePlugin
                 $title = $entry['updated_at'] === null
                     ? $this->phrase('translation_missing', 'Translation is missing.')
                     : $this->phrase('translation_updated_at', 'Last updated:')
-                        . ' ' . $this->formatTranslationDate($entry['updated_at']);
+                        . ' ' . $this->formatter()->dateTime($entry['updated_at']);
 
                 if ($entry['outdated']) {
                     $title = $this->phrase(
@@ -1596,32 +1634,16 @@ final class TranslationManager extends \Core\BasePlugin
                         'Translation may be outdated.'
                     ) . ' ' . $title;
                     $parts[] = '<span class="tm-language-count is-outdated" title="'
-                        . $this->escape($title) . '">⚠ ' . $this->escape($label) . '</span>';
+                        . \Core\Html::escape($title) . '">⚠ ' . \Core\Html::escape($label) . '</span>';
                 } else {
                     $parts[] = '<span class="tm-language-count" title="'
-                        . $this->escape($title) . '">' . $this->escape($label) . '</span>';
+                        . \Core\Html::escape($title) . '">' . \Core\Html::escape($label) . '</span>';
                 }
             }
             $result[$itemId] = implode(' <span class="tm-language-separator">|</span> ', $parts);
         }
 
         return $result;
-    }
-
-    private function formatTranslationDate(string $value): string
-    {
-        try {
-            $date = new \DateTimeImmutable($value);
-            $timezone = (string) \Core\Settings::get('default_timezone', 'UTC');
-            if (!in_array($timezone, \DateTimeZone::listIdentifiers(), true)) {
-                $timezone = 'UTC';
-            }
-            return $date
-                ->setTimezone(new \DateTimeZone($timezone))
-                ->format('d.m.Y H:i');
-        } catch (\Throwable) {
-            return $value;
-        }
     }
 
     private function contentPhraseStats(array $contentTypes): array
@@ -1742,7 +1764,7 @@ final class TranslationManager extends \Core\BasePlugin
             [\Core\Translation::SYSTEM_ENTITY_UUID]
         );
         while ($row = \DB::fetchRow($rows)) {
-            $data = $this->decodeJson($row['translated_data'] ?? null);
+            $data = \Core\Utils\JsonTool::decodeArray($row['translated_data'] ?? null);
             foreach ($data as $key => $value) {
                 if (is_string($key) && is_string($value)) {
                     $keys[$key] = true;
@@ -1817,7 +1839,7 @@ final class TranslationManager extends \Core\BasePlugin
         );
         while ($row = \DB::fetchRow($rows)) {
             $language = (string) $row['lang_code'];
-            $data = $this->decodeJson($row['translated_data'] ?? null);
+            $data = \Core\Utils\JsonTool::decodeArray($row['translated_data'] ?? null);
             $changed = false;
             foreach ($keys as $key) {
                 if (array_key_exists($key, $data)) {
@@ -1863,7 +1885,7 @@ final class TranslationManager extends \Core\BasePlugin
                 continue;
             }
 
-            $translation = $this->decodeJson($row['translated_data'] ?? null);
+            $translation = \Core\Utils\JsonTool::decodeArray($row['translated_data'] ?? null);
             $counts[$uuid][$language] = count(array_filter(
                 $this->flattenStrings($translation),
                 static fn(array $field): bool => trim((string) $field['value']) !== ''
@@ -1936,12 +1958,12 @@ final class TranslationManager extends \Core\BasePlugin
 
     private function languageSelect(string $name, string $selected): string
     {
-        $html = '<select class="admin-input" name="' . $this->escape($this->prefix . '-' . $name) . '">';
+        $html = '<select class="admin-input" name="' . \Core\Html::escape($this->prefix . '-' . $name) . '">';
         foreach ($this->activeLanguages() as $row) {
             $value = (string) $row['lang_code'];
-            $html .= '<option value="' . $this->escape($value) . '"'
+            $html .= '<option value="' . \Core\Html::escape($value) . '"'
                 . ($value === $selected ? ' selected' : '') . '>'
-                . $this->escape((string) $row['lang_name']) . ' (' . $this->escape($value) . ')</option>';
+                . \Core\Html::escape((string) $row['lang_name']) . ' (' . \Core\Html::escape($value) . ')</option>';
         }
         return $html . '</select>';
     }
@@ -1951,13 +1973,13 @@ final class TranslationManager extends \Core\BasePlugin
         string $selected,
         string $name = 'provider'
     ): string {
-        $html = '<select class="admin-input" name="' . $this->escape($this->prefix . '-' . $name) . '">';
+        $html = '<select class="admin-input" name="' . \Core\Html::escape($this->prefix . '-' . $name) . '">';
         foreach ($providerData['providers'] ?? [] as $key => $provider) {
             $configured = !empty($provider['configured']);
-            $html .= '<option value="' . $this->escape((string) $key) . '"'
+            $html .= '<option value="' . \Core\Html::escape((string) $key) . '"'
                 . ((string) $key === $selected ? ' selected' : '')
                 . ($configured ? '' : ' disabled') . '>'
-                . $this->escape((string) ($provider['title'] ?? $key))
+                . \Core\Html::escape((string) ($provider['title'] ?? $key))
                 . ($configured ? '' : ' — not configured') . '</option>';
         }
         return $html . '</select>';
@@ -1990,13 +2012,13 @@ final class TranslationManager extends \Core\BasePlugin
         return $plugin;
     }
 
-    private function url(string $action, array $params = []): string
+    private function formatter(): Formatter
     {
-        $url = '/' . PAGE_SLUG . '/' . $this->prefix . '-action/' . $action;
-        foreach ($params as $key => $value) {
-            $url .= '/' . $this->prefix . '-' . $key . '/' . rawurlencode((string) $value);
+        $plugin = $this->formatter ??= $this->plugins->get('Formatter');
+        if (!$plugin instanceof Formatter) {
+            throw new \RuntimeException('Formatter plugin is not available.');
         }
-        return $url;
+        return $plugin;
     }
 
     private function uuid(string $uuid): string
@@ -2012,18 +2034,7 @@ final class TranslationManager extends \Core\BasePlugin
         return (string) ($this->phrases[$key] ?? $fallback);
     }
 
-    private function decodeJson(mixed $value): array
-    {
-        if (is_array($value)) return $value;
-        if (!is_string($value) || $value === '') return [];
-        $decoded = json_decode($value, true);
-        return is_array($decoded) ? $decoded : [];
-    }
 
-    private function json(array $data): string
-    {
-        return json_encode($data, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: '{}';
-    }
 
     private function looksLikeHtml(string $value): bool
     {
@@ -2032,12 +2043,8 @@ final class TranslationManager extends \Core\BasePlugin
 
     private function notice(string $message, string $kind = 'success'): string
     {
-        return '<div class="admin-notice admin-notice-' . $this->escape($kind) . '">'
-            . $this->escape($message) . '</div>';
+        return '<div class="admin-notice admin-notice-' . \Core\Html::escape($kind) . '">'
+            . \Core\Html::escape($message) . '</div>';
     }
 
-    private function escape(string $value): string
-    {
-        return htmlspecialchars($value, ENT_QUOTES, 'UTF-8');
-    }
 }

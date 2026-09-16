@@ -78,13 +78,20 @@ final class Media extends \Core\BasePlugin
         'zip' => ['application/zip', 'application/x-zip-compressed'],
     ];
 
+    public function registerBrowserAssets(): void
+    {
+        $this->addCss('/plugins/Media/assets/media-browser.css');
+        $this->addJs('/plugins/Media/assets/media-browser.js');
+    }
+
     public function browser(array $instanceParams = []): string
     {
+        $this->registerBrowserAssets();
         $root = $this->normalizeRelativePath((string)($instanceParams['root'] ?? ''));
         $canManage = User::canPlugin((int)$this->id, 'manage');
 
         return $this->render('browser', [
-            'root' => $this->escape($root),
+            'root' => \Core\Html::escape($root),
             'can_manage' => $canManage ? '1' : '0',
             'list_url' => '/ajax/Media/listFiles',
             'upload_url' => '/ajax/Media/upload',
@@ -876,11 +883,7 @@ final class Media extends \Core\BasePlugin
     private function jsonResponse(array $payload, int $status): string
     {
         Response::addHeader('Content-Type: application/json; charset=utf-8', true, $status);
-        return json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR);
+        return \Core\Utils\JsonTool::encode($payload, false);
     }
 
-    private function escape(string $value): string
-    {
-        return htmlspecialchars($value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
-    }
 }

@@ -12,9 +12,11 @@
       "author": "Kami team"
     },
     "prefix": "sm",
-    "version": "0.2.0",
+    "version": "0.2.1",
+    "category": "system",
     "dependencies": [
-      "Forms"
+      "Forms",
+      "Formatter"
     ],
     "config": {
       "handlers": {

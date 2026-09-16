@@ -8,10 +8,11 @@
 
 {{template:bodyheader}}
 
-<div class="kc-container">
-{{content_plugins}}
-</div>
-
+<section class="kc-section kc-content-section">
+	<div class="kc-container">
+		{{content_plugins}}
+	</div>
+</section>
 {{template:footer}}
 
 </body>

@@ -18,6 +18,15 @@
 </section>
 <!-- /kami:template -->
 
+<!-- kami:template plugin-category-row -->
+<tr class="plm-category-row">
+    <th colspan="5" scope="rowgroup">
+        <span>{{category}}</span>
+        <span class="plm-category-count">{{count}}</span>
+    </th>
+</tr>
+<!-- /kami:template -->
+
 <!-- kami:template plugin-row -->
 <tr>
     <td><strong>{{title}}</strong><div class="plm-muted"><code>{{system_name}}</code></div><div class="plm-description">{{description}}</div></td>
@@ -84,8 +93,8 @@
             const data = await response.json();
             if (!response.ok || data.status !== 'ok') throw new Error(data.error || 'Failed to load settings.');
             fields.innerHTML = data.html || '';
-            window.Admin?.executeScripts?.(fields);
-            window.Admin?.initDynamic?.(fields);
+            window.Kami?.executeScripts?.(fields);
+            window.Kami?.initDynamic?.(fields);
         } catch (error) {
             fields.textContent = error.message;
         }

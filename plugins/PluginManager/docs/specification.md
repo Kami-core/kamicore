@@ -478,7 +478,15 @@ Content types, створені плагіном, пропонуються ко�
 
 Якщо content type видаляється, його items видаляються штатним механізмом Content.
 
-## 16. Dependencies / compatibility
+## 16. Package metadata / dependencies / compatibility
+
+Для групування у PluginManager пакет може вказати одну основну категорію:
+
+```json
+"category": "content"
+```
+
+`category` — необов’язковий lowercase key. Ієрархії категорій немає. Якщо поле відсутнє або некоректне, PluginManager використовує `others`. Категорія впливає лише на представлення пакета і не бере участі в activation, ACL чи dependency resolution. PluginManager не обмежує категорії фіксованим whitelist: відомі keys можуть мати локалізовані назви, а невідомі коректні keys відображаються автоматично.
 
 У manifest вказуються лише жорсткі dependencies:
 

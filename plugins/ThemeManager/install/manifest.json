@@ -11,7 +11,8 @@
       "author": "Kami team"
     },
     "prefix": "tm",
-    "version": "1.0.1",
+    "version": "1.0.2",
+    "category": "system",
     "dependencies": [],
     "config": {
       "handlers": {

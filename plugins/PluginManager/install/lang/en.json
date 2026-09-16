@@ -27,8 +27,20 @@
     "domains": "Domains",
     "status": "Status",
     "actions": "Actions",
+    "category_content": "Content",
+    "category_display": "Display",
+    "category_users": "Users",
+    "category_system": "System",
+    "category_utilities": "Utilities",
+    "category_others": "Others",
     "plugin_manager": "Plugin manager",
     "save": "Save",
+    "installed_success": "Plugin installed.",
+    "updated_success": "Plugin updated.",
+    "uninstalled_success": "Plugin uninstalled.",
+    "operation_success": "Plugin operation completed.",
+    "activation_saved": "Plugin activation updated.",
+    "settings_saved": "Plugin settings saved.",
     "cancel": "Cancel"
   }
 }

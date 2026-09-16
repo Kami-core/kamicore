@@ -36,13 +36,10 @@ class UserAccount extends \Core\BasePlugin {
     private const PASSWORD_RESET_TTL = 3600;
 
 	public function getAuthUI(array $context_vars = []): string {
+        $this->addCss('/plugins/UserAccount/assets/user-account.css');
         if (!\Core\User::isGuest()) {
             $user = \Core\User::getUser();
-            $username = htmlspecialchars(
-                (string)($user['username'] ?? ''),
-                ENT_QUOTES | ENT_SUBSTITUTE,
-                'UTF-8'
-            );
+            $username = \Core\Html::escape((string)($user['username'] ?? ''));
 
             return $this->render('auth_authorized', [
                 'username' => $username,
@@ -61,11 +58,7 @@ class UserAccount extends \Core\BasePlugin {
                 $this->loginReturnUrl($context_vars)
             );
             $googleAuth = $this->render('google_auth_button', [
-                'google_url' => htmlspecialchars(
-                    $googleUrl,
-                    ENT_QUOTES | ENT_SUBSTITUTE,
-                    'UTF-8'
-                ),
+                'google_url' => \Core\Html::escape($googleUrl),
             ]);
         } catch (\Throwable $error) {
             // $this->log(
@@ -237,11 +230,7 @@ class UserAccount extends \Core\BasePlugin {
             if ($emailVerificationRequired && empty($userdata['email_verified_at'])) {
                 return $this->render('login_unverified', [
                     'msg' => $this->phrases['login_unverified'],
-                    'identity' => htmlspecialchars(
-                        $login,
-                        ENT_QUOTES | ENT_SUBSTITUTE,
-                        'UTF-8'
-                    ),
+                    'identity' => \Core\Html::escape($login),
                 ]);
             }
 
@@ -331,7 +320,7 @@ class UserAccount extends \Core\BasePlugin {
             ]);
         }
 
-        $tokenHash = hash('sha256', $rawToken);
+        $tokenHash = \Core\Crypto::tokenHash($rawToken);
         if (!\DB::beginTransaction()) {
             return $this->render('password_reset_form_error', [
                 'msg' => $this->phrases['password_reset_failed'],
@@ -455,7 +444,7 @@ class UserAccount extends \Core\BasePlugin {
         $userId = \Core\User::getId();
         $wasAuthenticated = $userId > 0;
 
-        if (isset(getDomainPlugins()['Notifications'])) {
+        if (isset(\Core\PluginRegistry::forDomain()['Notifications'])) {
             try {
                 $notifications = $this->plugins->get('Notifications');
                 if ($notifications) {
@@ -478,7 +467,7 @@ class UserAccount extends \Core\BasePlugin {
 
         \Core\Session::logout();
 
-        \Core\Response::addHeader('Location: /', true, 302);
+        \Core\Response::redirect('/');
         \Core\Response::addHeader('Cache-Control: no-store, no-cache, must-revalidate');
         \Core\Response::send('');
     }
@@ -507,8 +496,8 @@ class UserAccount extends \Core\BasePlugin {
             throw new \RuntimeException('Mailer plugin is required for password reset.');
         }
 
-        $rawToken = bin2hex(random_bytes(32));
-        $tokenHash = hash('sha256', $rawToken);
+        $rawToken = \Core\Crypto::randomHex();
+        $tokenHash = \Core\Crypto::tokenHash($rawToken);
         $expiresAt = date('Y-m-d H:i:s', TIME_NOW + self::PASSWORD_RESET_TTL);
 
         if (\DB::insert('tokens', [
@@ -531,9 +520,9 @@ class UserAccount extends \Core\BasePlugin {
                 ->addTo($email, $username)
                 ->setSubject($this->phrases['password_reset_email_subject'])
                 ->setHtmlBody($this->render('password_reset_email_html', [
-                    'username' => htmlspecialchars($username, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'),
-                    'reset_url' => htmlspecialchars($resetUrl, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'),
-                    'site_name' => htmlspecialchars($siteName, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'),
+                    'username' => \Core\Html::escape($username),
+                    'reset_url' => \Core\Html::escape($resetUrl),
+                    'site_name' => \Core\Html::escape($siteName),
                 ]))
                 ->setTextBody($this->render('password_reset_email_txt', [
                     'username' => $username,
@@ -589,8 +578,8 @@ class UserAccount extends \Core\BasePlugin {
             throw new \RuntimeException('Mailer plugin is required for email verification.');
         }
 
-        $rawToken = bin2hex(random_bytes(32));
-        $tokenHash = hash('sha256', $rawToken);
+        $rawToken = \Core\Crypto::randomHex();
+        $tokenHash = \Core\Crypto::tokenHash($rawToken);
         $expiresAt = date('Y-m-d H:i:s', TIME_NOW + self::EMAIL_VERIFICATION_TTL);
 
         $inserted = \DB::insert('tokens', [
@@ -614,9 +603,9 @@ class UserAccount extends \Core\BasePlugin {
                 ->addTo($email, $username)
                 ->setSubject($this->phrases['verification_email_subject'])
                 ->setHtmlBody($this->render('verify_email_html', [
-                    'username' => htmlspecialchars($username, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'),
-                    'verification_url' => htmlspecialchars($verificationUrl, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'),
-                    'site_name' => htmlspecialchars($siteName, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'),
+                    'username' => \Core\Html::escape($username),
+                    'verification_url' => \Core\Html::escape($verificationUrl),
+                    'site_name' => \Core\Html::escape($siteName),
                 ]))
                 ->setTextBody($this->render('verify_email_txt', [
                     'username' => $username,
@@ -666,7 +655,7 @@ class UserAccount extends \Core\BasePlugin {
             return;
         }
 
-        $tokenHash = hash('sha256', $rawToken);
+        $tokenHash = \Core\Crypto::tokenHash($rawToken);
 
         if (!\DB::beginTransaction()) {
             $this->sendVerificationResult(
@@ -773,14 +762,10 @@ class UserAccount extends \Core\BasePlugin {
             ])
             : '';
         $content = $this->render($template, [
-            'message' => htmlspecialchars($message, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'),
+            'message' => \Core\Html::escape($message),
             'resend_form' => $resendForm,
-            'home_url' => htmlspecialchars($homeUrl, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'),
-            'language' => htmlspecialchars(
-                (string)(defined('LANG') ? LANG : (DOMAIN_CONFIG['default_language'] ?? 'en')),
-                ENT_QUOTES | ENT_SUBSTITUTE,
-                'UTF-8'
-            ),
+            'home_url' => \Core\Html::escape($homeUrl),
+            'language' => \Core\Html::escape((string)(defined('LANG') ? LANG : (DOMAIN_CONFIG['default_language'] ?? 'en'))),
         ]);
 
         \Core\Response::addHeader(
@@ -798,11 +783,7 @@ class UserAccount extends \Core\BasePlugin {
     {
         $content = $this->render('account_inactive_page', [
             'home_url' => '/',
-            'language' => htmlspecialchars(
-                (string)(defined('LANG') ? LANG : (DOMAIN_CONFIG['default_language'] ?? 'en')),
-                ENT_QUOTES | ENT_SUBSTITUTE,
-                'UTF-8'
-            ),
+            'language' => \Core\Html::escape((string)(defined('LANG') ? LANG : (DOMAIN_CONFIG['default_language'] ?? 'en'))),
         ]);
 
         \Core\Response::addHeader(
@@ -824,7 +805,7 @@ class UserAccount extends \Core\BasePlugin {
             return;
         }
 
-        $tokenHash = hash('sha256', $rawToken);
+        $tokenHash = \Core\Crypto::tokenHash($rawToken);
         $token = \DB::getRow(
             'SELECT token_id, expires_at
              FROM tokens
@@ -846,14 +827,10 @@ class UserAccount extends \Core\BasePlugin {
         }
 
         $content = $this->render('password_reset_page', [
-            'token' => htmlspecialchars($rawToken, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'),
+            'token' => \Core\Html::escape($rawToken),
             'ajax_url' => '/ajax/UserAccount/reset_password',
             'home_url' => '/',
-            'language' => htmlspecialchars(
-                (string)(defined('LANG') ? LANG : (DOMAIN_CONFIG['default_language'] ?? 'en')),
-                ENT_QUOTES | ENT_SUBSTITUTE,
-                'UTF-8'
-            ),
+            'language' => \Core\Html::escape((string)(defined('LANG') ? LANG : (DOMAIN_CONFIG['default_language'] ?? 'en'))),
         ]);
 
         \Core\Response::addHeader('Content-Type: text/html; charset=utf-8', true, 200);
@@ -865,17 +842,9 @@ class UserAccount extends \Core\BasePlugin {
     private function sendPasswordResetError(int $status): void
     {
         $content = $this->render('password_reset_error_page', [
-            'message' => htmlspecialchars(
-                $this->phrases['password_reset_invalid_or_expired'],
-                ENT_QUOTES | ENT_SUBSTITUTE,
-                'UTF-8'
-            ),
+            'message' => \Core\Html::escape($this->phrases['password_reset_invalid_or_expired']),
             'home_url' => '/',
-            'language' => htmlspecialchars(
-                (string)(defined('LANG') ? LANG : (DOMAIN_CONFIG['default_language'] ?? 'en')),
-                ENT_QUOTES | ENT_SUBSTITUTE,
-                'UTF-8'
-            ),
+            'language' => \Core\Html::escape((string)(defined('LANG') ? LANG : (DOMAIN_CONFIG['default_language'] ?? 'en'))),
         ]);
 
         \Core\Response::addHeader(
@@ -894,7 +863,7 @@ class UserAccount extends \Core\BasePlugin {
      */
     private function clearAuthenticatedNotifications(int $userId): void
     {
-        if ($userId < 1 || !isset(getDomainPlugins()['Notifications'])) {
+        if ($userId < 1 || !isset(\Core\PluginRegistry::forDomain()['Notifications'])) {
             return;
         }
 
@@ -942,7 +911,7 @@ class UserAccount extends \Core\BasePlugin {
             [$userId, self::EMAIL_CHANGE_METHOD]
         );
         if ($pending) {
-            $tokenData = json_decode((string)($pending['token_data'] ?? ''), true);
+            $tokenData = \Core\Utils\JsonTool::decodeArray($pending['token_data'] ?? null);
             $candidate = is_array($tokenData)
                 ? strtolower(trim((string)($tokenData['email'] ?? '')))
                 : '';
@@ -1214,13 +1183,10 @@ class UserAccount extends \Core\BasePlugin {
             throw new \RuntimeException('Mailer plugin is required for email changes.');
         }
 
-        $rawToken = bin2hex(random_bytes(32));
-        $tokenHash = hash('sha256', $rawToken);
+        $rawToken = \Core\Crypto::randomHex();
+        $tokenHash = \Core\Crypto::tokenHash($rawToken);
         $expiresAt = date('Y-m-d H:i:s', TIME_NOW + self::EMAIL_CHANGE_TTL);
-        $tokenData = json_encode(
-            ['email' => $newEmail],
-            JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES
-        );
+        $tokenData = \Core\Utils\JsonTool::encode(['email' => $newEmail], false);
 
         if (\DB::insert('tokens', [
             'user_id' => $userId,
@@ -1243,9 +1209,9 @@ class UserAccount extends \Core\BasePlugin {
                 ->addTo($newEmail, $username)
                 ->setSubject($this->phrases['email_change_subject'])
                 ->setHtmlBody($this->render('change_email_html', [
-                    'username' => htmlspecialchars($username, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'),
-                    'verification_url' => htmlspecialchars($verificationUrl, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'),
-                    'site_name' => htmlspecialchars($siteName, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'),
+                    'username' => \Core\Html::escape($username),
+                    'verification_url' => \Core\Html::escape($verificationUrl),
+                    'site_name' => \Core\Html::escape($siteName),
                 ]))
                 ->setTextBody($this->render('change_email_txt', [
                     'username' => $username,
@@ -1289,7 +1255,7 @@ class UserAccount extends \Core\BasePlugin {
             return;
         }
 
-        $tokenHash = hash('sha256', $rawToken);
+        $tokenHash = \Core\Crypto::tokenHash($rawToken);
         if (!\DB::beginTransaction()) {
             $this->sendEmailChangeResult(false, 500);
             return;
@@ -1328,11 +1294,8 @@ class UserAccount extends \Core\BasePlugin {
                 return;
             }
 
-            $tokenData = json_decode(
-                (string)($token['token_data'] ?? ''),
-                true,
-                512,
-                JSON_THROW_ON_ERROR
+            $tokenData = \Core\Utils\JsonTool::decode(
+                (string)($token['token_data'] ?? '')
             );
             $newEmail = strtolower(trim((string)($tokenData['email'] ?? '')));
             if (!filter_var($newEmail, FILTER_VALIDATE_EMAIL)) {
@@ -1421,9 +1384,9 @@ class UserAccount extends \Core\BasePlugin {
                 ->addTo($oldEmail, $username)
                 ->setSubject($this->phrases['email_changed_notice_subject'])
                 ->setHtmlBody($this->render('email_changed_notice_html', [
-                    'username' => htmlspecialchars($username, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'),
-                    'new_email' => htmlspecialchars($newEmail, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'),
-                    'site_name' => htmlspecialchars(DOMAIN_NAME, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'),
+                    'username' => \Core\Html::escape($username),
+                    'new_email' => \Core\Html::escape($newEmail),
+                    'site_name' => \Core\Html::escape(DOMAIN_NAME),
                 ]))
                 ->setTextBody($this->render('email_changed_notice_txt', [
                     'username' => $username,
@@ -1452,13 +1415,9 @@ class UserAccount extends \Core\BasePlugin {
                 : $this->phrases['email_change_invalid_or_expired']);
 
         $content = $this->render($template, [
-            'message' => htmlspecialchars($message, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'),
+            'message' => \Core\Html::escape($message),
             'home_url' => '/',
-            'language' => htmlspecialchars(
-                (string)(defined('LANG') ? LANG : (DOMAIN_CONFIG['default_language'] ?? 'en')),
-                ENT_QUOTES | ENT_SUBSTITUTE,
-                'UTF-8'
-            ),
+            'language' => \Core\Html::escape((string)(defined('LANG') ? LANG : (DOMAIN_CONFIG['default_language'] ?? 'en'))),
         ]);
 
         \Core\Response::addHeader(
@@ -1635,7 +1594,7 @@ class UserAccount extends \Core\BasePlugin {
                 $returnUrl
             );
             \Core\Response::addHeader('Cache-Control: no-store, no-cache, must-revalidate');
-            \Core\Response::addHeader('Location: ' . $authorizationUrl, true, 302);
+            \Core\Response::redirect($authorizationUrl);
             \Core\Response::send('');
         } catch (\Throwable $error) {
             $this->log(
@@ -1942,7 +1901,7 @@ class UserAccount extends \Core\BasePlugin {
             $redirectUrl = $purpose === self::OAUTH_PURPOSE_LOGIN
                 ? $this->loginRedirectUrl($returnUrl)
                 : ($returnUrl ?? '/');
-            \Core\Response::addHeader('Location: ' . $redirectUrl, true, 302);
+            \Core\Response::redirect($redirectUrl);
             \Core\Response::send('');
         } catch (\Throwable $error) {
             $this->log('Google authentication failed: ' . $error->getMessage(), 'error');
@@ -1957,16 +1916,13 @@ class UserAccount extends \Core\BasePlugin {
         ?int $userId,
         ?string $returnUrl
     ): string {
-        $rawState = bin2hex(random_bytes(32));
-        $stateHash = hash('sha256', $rawState);
+        $rawState = \Core\Crypto::randomHex();
+        $stateHash = \Core\Crypto::tokenHash($rawState);
         $method = $this->oauthStateMethod($provider, $purpose);
         $expiresAt = date('Y-m-d H:i:s', TIME_NOW + self::OAUTH_STATE_TTL);
 
         $tokenData = $returnUrl !== null
-            ? json_encode(
-                ['return_url' => $returnUrl],
-                JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES
-            )
+            ? \Core\Utils\JsonTool::encode(['return_url' => $returnUrl], false)
             : null;
 
         if (\DB::insert('tokens', [
@@ -2000,7 +1956,7 @@ class UserAccount extends \Core\BasePlugin {
      */
     private function consumeOAuthState(string $provider, string $rawState): ?array
     {
-        $stateHash = hash('sha256', $rawState);
+        $stateHash = \Core\Crypto::tokenHash($rawState);
         $methods = [
             self::OAUTH_PURPOSE_LOGIN => $this->oauthStateMethod(
                 $provider,
@@ -2073,7 +2029,7 @@ class UserAccount extends \Core\BasePlugin {
                 return null;
             }
 
-            $tokenData = json_decode((string)($token['token_data'] ?? ''), true);
+            $tokenData = \Core\Utils\JsonTool::decodeArray($token['token_data'] ?? null);
             $returnUrl = is_array($tokenData)
                 ? $this->normalizeLocalReturnUrl(
                     isset($tokenData['return_url'])
@@ -2395,7 +2351,7 @@ class UserAccount extends \Core\BasePlugin {
         }
 
         for ($attempt = 0; $attempt < 10; $attempt++) {
-            $candidate = $base . '_' . bin2hex(random_bytes(3));
+            $candidate = $base . '_' . \Core\Crypto::randomHex(3);
             if (!\DB::getOne('SELECT 1 FROM users WHERE username=$1 LIMIT 1', [$candidate])) {
                 return $candidate;
             }
@@ -2462,10 +2418,7 @@ class UserAccount extends \Core\BasePlugin {
         $postLoginAction = match ($action) {
             'nothing' => '',
             'redirect' => $this->render('login_redirect', [
-                'redirect_url' => json_encode(
-                    $this->loginRedirectUrl(),
-                    JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES
-                ),
+                'redirect_url' => \Core\Utils\JsonTool::encodeForHtml($this->loginRedirectUrl()),
             ]),
             default => $this->render('login_reload'),
         };

@@ -1,0 +1,234 @@
+/* Default theme: admin layout shell and sidebar. */
+body.kami-admin {
+  background: #f5f6f8;
+  color: #303741;
+}
+
+.kami-admin {
+  --admin-sidebar-width: 240px;
+  --admin-sidebar-width-collapsed: 64px;
+}
+
+.admin-shell {
+    min-height: 100vh;
+	width: 100%;
+	margin: 0;
+	padding: 0;
+
+    display: grid;
+    grid-template-columns: var(--admin-sidebar-width) minmax(0, 1fr);
+
+	transition: grid-template-columns .2s ease;
+}
+
+.admin-sidebar-collapsed .admin-shell {
+    --admin-sidebar-width: 60px;
+}
+
+.admin-page {
+	margin: 20px;
+}
+
+.admin-area .kc-container {
+	width: 100%;
+}
+
+.admin-panel {
+	margin: 20px;
+}
+
+.admin-main {
+    min-width: 0;
+    min-height: 100vh;
+
+    display: flex;
+    flex-direction: column;
+}
+
+.admin-content {
+    min-width: 0;
+    flex: 1 1 auto;
+
+    padding-inline: 20px;
+}
+
+html.admin-sidebar-collapsed .admin-sidebar span {
+    display: none;
+}
+
+.admin-sidebar span {
+	display: inline;
+}
+
+.admin-sidebar svg {
+	margin-right: 10px;
+}
+
+.sidebar-collapse-button {
+	margin: auto auto 10px;
+	background: #000;
+	color: #ABB1B6;
+	cursor: pointer;
+
+	width: 30px;
+	border: none;
+	border-radius: 15px;
+	opacity: .7;
+
+	transition: transform 0.2s ease;
+}
+
+html.admin-sidebar-collapsed .sidebar-collapse-button {
+	transform: rotate(180deg);
+}
+
+.admin-sidebar {
+    position: sticky;
+	left: 0;
+    top: 0;
+	margin: 0;
+	padding: 0;
+
+	border: none;
+
+    height: 100vh;
+    min-width: 0;
+
+    background: #1e1e1e;
+    color: #fff;
+
+    display: flex;
+    flex-direction: column;
+}
+
+.admin-sidebar .logo {
+	min-width: 0;
+	min-height: 80px;
+	padding: 20px;
+
+	display: flex;
+	gap: 20px;
+
+      font-size: 24px;
+      text-align: center;
+      font-weight: 600;
+      background: #111;
+}
+
+.admin-sidebar .logo img {
+	width: 40px;
+	height: auto;
+}
+
+html.admin-sidebar-collapsed .logo {
+	padding: 5px;
+}
+
+.admin-sidebar-nav {
+    min-height: 0;
+    flex: 1 1 auto;
+    overflow-y: auto;
+}
+
+.admin-sidebar-toggle {
+    flex: 0 0 auto;
+}
+
+.admin-sidebar .menu {
+	padding: 10px 0;
+}
+
+    .admin-sidebar a {
+      color: #ddd;
+      display: flex;
+      align-items: center;
+      padding: 10px 20px;
+      transition: background 0.2s;
+    }
+    .admin-sidebar a:hover,
+	.admin-sidebar a:focus-visible {
+		background: #343434 !important;
+		color: #fff;
+		text-decoration: none;
+		border-radius: 0;
+	}
+
+    .kami-admin .sidebar.collapsed .menu span.text {
+      display: none;
+    }
+    .kami-admin .sidebar.collapsed .logo span.text {
+      display: none;
+    }
+
+
+ul.admin-nav-sidebar {
+	list-style: none;
+	padding: 0;
+}
+
+.admin-nav-sidebar li {
+	display: block;
+	padding: 0;
+}
+
+
+.admin-nav-sidebar svg {
+	margin-right: 10px;
+}
+
+.admin-area {
+	display: flex;
+	flex-direction: column;
+}
+
+.admin-area aside {
+	margin-top: 0;
+}
+
+.kc-admin-footer {
+	margin: auto 0 0;
+}
+
+.kc-admin-footer a {
+	color: var(--admin-accent);
+}
+
+.kc-admin-footer a:hover {
+	color: var(--admin-accent-hover);
+	text-decoration: none;
+}
+
+.admin-tooltip, html.admin-sidebar-collapsed .admin-tooltip {
+	display: block;
+    position: fixed;
+    z-index: 1000;
+
+    max-width: 240px;
+    padding: 5px 8px;
+
+    border-radius: 4px;
+    background: #252b33;
+    color: #fff;
+
+    font-size: 0.75rem;
+    line-height: 1.35;
+    white-space: nowrap;
+
+    pointer-events: none;
+    box-shadow: 0 3px 10px rgb(0 0 0 / 18%);
+}
+
+    .kami-admin .main {
+      flex-grow: 1;
+      display: flex;
+      flex-direction: column;
+      min-height: 100vh;
+    }
+    .kami-admin footer {
+      text-align: center;
+      padding: 15px;
+      font-size: 0.9rem;
+      color: #777;
+      border-top: 1px solid #e5e5e5;
+      background: #fff;
+    }

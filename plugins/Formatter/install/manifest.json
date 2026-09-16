@@ -12,7 +12,8 @@
       "author": "Kami team"
     },
     "prefix": "fmt",
-    "version": "1.0.0",
+    "version": "1.0.1",
+    "category": "utilities",
     "dependencies": [],
     "config": {
       "default_language": "en"

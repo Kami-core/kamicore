@@ -1,0 +1,28 @@
+/* ------------------------- Content tree */
+.viewcontent-tree summary {
+    list-style: none;
+}
+
+.viewcontent-tree summary::-webkit-details-marker {
+    display: none;
+}
+
+.viewcontent-tree summary::before {
+    content: "›";
+	font-size: 18px;
+    display: inline-block;
+    margin-right: .4em;
+    transition: transform .15s ease;
+}
+
+.viewcontent-tree details[open] > summary::before {
+    transform: rotate(90deg);
+}
+
+.viewcontent-tree-children .viewcontent-tree-node, .viewcontent-tree-children .viewcontent-tree-leaf {
+	padding-left: 20px;
+}
+
+.viewcontent-tree details > summary {
+    font-weight: 600;
+}

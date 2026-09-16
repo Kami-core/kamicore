@@ -1,11 +1,24 @@
 <!-- kami:template sidebar -->
-	<ul class="kc-menu">
+	<ul class="kc-menu kc-sidebar-menu">
         {{menu_items}}
     </ul>
 <!-- /kami:template -->
 
 <!-- kami:template sidebar_item -->
-<li><a href="{{item_url}}" data-tooltip="{{item_title}}" aria-label="{{item_title}}">{{rendered_icon}}<span> {{item_title}}</span></a></li>
+<li>
+    <a href="{{item_url}}"
+       data-tooltip="{{item_title}}"
+       aria-label="{{item_title}}">
+        {{rendered_icon}}<span>{{item_title}}</span>
+    </a>
+    {{submenu}}
+</li>
+<!-- /kami:template -->
+
+<!-- kami:template sidebar_children -->
+<ul class="kc-menu kc-menu-children">
+    {{menu_children}}
+</ul>
 <!-- /kami:template -->
 
 
@@ -267,7 +280,7 @@
         </div>
     </header>
 
-    <form id="menu-form" class="nm-editor-form" method="post" action="{{save_action}}">
+    <form id="menu-form" class="nm-editor-form" data-navigation-menu-editor method="post" action="{{save_action}}">
         <section class="admin-panel nm-panel" aria-labelledby="nm-settings-title">
             <header class="admin-panel-header">
                 <h3 id="nm-settings-title" class="admin-panel-title">{{phrase.menu_settings}}</h3>
@@ -349,12 +362,6 @@
     </li>
 </template>
 
-<script type="module">
-    import { initMenuEditor } from '/plugins/Navigation/assets/menu-editor.js';
-
-    const form = document.getElementById('menu-form');
-    if (form) initMenuEditor(form);
-</script>
 <!-- /kami:template -->
 
 <!-- kami:template menu_edit_row -->

@@ -85,11 +85,11 @@ abstract class BasePlugin {
 				return false;
 			}
 
-			$locals = json_decode($domain_data['local_settings'] ?? "", true) ?? [];
-			$baseSettings = json_decode($main_data['settings'] ?? "", true) ?? [];
+			$locals = \Core\Utils\JsonTool::decodeArray($domain_data['local_settings'] ?? null);
+			$baseSettings = \Core\Utils\JsonTool::decodeArray($main_data['settings'] ?? null);
 
 			$this->settings = array_replace($baseSettings, $locals);
-			$this->config = json_decode($main_data['config'], true);
+			$this->config = \Core\Utils\JsonTool::decodeArray($main_data['config'] ?? null);
 
 			$full_data = [
 				"id" => $main_data['plugin_id'],
@@ -132,6 +132,16 @@ abstract class BasePlugin {
 	{
 		return $this->layoutParams;
 	}
+
+    protected function addCss(string $path): void
+    {
+        Assets::css($path);
+    }
+
+    protected function addJs(string $path): void
+    {
+        Assets::js($path);
+    }
 
 	public function render(string $template_name, array $params = [], ?bool $cacheable = false):string {
 		$params['phrases'] = $this->phrases;
@@ -204,18 +214,45 @@ abstract class BasePlugin {
 
     public function isApiAction(string $action): bool
     {
+        return $this->apiActionConfig($action) !== null;
+    }
+
+    /**
+     * Return API configuration for one declared action.
+     */
+    public function apiActionConfig(string $action): ?array
+    {
         $handler = $this->resolveActionHandler($action);
         if ($handler === null) {
-            return false;
+            return null;
         }
 
         $actions = $this->handlerDefinitions()[$handler]['actions'] ?? [];
         if (!is_array($actions) || !array_key_exists($action, $actions)) {
-            return false;
+            return null;
         }
 
         $actionConfig = $actions[$action];
-        return is_array($actionConfig) && ($actionConfig['api'] ?? false) === true;
+        if (!is_array($actionConfig) || ($actionConfig['api'] ?? false) !== true) {
+            return null;
+        }
+
+        return $actionConfig;
+    }
+
+    /**
+     * Return the HTTP method declared for one API action.
+     * GET is the default for backwards-compatible read-only actions.
+     */
+    public function apiActionMethod(string $action): ?string
+    {
+        $config = $this->apiActionConfig($action);
+        if ($config === null) {
+            return null;
+        }
+
+        $method = strtoupper(trim((string)($config['method'] ?? 'GET')));
+        return $method !== '' ? $method : 'GET';
     }
 
     public function invokeAction(string $action, array $params = []): mixed
@@ -262,6 +299,16 @@ abstract class BasePlugin {
      */
     public function getSettings(): array {
         return $this->settings;
+    }
+
+    protected function actionUrl(string $action, array $params = []): string
+    {
+        return Url::pluginAction(
+            (string) PAGE_SLUG,
+            (string) $this->prefix,
+            $action,
+            $params
+        );
     }
 
     /**
@@ -412,7 +459,7 @@ abstract class BasePlugin {
     /**
      * Inspect the routed item without accepting responsibility for the route.
      */
-    protected function peekRoutedItem(): ?array {
+    public function peekRoutedItem(): ?array {
         $itemId = \Core\Request::routedItemId();
         if ($itemId === null) {
             return null;

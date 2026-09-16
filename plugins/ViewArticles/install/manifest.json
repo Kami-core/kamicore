@@ -12,7 +12,8 @@
       "author": "Kami team"
     },
     "prefix": "articles",
-    "version": "1.0.8",
+    "version": "1.0.9",
+    "category": "display",
     "dependencies": [
       "Pagination",
       "Formatter"
