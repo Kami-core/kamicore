@@ -6,7 +6,7 @@
 
 KamiCore is a modular content management system built with PHP and PostgreSQL. It is designed around structured content, plugins, themes, multilingual data, and a small transparent core that avoids hiding application behavior behind unnecessary abstraction.
 
-> **KamiCore 0.5 Alpha**
+> **KamiCore 0.6 Alpha**
 >
 > This is an early development release intended for testing, evaluation, and experimentation. APIs, database structures, plugin contracts, and other internal interfaces may change before a stable release. Do not treat the current alpha as a drop-in production platform with guaranteed backward compatibility.
 
@@ -25,7 +25,7 @@ KamiCore is a modular content management system built with PHP and PostgreSQL. I
 
 ## Requirements
 
-KamiCore 0.5 Alpha currently requires:
+KamiCore 0.6 Alpha currently requires:
 
 - PHP **8.4 or newer**.
 - PostgreSQL **17 or newer**.
