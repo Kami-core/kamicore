@@ -191,6 +191,7 @@ COPY public.content_items (item_id, item_uuid, ct_id, author_id, plugin_id, item
 
 COPY public.core_migrations (migration_name, checksum, applied_at) FROM stdin;
 001_compound_field_type.sql	7adabcf0de2aa39fa74ecea0a12d63905ed973b09ef35e4ebdc07b54b1bbf4b0	2026-09-12 00:00:00
+002_restore_systemmanager_migration_checksum.sql	c56cb9be492a7072f812781e79489287d0eac9e8341af11ed69b291e94fc04c6	2026-09-16 16:40:48.431442
 \.
 
 
@@ -715,7 +716,7 @@ COPY public.plugin_migrations (plugin_id, migration_name, checksum, applied_at) 
 18	003_context_id.sql	09a37d7d4843a401b347f8115abd31a1a0542d31427131ae5da25b25b98e639c	2026-09-11 12:15:37.681305
 21	001_default_manage_acl.sql	35b456fa9dd60f893f26d7850600afc91f1c465407bafce71a940a89a72405ea	2026-09-02 14:03:19.029886
 24	001_initial.sql	b5a8ef768dab627086ba704248cf61deafddc636206f6bd67319e362e1a98306	2026-09-13 11:09:32.252673
-13	002_system_assets.sql	1712a5874cd0397d4cbc8ca3e24913312dea6c0f935625fb666d8ef756817ce5	2026-09-16 11:13:21.404005
+13	002_system_assets.sql	3fde652cf429cc02b6a31aae0d86d4717cb087f9449a8596b16120e172a49261	2026-09-16 11:13:21.404005
 13	003_asset_registry.sql	5d57507165f5edff4c0fab78bdd0e40f6639de224a53275eb7e36173ecb0ba3c	2026-09-16 11:13:21.404005
 \.
 
