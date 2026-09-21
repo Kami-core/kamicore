@@ -110,8 +110,7 @@ svg {
   max-width: 100%;
 }
 
-
-section {
+section.kc-section, section.kc-content-section {
 	padding: 48px 0;
 	background: var(--kc-bg-soft);
 }
@@ -602,6 +601,8 @@ td {
 
 .kc-navbar-right {
   gap: 12px;
+  flex: 0 0 auto;
+    white-space: nowrap;
 }
 
 

@@ -44,8 +44,6 @@ class LangSwitcher extends \Core\BasePlugin {
 			\Cache::set($cache_key, $langs);
 		};
 
-		$item_template = "{$template}_item";
-
 		$lang_items = [];
 		$active_lang_item = "";
 		foreach(DOMAIN_CONFIG['languages'] as $lang_code) {
@@ -56,13 +54,20 @@ class LangSwitcher extends \Core\BasePlugin {
 
 			if($lang_code==LANG) {
 				$lang['selected'] = "selected";
+				$lang['active'] = "active";
+
+				$item_template = "{$template}_active_item";
 
 				$active_lang_item = [
 					"template" => $item_template,
 					"params" => $lang
 				];
+
+
 			} else {
 				$lang['selected'] = "";
+				$lang['active'] = "";
+				$item_template = "{$template}_item";
 			}
 
 			$lang_items[] = [

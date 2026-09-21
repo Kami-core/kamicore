@@ -77,7 +77,7 @@
 <!-- /kami:template -->
 
 <!-- kami:template config -->
-<section class="admin-page">
+<section class="admin-panel">
     <header class="admin-page-header">
         <div>
             <h2 class="admin-page-title">{{heading}}</h2>

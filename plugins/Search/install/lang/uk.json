@@ -1,0 +1,28 @@
+{
+  "plugin": {
+    "title": "Пошук",
+    "description": "Повнотекстовий пошук по контенту з автодоповненням і пагінацією."
+  },
+  "handlers": {
+    "form": {
+      "title": "Форма пошуку",
+      "actions": {
+        "showForm": {"title": "Показати форму пошуку"},
+        "autocomplete": {"title": "Автодоповнення"}
+      }
+    },
+    "results": {
+      "title": "Результати пошуку",
+      "actions": {
+        "showResults": {"title": "Показати результати пошуку"}
+      }
+    }
+  },
+  "phrases": {
+    "search": "Пошук",
+    "placeholder": "Пошук...",
+    "search_results": "Результати пошуку",
+    "results_for": "Результати пошуку для «%s»",
+    "no_results": "Нічого не знайдено."
+  }
+}

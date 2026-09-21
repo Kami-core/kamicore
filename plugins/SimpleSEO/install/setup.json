@@ -1,0 +1,25 @@
+{
+  "presets": {
+    "standard": {
+      "pages": [
+        {
+          "system_name": "seo",
+          "title": "SEO",
+          "titles": {
+            "uk": "SEO"
+          },
+          "slug": "seo",
+          "recipe_name": "admin",
+          "wrappers": {
+            "content_middle": [
+              {
+                "handler": "manage",
+                "instance_params": {}
+              }
+            ]
+          }
+        }
+      ]
+    }
+  }
+}

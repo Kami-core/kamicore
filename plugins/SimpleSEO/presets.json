@@ -1,0 +1,38 @@
+{
+  "home": {
+    "title": "Home page",
+    "template": "{\n  \"@context\": \"https://schema.org\",\n  \"@graph\": [\n    {\n      \"@type\": \"WebSite\",\n      \"@id\": \"{{site_url}}#website\",\n      \"url\": \"{{site_url}}\",\n      \"name\": \"{{site_name}}\",\n      \"inLanguage\": \"{{language}}\"\n    },\n    {\n      \"@type\": \"WebPage\",\n      \"@id\": \"{{canonical_url}}#webpage\",\n      \"url\": \"{{canonical_url}}\",\n      \"name\": \"{{title}}\",\n      \"description\": \"{{description}}\",\n      \"isPartOf\": {\n        \"@id\": \"{{site_url}}#website\"\n      }\n    }\n  ]\n}"
+  },
+  "webpage": {
+    "title": "WebPage",
+    "template": "{\n  \"@context\": \"https://schema.org\",\n  \"@type\": \"WebPage\",\n  \"@id\": \"{{canonical_url}}#webpage\",\n  \"url\": \"{{canonical_url}}\",\n  \"name\": \"{{title}}\",\n  \"description\": \"{{description}}\",\n  \"inLanguage\": \"{{language}}\"\n}"
+  },
+  "collection": {
+    "title": "CollectionPage",
+    "template": "{\n  \"@context\": \"https://schema.org\",\n  \"@type\": \"CollectionPage\",\n  \"@id\": \"{{canonical_url}}#webpage\",\n  \"url\": \"{{canonical_url}}\",\n  \"name\": \"{{title}}\",\n  \"description\": \"{{description}}\",\n  \"inLanguage\": \"{{language}}\"\n}"
+  },
+  "article": {
+    "title": "Article",
+    "template": "{\n  \"@context\": \"https://schema.org\",\n  \"@type\": \"Article\",\n  \"@id\": \"{{canonical_url}}#article\",\n  \"url\": \"{{canonical_url}}\",\n  \"headline\": \"{{title}}\",\n  \"description\": \"{{description}}\",\n  \"inLanguage\": \"{{language}}\",\n  \"image\": \"{{image}}\",\n  \"datePublished\": \"{{published_at}}\",\n  \"dateModified\": \"{{updated_at}}\",\n  \"author\": {\n    \"@type\": \"Person\",\n    \"name\": \"{{author_name}}\"\n  }\n}"
+  },
+  "blogposting": {
+    "title": "BlogPosting",
+    "template": "{\n  \"@context\": \"https://schema.org\",\n  \"@type\": \"BlogPosting\",\n  \"@id\": \"{{canonical_url}}#article\",\n  \"url\": \"{{canonical_url}}\",\n  \"headline\": \"{{title}}\",\n  \"description\": \"{{description}}\",\n  \"inLanguage\": \"{{language}}\",\n  \"image\": \"{{image}}\",\n  \"datePublished\": \"{{published_at}}\",\n  \"dateModified\": \"{{updated_at}}\",\n  \"author\": {\n    \"@type\": \"Person\",\n    \"name\": \"{{author_name}}\"\n  }\n}"
+  },
+  "about": {
+    "title": "AboutPage",
+    "template": "{\n  \"@context\": \"https://schema.org\",\n  \"@type\": \"AboutPage\",\n  \"@id\": \"{{canonical_url}}#webpage\",\n  \"url\": \"{{canonical_url}}\",\n  \"name\": \"{{title}}\",\n  \"description\": \"{{description}}\",\n  \"inLanguage\": \"{{language}}\"\n}"
+  },
+  "contact": {
+    "title": "ContactPage",
+    "template": "{\n  \"@context\": \"https://schema.org\",\n  \"@type\": \"ContactPage\",\n  \"@id\": \"{{canonical_url}}#webpage\",\n  \"url\": \"{{canonical_url}}\",\n  \"name\": \"{{title}}\",\n  \"description\": \"{{description}}\",\n  \"inLanguage\": \"{{language}}\"\n}"
+  },
+  "organization": {
+    "title": "Organization",
+    "template": "{\n  \"@context\": \"https://schema.org\",\n  \"@type\": \"Organization\",\n  \"@id\": \"{{site_url}}#organization\",\n  \"name\": \"{{site_name}}\",\n  \"url\": \"{{site_url}}\",\n  \"logo\": \"{{site_logo}}\"\n}"
+  },
+  "person": {
+    "title": "Person",
+    "template": "{\n  \"@context\": \"https://schema.org\",\n  \"@type\": \"Person\",\n  \"name\": \"{{author_name}}\",\n  \"url\": \"{{author_url}}\"\n}"
+  }
+}

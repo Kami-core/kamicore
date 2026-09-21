@@ -185,6 +185,7 @@
   position: sticky;
   top: 16px;
   overflow: hidden;
+  padding: 0;
 }
 
 .pm-panel-heading {
@@ -214,7 +215,7 @@
 .pm-plugin-palette {
   max-height: calc(100vh - 230px);
   margin: 0;
-  padding: 6px 0;
+  padding: 5px 20px 5px;
   overflow-y: auto;
   list-style: none;
 }
@@ -224,7 +225,7 @@
   align-items: center;
   gap: 9px;
   margin: 0;
-  padding: 10px 14px;
+  padding: 10px 0;
   border-bottom: 1px solid #edf0f3;
   background: #fff;
   color: #48515c;

@@ -12,7 +12,7 @@
       "author": "Kami team"
     },
     "prefix": "cm",
-    "version": "1.2.6",
+    "version": "1.2.9",
     "category": "content",
     "dependencies": [
       "Forms",
@@ -31,6 +31,12 @@
             },
             "fieldList": {
               "title": "Manage global content fields"
+            },
+            "fieldTypeList": {
+              "title": "Manage field types"
+            },
+            "fieldTypeDelete": {
+              "title": "Delete field type"
             },
             "globalFieldEdit": {
               "title": "Edit global content field"
@@ -82,6 +88,9 @@
             },
             "itemDelete": {
               "title": "TODO"
+            },
+            "typeCanonicalViewerUpdate": {
+              "title": "Update canonical content viewer"
             }
           },
           "default_action": "typeList"

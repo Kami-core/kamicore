@@ -20,6 +20,7 @@ class PageManager extends \Core\BasePlugin {
 
 	public function list():string {
 		$this->addCss('/plugins/PageManager/assets/page-manager.css');
+		$this->forms()->registerEntityFieldAssets();
 		// Domain selection is rendered client-side, but this path parameter belongs to the list route.
 		$this->param('domainId');
 
@@ -85,6 +86,7 @@ class PageManager extends \Core\BasePlugin {
 		]);
 		$data['recipe_meta'] = \Core\Utils\JsonTool::encodeForHtml($recipeMeta);
 		$data['recipe_create_disabled'] = $recipes === [] ? ' disabled' : '';
+		$data['can_create_recipe'] = \Core\Utils\JsonTool::encodeForHtml(\Core\User::isRoot());
 		$data['recipe_tools'] = \Core\User::isRoot()
 			? '<a class="admin-button admin-button-secondary" href="'
 				. $this->managerUrl('recipes') . '">'
@@ -103,6 +105,7 @@ class PageManager extends \Core\BasePlugin {
 			'domainUnavailable' => $this->phrases['domain_unavailable'] ?? 'Domain is not available',
 			'editPage' => $this->phrases['edit_page'] ?? 'Edit page',
 			'deletePage' => $this->phrases['delete_page'] ?? 'Delete page',
+			'createRecipeFromPage' => $this->phrases['create_recipe_from_page'] ?? 'Create recipe from page',
 			'deleteConfirm' => $this->phrases['delete_page_confirm'] ?? 'Delete “{title}”? This action cannot be undone.',
 			'deleteFailed' => $this->phrases['delete_page_failed'] ?? 'Failed to delete the page.',
 			'recipePrefix' => $this->phrases['recipe_page_prefix'] ?? 'URL prefix: {prefix}',
@@ -164,6 +167,18 @@ class PageManager extends \Core\BasePlugin {
 		);
 		$pageData['back_label'] = \Core\Html::escape((string)($this->phrases['back_to_pages'] ?? 'Back to pages'));
 		$pageData['cancel_url'] = $pageData['back_url'];
+		$pageData['recipe_from_page_url'] = $this->managerUrl(
+			'recipes',
+			['pgm-pageId' => $pageId]
+		);
+		$pageData['recipe_from_page_hidden'] = \Core\User::isRoot() ? '' : ' hidden';
+		$pageData['recipe_from_page_label'] = \Core\Html::escape(
+			$this->phrases['create_recipe_from_page'] ?? 'Create recipe from page'
+		);
+		$pageData['recipe_from_page_hint'] = \Core\Html::escape(
+			$this->phrases['recipe_from_saved_page_hint']
+				?? 'Create a recipe draft from the saved state of this page.'
+		);
 		$pageData['layout_data_url'] = '/ajax/PageManager/pageLayoutData/pgm-pageId/' . $pageId;
 		$pageData['parent_field'] = $this->forms()->renderField([
 			'name' => 'parent_id',
@@ -754,8 +769,22 @@ class PageManager extends \Core\BasePlugin {
 		$this->addCss('/plugins/PageManager/assets/page-manager.css');
 		$this->assertRecipeManagerAccess();
 		$requestedId = (int)$this->param('id', 0);
+		$sourcePageId = (int)$this->param('pageId', 0);
 		$editing = null;
-		if ($requestedId > 0) {
+		$draftNotice = '';
+
+		if ($sourcePageId > 0) {
+			$editing = $this->buildRecipeDraftFromPage($sourcePageId);
+			$sourceTitle = (string)($editing['source_title'] ?? '');
+			$notice = str_replace(
+				'{title}',
+				$sourceTitle,
+				$this->phrases['recipe_draft_from_page'] ?? 'Draft generated from saved page “{title}”.'
+			);
+			$draftNotice = '<p class="admin-page-description pm-recipe-source">'
+				. \Core\Html::escape($notice)
+				. '</p>';
+		} elseif ($requestedId > 0) {
 			foreach ($this->getRecipes() as $recipe) {
 				if ((int)$recipe['recipe_id'] === $requestedId) {
 					$editing = $recipe;
@@ -780,12 +809,17 @@ class PageManager extends \Core\BasePlugin {
 		}
 
 		$payload = $editing['payload'] ?? $this->normalizeRecipePayload([]);
+		$editorTitle = $sourcePageId > 0
+			? ($this->phrases['create_recipe_from_page'] ?? 'Create recipe from page')
+			: ($this->phrases['edit_recipe'] ?? 'Edit recipe');
 
 		return $this->render('recipes', [
 			'recipe_rows' => $rows !== [] ? $rows : [[
 				'template' => 'recipe-empty',
 				'params' => [],
 			]],
+			'editor_title' => \Core\Html::escape($editorTitle),
+			'draft_notice' => $draftNotice,
 			'recipe_id' => (string)($editing['recipe_id'] ?? 0),
 			'recipe_key' => \Core\Html::escape((string)($editing['recipe_key'] ?? '')),
 			'name' => \Core\Html::escape((string)($editing['name'] ?? '')),
@@ -1083,6 +1117,106 @@ class PageManager extends \Core\BasePlugin {
 
 		return $pageId;
 
+	}
+
+
+	private function buildRecipeDraftFromPage(int $pageId): array {
+		$page = \DB::getRow(
+			'select p.page_id, p.uuid, p.system_name, p.page_slug, p.page_plugins,
+				l.system_name as layout_name, l.wrappers as layout_wrappers
+			from pages p
+			left join theme_layouts l using(layout_id)
+			where p.page_id=$1',
+			[$pageId]
+		);
+		if (!$page) {
+			throw new \OutOfBoundsException('Page not found.');
+		}
+
+		$pagePlugins = \Core\Utils\JsonTool::decodeArray($page['page_plugins'] ?? null);
+		$declaredWrappers = \Core\Utils\JsonTool::decodeArray($page['layout_wrappers'] ?? null);
+		$wrappers = [];
+		foreach ($declaredWrappers as $wrapper => $_definition) {
+			if (is_string($wrapper) && $wrapper !== '') {
+				$wrappers[$wrapper] = [];
+			}
+		}
+
+		foreach ($pagePlugins as $wrapper => $instances) {
+			if (
+				!is_string($wrapper)
+				|| !array_key_exists($wrapper, $wrappers)
+				|| !is_array($instances)
+			) {
+				continue;
+			}
+			foreach ($instances as $instance) {
+				if (!is_array($instance)) {
+					continue;
+				}
+
+				foreach ($instance as $pluginName => $params) {
+					$pluginName = trim((string)$pluginName);
+					if ($pluginName === '') {
+						continue;
+					}
+
+					$params = is_array($params) ? $params : [];
+					$handler = trim((string)($params['handler'] ?? ''));
+					unset($params['handler']);
+
+					$recipeInstance = [
+						'plugin' => $pluginName,
+						'instance_params' => $params,
+					];
+					if ($handler !== '') {
+						$recipeInstance['handler'] = $handler;
+					}
+					$wrappers[$wrapper][] = $recipeInstance;
+				}
+			}
+		}
+
+		$translation = \Core\Translation::get((string)$page['uuid']) ?? [];
+		$title = trim((string)($translation['title'] ?? ''));
+		if ($title === '') {
+			$title = ucwords(str_replace(['_', '-'], ' ', (string)$page['system_name']));
+		}
+
+		return [
+			'recipe_id' => 0,
+			'recipe_key' => $this->suggestRecipeKey($page),
+			'name' => $title,
+			'description' => '',
+			'source_title' => $title,
+			'payload' => $this->normalizeRecipePayload([
+				'page_prefix' => '',
+				'default_navigation_menus' => [],
+				'layout' => (string)($page['layout_name'] ?? ''),
+				'wrappers' => $wrappers,
+			]),
+		];
+	}
+
+	private function suggestRecipeKey(array $page): string {
+		$slug = trim((string)($page['page_slug'] ?? ''), '/');
+		$source = $slug !== '' ? (string)basename($slug) : (string)($page['system_name'] ?? '');
+		$key = strtolower($source);
+		$key = preg_replace('/[^a-z0-9]+/', '-', $key) ?? '';
+		$key = trim($key, '-');
+
+		if ($key === '' || !preg_match('/^[a-z]/', $key)) {
+			$key = 'page-' . ($key !== '' ? $key : (int)($page['page_id'] ?? 0));
+		}
+
+		$base = $key;
+		$suffix = 2;
+		while (\DB::getOne('select 1 from pgm_recipes where recipe_key=$1', [$key])) {
+			$key = $base . '-' . $suffix;
+			$suffix++;
+		}
+
+		return $key;
 	}
 
 	private function normalizeRecipePayload(array $payload): array {

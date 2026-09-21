@@ -1,6 +1,6 @@
 <!-- kami:template overview -->
-<div class="admin-page">
-  <header class="admin-page-header">
+<section class="admin-panel">
+		<header class="admin-page-header">
     <div>
       <h2 class="admin-page-title">{{phrase.system}}</h2>
       <p class="admin-page-description">{{phrase.system_help}}</p>
@@ -28,12 +28,12 @@
       </tbody>
     </table>
   </div>
-</div>
+</section>
 <!-- /kami:template -->
 
 <!-- kami:template settings -->
-<div class="admin-page">
-  <header class="admin-page-header">
+<section class="admin-panel">
+		<header class="admin-page-header">
     <div>
       <a class="admin-back-link" href="{{back_url}}"><svg class="icon icon-chevron-left icon-sm" aria-hidden="true"></svg><span>{{phrase.back_to_system}}</span></a>
       <h2 class="admin-page-title">{{phrase.system_settings}}</h2>
@@ -42,15 +42,13 @@
   </header>
   {{notice}}
   <form method="post" action="{{save_url}}" class="admin-form">
-    <section class="admin-panel">
       <div class="admin-form-fields">{{settings_fields}}</div>
-    </section>
     <footer class="admin-form-actions" style="padding:16px 20px 20px">
       <a class="admin-button admin-button-secondary" href="{{back_url}}">{{phrase.cancel}}</a>
       <button class="admin-button admin-button-primary" type="submit">{{phrase.save}}</button>
     </footer>
   </form>
-</div>
+</section>
 <!-- /kami:template -->
 
 <!-- kami:template setting-row -->
@@ -61,8 +59,8 @@
 <!-- /kami:template -->
 
 <!-- kami:template languages -->
-<div class="admin-page">
-  <header class="admin-page-header">
+<section class="admin-panel">
+		<header class="admin-page-header">
     <div>
       <a class="admin-back-link" href="{{back_url}}"><svg class="icon icon-chevron-left icon-sm" aria-hidden="true"></svg><span>{{phrase.back_to_system}}</span></a>
       <h2 class="admin-page-title">{{phrase.languages}}</h2>
@@ -82,7 +80,7 @@
       <button class="admin-button admin-button-primary" type="submit">{{phrase.save}}</button>
     </footer>
   </form>
-</div>
+</section>
 <!-- /kami:template -->
 
 <!-- kami:template language-row -->
@@ -98,8 +96,8 @@
 <!-- /kami:template -->
 
 <!-- kami:template domains -->
-<div class="admin-page">
-  <header class="admin-page-header">
+<section class="admin-panel">
+		<header class="admin-page-header">
     <div>
       <a class="admin-back-link" href="{{back_url}}"><svg class="icon icon-chevron-left icon-sm" aria-hidden="true"></svg><span>{{phrase.back_to_system}}</span></a>
       <h2 class="admin-page-title">{{phrase.domains}}</h2>
@@ -113,7 +111,7 @@
       <tbody>{{domain_rows}}</tbody>
     </table>
   </div>
-</div>
+</section>
 <!-- /kami:template -->
 
 <!-- kami:template domain-row -->
@@ -126,14 +124,15 @@
 <!-- /kami:template -->
 
 <!-- kami:template domain-edit -->
-<div class="admin-page">
-  <header class="admin-page-header">
+<section class="admin-panel">
+		<header class="admin-page-header">
     <div>
       <a class="admin-back-link" href="{{back_url}}"><svg class="icon icon-chevron-left icon-sm" aria-hidden="true"></svg><span>{{phrase.back_to_domains}}</span></a>
       <h2 class="admin-page-title">{{page_title}}</h2>
     </div>
   </header>
   {{notice}}
+</section>
   <form method="post" action="{{save_url}}" class="admin-form">
     <input type="hidden" name="domain_id" value="{{domain_id}}">
     <section class="admin-panel">
@@ -149,7 +148,7 @@
       <button class="admin-button admin-button-primary" type="submit">{{phrase.save}}</button>
     </footer>
   </form>
-</div>
+
 <!-- /kami:template -->
 
 <!-- kami:template override-row -->
@@ -161,8 +160,8 @@
 <!-- /kami:template -->
 
 <!-- kami:template secrets -->
-<div class="admin-page">
-  <header class="admin-page-header">
+<section class="admin-panel">
+		<header class="admin-page-header">
     <div>
       <a class="admin-back-link" href="{{back_url}}"><svg class="icon icon-chevron-left icon-sm" aria-hidden="true"></svg><span>{{phrase.back_to_system}}</span></a>
       <h2 class="admin-page-title">{{phrase.secrets}}</h2>
@@ -170,6 +169,8 @@
     </div>
   </header>
   {{notice}}
+</section>
+
   <section class="admin-panel">
     <header class="admin-panel-header"><h3 class="admin-panel-title">{{phrase.add_secret}}</h3></header>
     <form method="post" action="{{save_url}}" class="admin-form" style="padding:16px 18px">
@@ -186,7 +187,7 @@
       </table>
     </div>
   </section>
-</div>
+
 <!-- /kami:template -->
 
 <!-- kami:template secret-row -->

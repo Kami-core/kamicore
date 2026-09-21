@@ -1,5 +1,5 @@
 <!-- kami:template plugins -->
-<section class="admin-page">
+<section class="admin-panel">
     <header class="admin-page-header">
         <div>
             <h2 class="admin-page-title">{{phrase.plugins}}</h2>
@@ -38,7 +38,7 @@
 <!-- /kami:template -->
 
 <!-- kami:template plugin-detail -->
-<section class="admin-page" data-plugin-settings data-plugin="{{system_name}}" data-settings-url="{{settings_load_url}}">
+<section class="admin-panel" data-plugin-settings data-plugin="{{system_name}}" data-settings-url="{{settings_load_url}}">
     <header class="admin-page-header">
         <div>
             <a class="admin-back-link" href="{{back_url}}">
@@ -49,8 +49,8 @@
             <p class="admin-page-description"><code>{{system_name}}</code> · {{phrase.version}} {{version}} · prefix <code>{{prefix}}</code></p>
         </div>
     </header>
-
-    <section class="admin-panel plm-panel">
+</section>
+    <section class="admin-panel admin-pad plm-panel">
         <h3>Domain activation</h3>
         <form method="post" action="{{activation_action}}">
             <input type="hidden" name="plugin" value="{{system_name}}">
@@ -59,7 +59,7 @@
         </form>
     </section>
 
-    <section class="admin-panel plm-panel">
+    <section class="admin-panel admin-pad plm-panel">
         <h3>{{phrase.settings}}</h3>
         <form method="post" action="{{settings_action}}">
             <input type="hidden" name="plugin" value="{{system_name}}">
@@ -74,7 +74,7 @@
             <div class="admin-form-actions"><button class="admin-button admin-button-primary" type="submit">{{phrase.save}}</button></div>
         </form>
     </section>
-</section>
+
 <script>
 (function() {
     'use strict';

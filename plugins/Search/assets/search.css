@@ -1,0 +1,106 @@
+.search-form {
+    width: 100%;
+    margin: 0;
+}
+
+.search-form-bar {
+    display: flex;
+    align-items: stretch;
+    width: 100%;
+	min-width: 240px;
+    background: #fff;
+    border: 1px solid var(--search-border, #cfd6dc);
+    border-radius: 5px;
+    overflow: hidden;
+    transition:
+        border-color .2s ease,
+        box-shadow .2s ease,
+        background-color .2s ease;
+}
+
+.search-form-bar:focus-within {
+    border-color: var(--search-accent, #32b43c);
+    box-shadow: 0 0 0 .2rem rgb(50 180 60 / 0.14);
+}
+
+.search-form .ts-wrapper {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.search-form .ts-wrapper .ts-control {
+    min-height: 2.75rem;
+    padding: .45rem .85rem;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+}
+
+.search-form .ts-wrapper.focus .ts-control,
+.search-form .ts-wrapper.input-active .ts-control,
+.search-form .ts-wrapper.single.input-active .ts-control {
+    border: 0;
+    box-shadow: none;
+    background: transparent;
+}
+
+.search-form .ts-wrapper .ts-control input {
+    font: inherit;
+}
+
+.search-form .ts-wrapper .ts-control,
+.search-form .ts-wrapper .ts-control input,
+.search-form .ts-wrapper .item,
+.search-form .ts-wrapper .option {
+    color: inherit;
+}
+
+.search-form-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 3.25rem;
+    width: 3.25rem;
+    min-width: 3.25rem;
+    padding: 0;
+    border: 0;
+    border-left: 1px solid var(--search-divider, #d9e0e5);
+    background: #182C4F;
+    color: #fff;
+    cursor: pointer;
+    transition:
+        background-color .2s ease,
+        color .2s ease;
+}
+
+.search-form-button:hover {
+    background: var(--search-accent-hover, #289632);
+}
+
+.search-form-button:focus-visible {
+    outline: none;
+}
+
+.search-form-button-icon {
+    width: 1.15rem;
+    height: 1.15rem;
+    fill: currentColor;
+}
+
+.search-form-button-text {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    white-space: nowrap;
+    border: 0;
+    clip: rect(0, 0, 0, 0);
+    clip-path: inset(50%);
+}
+
+.search-results-title {
+    margin-top: 0;
+}

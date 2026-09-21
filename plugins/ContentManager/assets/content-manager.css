@@ -190,7 +190,13 @@
 }
 
 .cm-manager-table {
-  min-width: 980px;
+  min-width: 1180px;
+}
+
+.cm-manager-control {
+  display: flex;
+  align-items: center;
+  gap: 6px;
 }
 
 .cm-manager-type-title {
@@ -232,10 +238,6 @@
   }
 }
 
-.cm-structure-editor,
-.cm-field-editor {
-  max-width: 1180px;
-}
 
 .cm-structure-form {
   margin-top: 18px;
@@ -281,10 +283,6 @@
 .cm-code-input {
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   font-size: 0.82rem;
-}
-
-.cm-structure-fields {
-  margin-top: 24px;
 }
 
 .cm-section-heading {

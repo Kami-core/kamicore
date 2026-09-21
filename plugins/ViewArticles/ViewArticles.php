@@ -31,8 +31,20 @@ class ViewArticles extends \Core\BasePlugin {
 		$item['data']['title'] = $item['title'];
 		$item['data']['published_at'] = $this->plugins->get('Formatter')->dateTime($item['data']['published_at']);
 
+		$preview = trim((string)($item['data']['article_image'] ?? ''));
+
+		$previewHtml = $preview !== ''
+			? $this->render('article-img', [
+				'preview' => \Core\Html::escape($preview),
+				'alt' => \Core\Html::escape((string)($item['title'] ?? '')),
+			])
+			: '';
+
+		$item['data']['preview'] = $previewHtml;
+
 		return $this->render("article-page", $item['data']);
 	}
+
 	public function list(array $instance_params = []): string {
 		$this->addCss('/plugins/ViewArticles/assets/view-articles.css');
 		$itemsPerPageOptions = $this->itemsPerPageOptions();
@@ -97,7 +109,12 @@ class ViewArticles extends \Core\BasePlugin {
 		}
 
 		$articles = [];
+		$this->layoutParams['listItems'] = [];
 		foreach ($result['ids'] as $id) {
+			$seoItem = \Core\Content::getItem((int)$id);
+			if ($seoItem !== []) {
+				$this->layoutParams['listItems'][] = ['name' => $seoItem['title'], 'url' => $this->articleUrl($seoItem)];
+			}
 			$articles[] = [
 				'template' => 'article-card',
 				'params' => $this->articleCardParams((int)$id),
@@ -214,7 +231,7 @@ class ViewArticles extends \Core\BasePlugin {
 
 		$data = is_array($article['data'] ?? null) ? $article['data'] : [];
 		$publishedAt = trim((string)($data['published_at'] ?? ''));
-		$preview = trim((string)($data['article_preview'] ?? ''));
+		$preview = trim((string)($data['article_image'] ?? ''));
 
 		$published = $publishedAt !== ''
 			? $this->render('article-card-date', [
@@ -239,31 +256,93 @@ class ViewArticles extends \Core\BasePlugin {
 		];
 	}
 
-	private function articleUrl(array $article): string {
-		$data = is_array($article['data'] ?? null) ? $article['data'] : [];
+	public function canonicalUrl(array $item, string $langCode, int $domainId, int $groupId): ?string {
+		$contentTypeId = (int)($item['ct_id'] ?? 0);
+		if ($contentTypeId < 1 || !\Core\User::canContent($contentTypeId, 'view', $groupId)) return null;
+		try {
+			$contentType = \Core\Content::getContentType($contentTypeId, $langCode);
+		} catch (\Throwable) {
+			return null;
+		}
+		if ((string)($contentType['system_name'] ?? '') !== 'article') return null;
+
+		$slug = trim((string)($item['item_slug'] ?? ''));
+		if ($slug === '' || !$this->id || !\Core\User::canPlugin((int)$this->id, 'view', $groupId)) return null;
+
+		$domain = \DB::getRow('select domain_config from domains where domain_id=$1', [$domainId]);
+		if (!$domain) return null;
+		$config = \Core\Utils\JsonTool::decodeArray($domain['domain_config'] ?? null);
+		$languages = is_array($config['languages'] ?? null) ? $config['languages'] : [];
+		if (!in_array($langCode, $languages, true)) return null;
+
+		$data = is_array($item['data'] ?? null) ? $item['data'] : [];
 		$categories = $this->categoryIds($data['article_categories'] ?? null);
 		$primaryCategory = (int)($data['article_primary_category'] ?? 0);
-		if ($primaryCategory < 1) {
-			$primaryCategory = $categories[0] ?? 0;
+		if ($primaryCategory < 1) $primaryCategory = $categories[0] ?? 0;
+
+		$preferredPageId = null;
+		if ($primaryCategory > 0) {
+			$category = \Core\Content::getItem($primaryCategory, $langCode);
+			$preferredPageId = (int)($category['data']['category_page'] ?? 0) ?: null;
 		}
 
-		$pageSlug = '';
-		if ($primaryCategory > 0) {
-			$category = \Core\Content::getItem($primaryCategory);
-			$pageId = (int)($category['data']['category_page'] ?? 0);
-			if ($pageId > 0) {
-				$pageSlug = (string)(\Core\PageRegistry::forDomain(DOMAIN_ID)[$pageId] ?? '');
+		$candidates = $this->articleCanonicalPages($domainId, $groupId, $categories, $primaryCategory, $preferredPageId);
+		if ($candidates === []) return null;
+		$defaultLanguage = (string)($config['default_language'] ?? $langCode);
+		$base = $this->localizedPagePath((string)$candidates[0]['page_slug'], $langCode, $defaultLanguage);
+		return rtrim($base, '/') . '/' . rawurlencode($slug);
+	}
+
+	private function articleCanonicalPages(int $domainId, int $groupId, array $categories, int $primaryCategory, ?int $preferredPageId): array {
+		$candidates = [];
+		$pages = \DB::query('select page_id, page_slug, page_plugins from pages where domain_id=$1 order by page_id', [$domainId]);
+		while ($page = \DB::fetchRow($pages)) {
+			$pageId = (int)$page['page_id'];
+			if (!\Core\User::canPage($pageId, $groupId)) continue;
+			$priority = $this->articlePagePriority($page, $categories, $primaryCategory);
+			if ($priority === null) continue;
+			if ($preferredPageId !== null && $pageId === $preferredPageId) $priority = -1;
+			$candidates[] = ['priority'=>$priority, 'page_id'=>$pageId, 'page_slug'=>(string)$page['page_slug']];
+		}
+		usort($candidates, static fn(array $a, array $b): int => $a['priority'] <=> $b['priority'] ?: $a['page_id'] <=> $b['page_id']);
+		return $candidates;
+	}
+
+	private function articlePagePriority(array $page, array $categories, int $primaryCategory): ?int {
+		$pagePlugins = \Core\Utils\JsonTool::decodeArray($page['page_plugins'] ?? null);
+		$best = null;
+		foreach ($pagePlugins as $instances) {
+			if (!is_array($instances)) continue;
+			foreach ($instances as $instance) {
+				if (!is_array($instance) || !isset($instance['ViewArticles']) || !is_array($instance['ViewArticles'])) continue;
+				$params = $instance['ViewArticles'];
+				if ((string)($params['handler'] ?? '') !== 'view') continue;
+				$allowed = $this->categoryIds($params['articles_category_ids'] ?? null);
+				if ($allowed === []) $priority = 2;
+				elseif ($primaryCategory > 0 && in_array($primaryCategory, $allowed, true)) $priority = 0;
+				elseif (array_intersect($categories, $allowed) !== []) $priority = 1;
+				else continue;
+				$best = $best === null ? $priority : min($best, $priority);
 			}
 		}
+		return $best;
+	}
+
+	private function localizedPagePath(string $pageSlug, string $langCode, string $defaultLanguage): string {
+		$prefix = $langCode === $defaultLanguage ? '' : '/' . rawurlencode($langCode);
+		$segments = array_values(array_filter(explode('/', trim($pageSlug, '/')), static fn(string $segment): bool => $segment !== ''));
+		$path = implode('/', array_map('rawurlencode', $segments));
+		return $prefix . ($path !== '' ? '/' . $path : '');
+	}
+
+	private function articleUrl(array $article): string {
+		$groupId = defined('USERGROUP_ID')
+			? (int)USERGROUP_ID
+			: (int)(GLOBAL_SETTINGS['usergroup_guest'] ?? 0);
+		$canonical = $this->canonicalUrl($article, LANG, DOMAIN_ID, $groupId);
+		if ($canonical !== null) return $canonical;
 
 		$slug = rawurlencode((string)($article['item_slug'] ?? ''));
-		if ($pageSlug !== '' && $slug !== '') {
-			$languagePrefix = LANG === (DOMAIN_CONFIG['default_language'] ?? LANG)
-				? ''
-				: '/' . rawurlencode(LANG);
-			return $languagePrefix . '/' . trim($pageSlug, '/') . '/' . $slug;
-		}
-
 		$path = rtrim(\Core\Request::path(), '/');
 		return ($path !== '' ? $path : '') . ($slug !== '' ? '/' . $slug : '');
 	}

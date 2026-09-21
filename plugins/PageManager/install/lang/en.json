@@ -3,12 +3,7 @@
     "title": "Page Manager",
     "description": "Create pages, select layouts, and place plugins into page sections."
   },
-  "settings": {
-    "test": {
-      "title": "Test setting",
-      "description": "Temporary setting used during development."
-    }
-  },
+  "settings": {},
   "handlers": {
     "manage": {
       "title": "Manage pages",
@@ -123,6 +118,9 @@
     "recipe": "Recipe",
     "select_recipe": "Select recipe…",
     "create_from_recipe": "From recipe",
+    "create_recipe_from_page": "Create recipe from page",
+    "recipe_from_saved_page_hint": "Create a recipe draft from the saved state of this page.",
+    "recipe_draft_from_page": "Draft generated from saved page “{title}”. Review the recipe before saving.",
     "create_from_recipe_for": "New page from recipe for",
     "recipe_key": "Recipe key",
     "name": "Name",

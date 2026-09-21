@@ -1,5 +1,5 @@
 <!-- kami:template item-edit -->
-<section class="admin-page cm-item-editor" aria-labelledby="cm-item-editor-title">
+<section class="admin-panel cm-item-editor" aria-labelledby="cm-item-editor-title">
     <header class="admin-page-header cm-item-editor-header">
         <div>
             <a class="admin-back-link" href="{{back_link}}">
@@ -51,7 +51,7 @@
 <!-- /kami:template -->
 
 <!-- kami:template items-list -->
-<section class="admin-page"
+<section class="admin-panel"
          data-content-items-page
          data-item-count="{{items_count}}"
          aria-labelledby="cm-items-title">
@@ -213,7 +213,7 @@
 <!-- /kami:template -->
 
 <!-- kami:template types-list -->
-<section class="admin-page"
+<section class="admin-panel"
          data-content-types-page
          aria-labelledby="cm-types-title">
     <header class="admin-page-header">
@@ -418,7 +418,7 @@
 <!-- /kami:template -->
 
 <!-- kami:template fields-list -->
-<section class="admin-page"
+<section class="admin-panel"
          data-content-fields-page
          aria-labelledby="cm-fields-title">
     <header class="admin-page-header">
@@ -446,6 +446,10 @@
                    autocomplete="off"
                    data-content-fields-search>
         </div>
+        <a class="admin-button admin-button-secondary" href="{{field_types_link}}">
+            <svg class="icon icon-settings icon-sm" aria-hidden="true"></svg>
+            <span>{{phrase.manage_field_types}}</span>
+        </a>
     </div>
 
     <div class="admin-table-wrap">
@@ -668,11 +672,259 @@
 </script>
 <!-- /kami:template -->
 
+<!-- kami:template field-types-list -->
+<section class="admin-panel"
+         data-content-field-types-page
+         aria-labelledby="cm-field-types-title">
+    <header class="admin-page-header">
+        <div>
+            <a class="admin-back-link" href="{{back_link}}">
+                <svg class="icon icon-chevron-left icon-sm" aria-hidden="true"></svg>
+                <span>{{phrase.back_to_fields}}</span>
+            </a>
+            <h2 id="cm-field-types-title" class="admin-page-title">{{phrase.field_types}}</h2>
+            <p class="admin-page-description">{{phrase.field_types_help}}</p>
+        </div>
+        <span class="admin-page-status" data-content-field-types-status></span>
+    </header>
+
+    <div class="admin-toolbar">
+        <div class="cm-search">
+            <label class="admin-visually-hidden" for="cm-field-types-search">
+                {{phrase.search_field_types}}
+            </label>
+            <svg class="icon icon-search icon-sm" aria-hidden="true"></svg>
+            <input id="cm-field-types-search"
+                   class="admin-input"
+                   type="search"
+                   placeholder="{{phrase.search_field_types}}"
+                   autocomplete="off"
+                   data-content-field-types-search>
+        </div>
+    </div>
+
+    <div class="admin-table-wrap">
+        <table class="admin-table cm-global-fields-table">
+            <thead>
+                <tr>
+                    <th>{{phrase.field_type}}</th>
+                    <th>{{phrase.parent_type}}</th>
+                    <th>{{phrase.fields}}</th>
+                    <th>{{phrase.child_types}}</th>
+                    <th class="admin-actions-heading">{{phrase.actions}}</th>
+                </tr>
+            </thead>
+            <tbody data-content-field-types-rows></tbody>
+        </table>
+    </div>
+
+    <div class="admin-notice" data-content-field-types-notice hidden aria-live="polite"></div>
+</section>
+
+<script>
+(function initContentFieldTypesPage() {
+    'use strict';
+
+    const root = document.querySelector('[data-content-field-types-page]');
+    if (!root) return;
+
+    const text = {{ui_text}};
+    const search = root.querySelector('[data-content-field-types-search]');
+    const rows = root.querySelector('[data-content-field-types-rows]');
+    const status = root.querySelector('[data-content-field-types-status]');
+    const notice = root.querySelector('[data-content-field-types-notice]');
+    let fieldTypes = {{field_types_json}};
+
+    function format(pattern, values = {}) {
+        return Object.entries(values).reduce(
+            (result, [key, value]) => result.replaceAll('{' + key + '}', String(value)),
+            pattern
+        );
+    }
+
+    function createIcon(name) {
+        const icon = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+        icon.classList.add('icon', 'icon-' + name, 'icon-sm');
+        icon.setAttribute('aria-hidden', 'true');
+        return icon;
+    }
+
+    function showNotice(message, kind) {
+        notice.textContent = message;
+        notice.className = 'admin-notice admin-notice-' + kind;
+        notice.hidden = false;
+    }
+
+    function lockReason(type) {
+        if (type.field_count > 0) return text.usedLock;
+        if (type.child_count > 0) return text.childrenLock;
+        return '';
+    }
+
+    function countCell(count, names) {
+        const cell = document.createElement('td');
+        cell.textContent = String(count);
+        if (Array.isArray(names) && names.length > 0) {
+            cell.title = names.join(', ');
+        }
+        return cell;
+    }
+
+    function createRow(type) {
+        const row = document.createElement('tr');
+        row.dataset.fieldTypeId = String(type.type_id);
+
+        const details = document.createElement('td');
+        const title = document.createElement('strong');
+        title.className = 'cm-field-title';
+        title.textContent = type.title || type.system_name;
+        const name = document.createElement('code');
+        name.className = 'cm-field-name';
+        name.textContent = type.system_name;
+        details.append(title, name);
+        if (type.description) {
+            const description = document.createElement('small');
+            description.className = 'cm-field-description';
+            description.textContent = type.description;
+            details.appendChild(description);
+        }
+
+        const parent = document.createElement('td');
+        if (type.parent_name) {
+            const parentName = document.createElement('code');
+            parentName.textContent = type.parent_name;
+            parent.appendChild(parentName);
+        } else {
+            parent.textContent = text.noParent;
+        }
+
+        const fields = countCell(type.field_count, type.fields);
+        const children = countCell(type.child_count, type.children);
+
+        const actions = document.createElement('td');
+        actions.className = 'admin-actions-cell';
+        const group = document.createElement('div');
+        group.className = 'admin-actions';
+
+        const button = document.createElement('button');
+        button.className = 'admin-action-button admin-action-danger';
+        button.type = 'button';
+        button.appendChild(createIcon('trash'));
+
+        if (type.deletable) {
+            button.dataset.deleteFieldType = String(type.type_id);
+            button.title = text.deleteType;
+            button.setAttribute('aria-label', text.deleteType);
+        } else {
+            const reason = lockReason(type);
+            button.disabled = true;
+            button.title = reason;
+            button.setAttribute('aria-label', reason);
+        }
+
+        group.appendChild(button);
+        actions.appendChild(group);
+        row.append(details, parent, fields, children, actions);
+        return row;
+    }
+
+    function render() {
+        const query = search.value.trim().toLowerCase();
+        const filtered = fieldTypes.filter(type => {
+            if (!query) return true;
+            return [
+                type.title,
+                type.description,
+                type.system_name,
+                type.parent_name,
+                ...(type.fields || []),
+                ...(type.children || [])
+            ].some(value => String(value || '').toLowerCase().includes(query));
+        });
+
+        rows.replaceChildren();
+        status.textContent = format(text.typeCount, { count: filtered.length });
+
+        if (filtered.length === 0) {
+            const row = document.createElement('tr');
+            const cell = document.createElement('td');
+            cell.colSpan = 5;
+            cell.className = 'admin-empty-state';
+            cell.textContent = text.noTypes;
+            row.appendChild(cell);
+            rows.appendChild(row);
+            return;
+        }
+
+        filtered.forEach(type => rows.appendChild(createRow(type)));
+    }
+
+    async function deleteFieldType(button) {
+        const type = fieldTypes.find(
+            item => String(item.type_id) === button.dataset.deleteFieldType
+        );
+        if (!type || !window.confirm(
+            format(text.confirmDelete, { title: type.title || type.system_name })
+        )) {
+            return;
+        }
+
+        button.disabled = true;
+        notice.hidden = true;
+
+        try {
+            const formData = new FormData();
+            formData.append('type_id', String(type.type_id));
+            const response = await fetch('{{delete_endpoint}}', {
+                method: 'POST',
+                body: formData,
+                credentials: 'same-origin',
+                headers: {
+                    'Accept': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest'
+                }
+            });
+            const data = await response.json();
+            if (!response.ok || data.status !== 'ok') {
+                throw new Error(data.error || text.deleteFailed);
+            }
+
+            fieldTypes = fieldTypes.filter(item => item.type_id !== type.type_id);
+            fieldTypes.forEach(item => {
+                if (item.parent_name === type.system_name) {
+                    item.parent_name = null;
+                }
+                item.children = (item.children || []).filter(
+                    name => name !== type.system_name
+                );
+                item.child_count = item.children.length;
+                item.deletable = item.field_count === 0 && item.child_count === 0;
+            });
+            render();
+            showNotice(data.message || text.deleted, 'success');
+        } catch (error) {
+            button.disabled = false;
+            showNotice(error.message || text.deleteFailed, 'error');
+        }
+    }
+
+    search.addEventListener('input', render);
+    rows.addEventListener('click', event => {
+        const button = event.target.closest('[data-delete-field-type]');
+        if (button) deleteFieldType(button);
+    });
+
+    render();
+})();
+</script>
+<!-- /kami:template -->
+
 <!-- kami:template type-edit -->
-<section class="admin-page cm-structure-editor"
-         data-structure-editor
-         data-type-id="{{type_id}}"
-         aria-labelledby="cm-structure-title">
+<div class="cm-structure-editor"
+     data-structure-editor
+     data-type-id="{{type_id}}"
+     aria-labelledby="cm-structure-title">
+<section class="admin-panel">
     <header class="admin-page-header">
         <div>
             <a class="admin-back-link" href="{{back_link}}">
@@ -684,7 +936,6 @@
         </div>
     </header>
 
-    {{declarative_notice}}
 
     <form class="cm-structure-form" method="post" action="{{save_action}}">
         <input type="hidden" name="ct_id" value="{{type_id}}">
@@ -728,9 +979,11 @@
             </div>
         </div>
     </form>
+</section>
 
+<section class="admin-panel">
     <div class="cm-structure-fields"{{fields_hidden}}>
-        <div class="cm-section-heading">
+        <div class="cm-section-heading admin-pad">
             <div>
                 <h3>{{phrase.fields}}</h3>
                 <p>{{phrase.fields_help}}</p>
@@ -768,6 +1021,7 @@
     </div>
     <div class="admin-notice" data-structure-notice hidden aria-live="polite"></div>
 </section>
+</div>
 
 <script>
 (function() {
@@ -778,6 +1032,7 @@
     const typeId = root.dataset.typeId;
     const notice = root.querySelector('[data-structure-notice]');
     const existing = root.querySelector('[data-existing-field]');
+    const attachButton = root.querySelector('[data-attach-field]');
 
     function showNotice(message, kind) {
         notice.textContent = message;
@@ -801,8 +1056,8 @@
         return data;
     }
 
-    root.querySelector('[data-attach-field]').addEventListener('click', async event => {
-        if (!existing.value) return;
+    attachButton?.addEventListener('click', async event => {
+        if (!existing?.value) return;
         event.currentTarget.disabled = true;
         try {
             await post('fieldAttach', { ct_id: typeId, field_id: existing.value });
@@ -1122,7 +1377,7 @@
 <!-- /kami:template -->
 
 <!-- kami:template type-managers -->
-<section class="admin-page cm-manager-page"
+<section class="admin-panel cm-manager-page"
          data-type-managers-page
          aria-labelledby="cm-managers-title">
     <header class="admin-page-header">
@@ -1146,6 +1401,7 @@
                     <th>{{phrase.owner_plugin}}</th>
                     <th>{{phrase.default_manager}}</th>
                     <th>{{phrase.current_manager}}</th>
+                    <th>{{phrase.canonical_viewer}}</th>
                     <th>{{phrase.source}}</th>
                     <th class="admin-actions-heading">{{phrase.actions}}</th>
                 </tr>
@@ -1169,6 +1425,7 @@
     const text = {{ui_text}};
     const notice = root.querySelector('[data-manager-notice]');
     const endpoint = '/ajax/ContentManager/typeManagerUpdate';
+    const canonicalViewerEndpoint = '/ajax/ContentManager/typeCanonicalViewerUpdate';
 
     function showNotice(message, kind) {
         notice.textContent = message;
@@ -1243,15 +1500,53 @@
         }
     }
 
+    async function updateCanonicalViewer(row) {
+        const select = row.querySelector('[data-canonical-viewer-select]');
+        const formData = new FormData();
+
+        formData.append('ct_id', row.dataset.typeId);
+        formData.append('canonical_viewer_plugin_id', select.value);
+
+        notice.hidden = true;
+        setBusy(row, true);
+
+        try {
+            const response = await fetch(canonicalViewerEndpoint, {
+                method: 'POST',
+                body: formData,
+                credentials: 'same-origin',
+                headers: {
+                    'Accept': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest'
+                }
+            });
+            const data = await response.json();
+            if (!response.ok || data.status !== 'ok') {
+                throw new Error(data.error || text.canonicalViewerSaveFailed);
+            }
+            showNotice(data.message || text.canonicalViewerSaved, 'success');
+        } catch (error) {
+            console.error('Content Manager: canonical viewer update failed.', error);
+            showNotice(error.message || text.canonicalViewerSaveFailed, 'error');
+        } finally {
+            setBusy(row, false);
+        }
+    }
+
     root.addEventListener('click', event => {
         const saveButton = event.target.closest('[data-manager-save]');
         const resetButton = event.target.closest('[data-manager-reset]');
-        const button = saveButton || resetButton;
+        const canonicalViewerButton = event.target.closest('[data-canonical-viewer-save]');
+        const button = saveButton || resetButton || canonicalViewerButton;
         if (!button) return;
 
         const row = button.closest('[data-manager-row]');
         if (!row) return;
 
+        if (canonicalViewerButton) {
+            updateCanonicalViewer(row);
+            return;
+        }
         updateManager(row, resetButton ? 'reset' : 'override');
     });
 })();
@@ -1273,6 +1568,22 @@
                 aria-label="{{phrase.current_manager}}">
             {{manager_options}}
         </select>
+    </td>
+    <td>
+        <div class="cm-manager-control">
+            <select class="admin-input admin-input-wide"
+                    data-canonical-viewer-select
+                    aria-label="{{phrase.canonical_viewer}}">
+                {{canonical_viewer_options}}
+            </select>
+            <button class="admin-action-button"
+                    type="button"
+                    data-canonical-viewer-save
+                    title="{{phrase.save_canonical_viewer}}"
+                    aria-label="{{phrase.save_canonical_viewer}}">
+                <svg class="icon icon-save icon-sm"></svg>
+            </button>
+        </div>
     </td>
     <td>
         <span class="cm-manager-badge{{override_class}}" data-manager-badge>

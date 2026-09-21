@@ -277,9 +277,10 @@ final class ExtensionManager
         ?string $folder = null
     ): bool {
         return self::transaction(function () use ($manifest, $existingPlugin, $folder): void {
+            $isInstall = $existingPlugin === null;
             $pluginData = self::pluginData(
                 $manifest,
-                $existingPlugin === null,
+                $isInstall,
                 self::decodeObject($existingPlugin['settings'] ?? null)
             );
 
@@ -324,26 +325,17 @@ final class ExtensionManager
                 $languages
             );
 
-            self::syncFieldTypes(
-                is_array($manifest['field_types'] ?? null)
-                    ? $manifest['field_types']
-                    : [],
-                $languages
-            );
+            if ($isInstall) {
+                self::bootstrapPluginStructures(
+                    (int) $plugin['plugin_id'],
+                    $manifest,
+                    $languages
+                );
+            }
 
-            self::syncStandaloneFields(
-                is_array($manifest['fields'] ?? null)
-                    ? $manifest['fields']
-                    : [],
-                $languages
-            );
-
-            self::syncContentTypes(
+            self::syncCanonicalViewerDefaults(
                 (int) $plugin['plugin_id'],
-                is_array($manifest['content_types'] ?? null)
-                    ? $manifest['content_types']
-                    : [],
-                $languages
+                $manifest['canonical_viewer_for'] ?? []
             );
         });
     }
@@ -501,6 +493,44 @@ final class ExtensionManager
         }
     }
 
+    /**
+     * Apply structures.json only when the plugin is installed for the first time.
+     *
+     * Runtime structure is database-owned after installation. Package updates
+     * must use versioned migrations for structural changes so local edits are
+     * never silently restored from structures.json.
+     *
+     * @param array<string, mixed> $manifest
+     * @param array<string, array<string, mixed>> $languages
+     */
+    private static function bootstrapPluginStructures(
+        int $pluginId,
+        array $manifest,
+        array $languages
+    ): void {
+        self::syncFieldTypes(
+            is_array($manifest['field_types'] ?? null)
+                ? $manifest['field_types']
+                : [],
+            $languages
+        );
+
+        self::syncStandaloneFields(
+            is_array($manifest['fields'] ?? null)
+                ? $manifest['fields']
+                : [],
+            $languages
+        );
+
+        self::syncContentTypes(
+            $pluginId,
+            is_array($manifest['content_types'] ?? null)
+                ? $manifest['content_types']
+                : [],
+            $languages
+        );
+    }
+
     private static function syncFieldTypes(
         array $fieldTypes,
         array $languages
@@ -616,7 +646,6 @@ final class ExtensionManager
                 $existing ? (int)$existing['field_id'] : null,
                 [
                     'type_id' => (int)$fieldType['type_id'],
-                    'variant_id' => null,
                     'system_name' => $systemName,
                     'field_settings' => $settings,
                 ]
@@ -717,6 +746,55 @@ final class ExtensionManager
                     )
                 );
             }
+        }
+    }
+
+    private static function syncCanonicalViewerDefaults(
+        int $pluginId,
+        mixed $contentTypes
+    ): void {
+        if (!is_array($contentTypes)) {
+            throw new \RuntimeException(
+                'canonical_viewer_for must be an array of content type system names.'
+            );
+        }
+
+        $seen = [];
+        foreach ($contentTypes as $systemName) {
+            if (!is_string($systemName) || !preg_match('/^[a-z][a-z0-9_]*$/', $systemName)) {
+                throw new \RuntimeException(
+                    'canonical_viewer_for contains an invalid content type system name.'
+                );
+            }
+            if (isset($seen[$systemName])) {
+                continue;
+            }
+            $seen[$systemName] = true;
+
+            $contentType = \DB::getRow(
+                'select ct_id, canonical_viewer_plugin_id from content_types where system_name=$1',
+                [$systemName]
+            );
+            if (!$contentType) {
+                throw new \RuntimeException(
+                    "Canonical viewer target content type is not installed: {$systemName}."
+                );
+            }
+
+            if ($contentType['canonical_viewer_plugin_id'] !== null) {
+                continue;
+            }
+
+            self::assertWrite(
+                \DB::update(
+                    'content_types',
+                    ['canonical_viewer_plugin_id' => $pluginId],
+                    'ct_id=$1 and canonical_viewer_plugin_id is null',
+                    [(int)$contentType['ct_id']]
+                ),
+                "Failed to assign canonical viewer for content type {$systemName}."
+            );
+            \Core\ContentStructure::invalidateContentTypeCache((int)$contentType['ct_id']);
         }
     }
 

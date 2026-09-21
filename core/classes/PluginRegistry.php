@@ -48,6 +48,7 @@ final class PluginRegistry
     }
 
     private array $instances = [];
+    private array $domainInstances = [];
 
     public function get(string $plugin_name): ?BasePlugin
     {
@@ -68,6 +69,29 @@ final class PluginRegistry
         }
 
         return $this->instances[$plugin_name] = $instance;
+    }
+
+    public function getForDomain(string $pluginName, int $domainId): ?BasePlugin
+    {
+        if ($domainId < 1) {
+            return null;
+        }
+        if ($domainId === DOMAIN_ID) {
+            return $this->get($pluginName);
+        }
+
+        $key = $domainId . ':' . $pluginName;
+        if (array_key_exists($key, $this->domainInstances)) {
+            return $this->domainInstances[$key];
+        }
+
+        $class = "\\Plugins\\{$pluginName}\\{$pluginName}";
+        if (!class_exists($class)) {
+            return $this->domainInstances[$key] = null;
+        }
+
+        $instance = new $class($this, $domainId);
+        return $this->domainInstances[$key] = $instance->active ? $instance : null;
     }
 
     /** @return array<string, BasePlugin> */

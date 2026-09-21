@@ -6,7 +6,7 @@
 		gap: 0;
 	}
 
-	.ls-simple a {
+	.ls-simple a, .ls-simple span {
 		color: inherit;
 		text-decoration: none;
 		text-transform: uppercase;
@@ -17,12 +17,12 @@
 		opacity: 1;
 	}
 
-	.ls-simple a.active {
+	.ls-simple .active {
 		font-weight: 700;
 		opacity: 1;
 	}
 
-	.ls-simple a + a::before {
+	.ls-simple * + *::before {
 		content: "·";
 		display: inline-block;
 		margin: 0 4px;
@@ -36,6 +36,10 @@
 
 <!-- kami:template simple_item -->
 <a class="{{active}}" href="{{url}}">{{lang_code}}</a>
+<!-- /kami:template -->
+
+<!-- kami:template simple_active_item -->
+<span class="{{active}}">{{lang_code}}</span>
 <!-- /kami:template -->
 
 

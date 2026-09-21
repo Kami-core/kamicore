@@ -71,7 +71,7 @@
 
 
 <!-- kami:template menu_list -->
-<section class="admin-page"
+<section class="admin-panel"
          data-navigation-manager
          data-menu-count="{{menu_count}}"
          aria-labelledby="nm-menus-title">
@@ -268,7 +268,7 @@
 <!-- /kami:template -->
 
 <!-- kami:template menu_edit -->
-<section class="admin-page nm-editor" aria-labelledby="nm-editor-title">
+<section class="admin-panel nm-editor" aria-labelledby="nm-editor-title">
     <header class="admin-page-header">
         <div>
             <a class="admin-back-link" href="{{cancel_url}}">
@@ -279,9 +279,11 @@
             <p class="admin-page-description">{{phrase.edit_menu_help}}</p>
         </div>
     </header>
+</section>
 
+<section class="admin-page">
     <form id="menu-form" class="nm-editor-form" data-navigation-menu-editor method="post" action="{{save_action}}">
-        <section class="admin-panel nm-panel" aria-labelledby="nm-settings-title">
+        <section class="admin-card nm-panel" aria-labelledby="nm-settings-title">
             <header class="admin-panel-header">
                 <h3 id="nm-settings-title" class="admin-panel-title">{{phrase.menu_settings}}</h3>
             </header>
@@ -291,7 +293,7 @@
             </div>
         </section>
 
-        <section class="admin-panel nm-panel" aria-labelledby="nm-items-title">
+        <section class="admin-card nm-panel" aria-labelledby="nm-items-title">
             <header class="admin-panel-header nm-items-header">
                 <div>
                     <h3 id="nm-items-title" class="admin-panel-title">{{phrase.menu_items}}</h3>

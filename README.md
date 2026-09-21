@@ -6,26 +6,28 @@
 
 KamiCore is a modular content management system built with PHP and PostgreSQL. It is designed around structured content, plugins, themes, multilingual data, and a small transparent core that avoids hiding application behavior behind unnecessary abstraction.
 
-> **KamiCore 0.6 Alpha**
+> **KamiCore 0.7 Alpha**
 >
-> This is an early development release intended for testing, evaluation, and experimentation. APIs, database structures, plugin contracts, and other internal interfaces may change before a stable release. Do not treat the current alpha as a drop-in production platform with guaranteed backward compatibility.
+> This is an early development release intended for testing, evaluation, and real-world development. APIs, database structures, plugin contracts, theme contracts, and other internal interfaces may still change before a stable release. Release upgrades are supported, but arbitrary development snapshots are not guaranteed to remain backward compatible.
 
 ## Highlights
 
-- Structured content types with reusable field definitions and PostgreSQL-backed indexing.
-- Plugin-based page composition and application lifecycle extensions.
+- Structured content types with reusable field definitions, compound fields, hierarchy, and PostgreSQL-backed indexing.
+- Plugin-based page composition and lifecycle extensions.
 - Themes with overridable templates and layouts.
 - Multi-domain support with per-domain themes, plugin activation/settings, languages, and content presentation.
-- Multilingual content and system dictionaries with fallback support.
+- Multilingual content and system dictionaries with fallback support and assisted translation workflows.
 - User groups, plugin permissions, content permissions, and page-level access control.
-- Built-in administration for pages, content, navigation, media, users, translations, plugins, and themes.
-- Token-based API access with scoped permissions.
+- Built-in administration for pages, content, navigation, media, users, translations, plugins, themes, and system settings.
+- Generic content viewing in single, list, and hierarchical tree modes.
 - Redis caching with a no-cache fallback.
-- Browser-based installer for a clean first setup.
+- Browser-based installer and checksummed core/plugin database migrations.
+
+KamiCore also ships several **bundled but optional** capabilities that are installed explicitly when needed, including API access, Markdown rendering, search, and SEO/sitemap support. The zero-config installation intentionally stays small and does not enable scenario-specific features automatically.
 
 ## Requirements
 
-KamiCore 0.6 Alpha currently requires:
+KamiCore 0.7 Alpha currently requires:
 
 - PHP **8.4 or newer**.
 - PostgreSQL **17 or newer**.
@@ -36,7 +38,7 @@ KamiCore 0.6 Alpha currently requires:
 
 Optional:
 
-- Redis and the PHP `redis` extension for application caching.
+- Redis **5 or newer** and the PHP `redis` extension for application caching.
 - SMTP credentials if email delivery should be configured during installation. Mail settings can also be configured later.
 
 The PostgreSQL user used for installation must be able to create tables, indexes, triggers, functions, and the required PostgreSQL extensions in the selected database.
@@ -67,7 +69,9 @@ git pull
 php utils/update.php
 ```
 
-The updater applies any pending, checksummed core database migrations in order and then updates all installed plugins, including their own database migrations. Already applied migrations are not run again.
+The updater applies pending, checksummed core migrations in order and then updates all installed plugins, including their versioned database migrations. Already applied migrations are not run again.
+
+Plugin `structures.json` files are used only to bootstrap structures during the **first installation** of a plugin. Later updates do not re-synchronize those declarations over the live database; structural evolution of an installed plugin is handled by explicit plugin migrations. This keeps administrator changes from being silently restored by a package update.
 
 Create a database backup before upgrading, especially while KamiCore remains in alpha. New plugins included in a release are not installed automatically; plugin installation remains an explicit administrator action.
 
@@ -76,26 +80,31 @@ Create a database backup before upgrading, especially while KamiCore remains in 
 The distribution contains two installer snapshots:
 
 - `install/database/schema.sql` — database structure;
-- `install/database/data.sql` — initial system and demo data.
+- `install/database/data.sql` — initial system and sample-site data.
 
 The installer restores them directly through PHP's `pgsql` extension; a local `psql` executable is not required on the web server.
 
-## Initial content
+The snapshot is intentionally clean: transient sessions, API tokens, secrets, setup history, development mail settings, and optional-plugin setup resources are not included.
 
-The alpha package includes a small bilingual demo site. Its purpose is to demonstrate page composition, structured articles, navigation, static blocks, translations, and theme rendering without turning the distribution into a prebuilt website.
+## Initial site
 
-Everything in the demo can be edited or removed from the administration area after installation.
+A clean installation creates a small bilingual sample site rather than a prebuilt application. It demonstrates page composition, structured articles, navigation, static blocks, translations, administration, and the default theme while keeping scenario-specific functionality out of the baseline.
+
+Everything in the sample site can be edited or removed from the administration area.
+
+Optional bundled plugins such as **ApiAccess**, **ViewMd**, **Search**, and **SimpleSEO** can be installed later through PluginManager when a project actually needs them.
 
 ## Project status
 
-KamiCore is under active development. The current alpha is useful for testing the architecture and building experimental sites, but some areas are intentionally still evolving.
+KamiCore is under active development. The current alpha is already suitable for testing the architecture and building real development sites, but several contracts are intentionally still evolving.
 
-In particular, during the alpha cycle:
+During the alpha cycle:
 
-- database migrations and structures may change;
-- plugin APIs may change;
+- database structures and migrations may continue to evolve;
+- plugin and theme contracts may change;
 - configuration formats may change;
-- release upgrades are supported through `php utils/update.php`, but backward compatibility between arbitrary development snapshots is not guaranteed.
+- release upgrades are supported through `php utils/update.php`;
+- backward compatibility between arbitrary unpublished development snapshots is not guaranteed.
 
 Bug reports and focused feedback are welcome, especially when they include reproducible steps and environment details.
 
@@ -103,12 +112,12 @@ The current development direction is tracked in [ROADMAP.md](ROADMAP.md).
 
 ## Technology
 
-The current core stack is intentionally small:
+The core stack is intentionally small:
 
 - PHP 8.4;
 - PostgreSQL 17+;
 - Redis 5+ when caching is enabled;
-- Lightweight frontend code built primarily with project CSS and JavaScript.
+- lightweight frontend code built primarily with project CSS and JavaScript.
 
 Database access in the core uses PHP's native `pgsql` extension.
 
@@ -116,7 +125,9 @@ Database access in the core uses PHP's native `pgsql` extension.
 
 KamiCore keeps its master encryption key outside the public document root and stores application secrets encrypted in the database. The installer generates a fresh master key for each installation.
 
-As with any alpha software, review your deployment environment and configuration before exposing a test installation to untrusted traffic.
+API authentication is provided through the optional bundled ApiAccess plugin and uses bearer tokens whose stored values are hashed. Token permissions can only narrow the permissions already granted to the user by the normal ACL model.
+
+As with any alpha software, review your deployment environment and configuration before exposing an installation to untrusted traffic.
 
 ## License
 

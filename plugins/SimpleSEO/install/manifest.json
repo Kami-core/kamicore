@@ -1,0 +1,65 @@
+{
+  "schema_version": "1.0",
+  "type": "plugin",
+  "data": {
+    "info": {
+      "uuid": "c6bcdfb0-1e6d-45fb-a73d-01be83481e30",
+      "name": "SimpleSEO",
+      "title": "Simple SEO",
+      "description": "Page metadata, content templates, structured data and XML sitemaps.",
+      "origin_type": "local",
+      "origin_ref": null,
+      "author": "Kami team"
+    },
+    "prefix": "seo",
+    "version": "0.2.0",
+    "category": "utilities",
+    "dependencies": [
+      "ContentManager",
+      "Forms"
+    ],
+    "config": {
+      "default_language": "en",
+      "default_handler": "view",
+      "handlers": {
+        "view": {
+          "title": "SEO metadata",
+          "actions": {
+            "renderPlaceholder": {
+              "title": "Render SEO placeholder"
+            }
+          },
+          "default_action": "renderPlaceholder"
+        },
+        "manage": {
+          "title": "Manage SEO",
+          "actions": {
+            "manage": {
+              "title": "Manage SEO"
+            },
+            "save": {
+              "title": "Save SEO"
+            },
+            "preview": {
+              "title": "Preview metadata"
+            },
+            "deleteSchema": {
+              "title": "Delete custom schema"
+            },
+            "resetSchema": {
+              "title": "Restore schema preset"
+            },
+            "saveSitemap": {
+              "title": "Save sitemap settings"
+            },
+            "generateSitemapNow": {
+              "title": "Generate sitemap"
+            }
+          },
+          "default_action": "manage"
+        }
+      }
+    },
+    "settings": {}
+  }
+}

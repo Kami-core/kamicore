@@ -552,6 +552,8 @@ final class TranslationManager extends \Core\BasePlugin
             $targetLanguage = $this->language((string) ($data['target'] ?? ''));
             $this->assertDifferentLanguages($sourceLanguage, $targetLanguage);
             $provider = trim((string) ($data['provider'] ?? ''));
+            $context = trim((string) ($data['context'] ?? ''));
+            $instructions = trim((string) ($data['instructions'] ?? ''));
 
             $result = match ($kind) {
                 'content' => $this->batchContentStep(
@@ -559,6 +561,8 @@ final class TranslationManager extends \Core\BasePlugin
                     $sourceLanguage,
                     $targetLanguage,
                     $provider,
+                    $context,
+                    $instructions,
                     $scope,
                     is_array($data['ids'] ?? null) ? $data['ids'] : [],
                     (int) ($data['cursor'] ?? 0)
@@ -568,6 +572,8 @@ final class TranslationManager extends \Core\BasePlugin
                     $sourceLanguage,
                     $targetLanguage,
                     $provider,
+                    $context,
+                    $instructions,
                     is_array($data['ids'] ?? null) ? $data['ids'] : []
                 ),
                 default => throw new \InvalidArgumentException('Unknown batch translation kind.'),
@@ -1143,11 +1149,22 @@ final class TranslationManager extends \Core\BasePlugin
         $providerData = $this->processor()->getProviders('translate');
         $provider = (string) ($providerData['default'] ?? '');
         $targetLanguage = $this->defaultTargetLanguage($sourceLanguage);
+        $loadUrl = match ($kind) {
+            'system' => $this->actionUrl('systemList', [
+                'entityType' => (string) ($context['entity_type'] ?? ''),
+            ]),
+            'content' => $this->actionUrl('contentList', [
+                'type' => (int) ($context['type_id'] ?? 0),
+            ]),
+            default => throw new \InvalidArgumentException('Unknown batch translation kind.'),
+        };
 
         return $this->render('batch-panel', [
             'kind' => \Core\Html::escape($kind),
             'source_language' => \Core\Html::escape($sourceLanguage),
             'source_code' => \Core\Html::escape(strtoupper($sourceLanguage)),
+            'source_select' => $this->languageSelect('source', $sourceLanguage),
+            'load_url' => $loadUrl,
             'type_id' => (string) ((int) ($context['type_id'] ?? 0)),
             'entity_type' => \Core\Html::escape((string) ($context['entity_type'] ?? '')),
             'target_select' => $this->languageSelect('batch-target', $targetLanguage),
@@ -1173,6 +1190,8 @@ final class TranslationManager extends \Core\BasePlugin
         string $sourceLanguage,
         string $targetLanguage,
         string $provider,
+        string $context,
+        string $instructions,
         string $scope,
         array $ids,
         int $cursor
@@ -1275,6 +1294,8 @@ final class TranslationManager extends \Core\BasePlugin
                 'source_language' => $sourceLanguage,
                 'target_language' => $targetLanguage,
                 'profile' => 'translation_manager_batch',
+                'context' => $context,
+                'instructions' => $instructions,
             ];
             if ($provider !== '') {
                 $options['provider'] = $provider;
@@ -1333,6 +1354,8 @@ final class TranslationManager extends \Core\BasePlugin
         string $sourceLanguage,
         string $targetLanguage,
         string $provider,
+        string $context,
+        string $instructions,
         array $ids
     ): array {
         $this->systemEntityConfig($entityType);
@@ -1410,6 +1433,8 @@ final class TranslationManager extends \Core\BasePlugin
                 'source_language' => $sourceLanguage,
                 'target_language' => $targetLanguage,
                 'profile' => 'translation_manager_batch',
+                'context' => $context,
+                'instructions' => $instructions,
             ];
             if ($provider !== '') {
                 $options['provider'] = $provider;

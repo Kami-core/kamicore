@@ -12,7 +12,7 @@
       "author": "Kami team"
     },
     "prefix": "articles",
-    "version": "1.0.9",
+    "version": "1.0.13",
     "category": "display",
     "dependencies": [
       "Pagination",
@@ -115,6 +115,9 @@
         "type": "number",
         "default": 20
       }
-    }
+    },
+    "canonical_viewer_for": [
+      "article"
+    ]
   }
 }

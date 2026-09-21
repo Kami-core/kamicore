@@ -1,6 +1,6 @@
 <!-- kami:template overview -->
-<div class="admin-page">
-  <header class="admin-page-header">
+<section class="admin-panel">
+		<header class="admin-page-header">
     <div>
       <h2 class="admin-page-title">{{phrase.users_access}}</h2>
       <p class="admin-page-description">{{phrase.users_access_help}}</p>
@@ -20,12 +20,12 @@
       </tbody>
     </table>
   </div>
-</div>
+</section>
 <!-- /kami:template -->
 
 <!-- kami:template users -->
-<div class="admin-page">
-  <header class="admin-page-header">
+<section class="admin-panel">
+		<header class="admin-page-header">
     <div>
       <a class="admin-back-link" href="{{back_url}}"><svg class="icon icon-chevron-left icon-sm" aria-hidden="true"></svg><span>{{phrase.back}}</span></a>
       <h2 class="admin-page-title">{{phrase.users}}</h2>
@@ -42,7 +42,7 @@
       <tbody>{{user_rows}}</tbody>
     </table>
   </div>
-</div>
+</section>
 <!-- /kami:template -->
 
 <!-- kami:template user-row -->
@@ -57,8 +57,8 @@
 <!-- /kami:template -->
 
 <!-- kami:template user-edit -->
-<div class="admin-page">
-  <header class="admin-page-header">
+<section class="admin-panel">
+		<header class="admin-page-header">
     <div>
       <a class="admin-back-link" href="{{back_url}}"><svg class="icon icon-chevron-left icon-sm" aria-hidden="true"></svg><span>{{phrase.back_to_users}}</span></a>
       <h2 class="admin-page-title">{{page_title}}</h2>
@@ -66,7 +66,7 @@
   </header>
   <form method="post" action="{{save_url}}" class="admin-form">
     <input type="hidden" name="user_id" value="{{user_id}}">
-    <section class="admin-panel">
+    <section class="simple admin-pad">
       <div class="admin-form-fields">{{fields}}{{password_field}}</div>
     </section>
     <footer class="admin-form-actions" style="padding:16px 20px 20px">
@@ -74,12 +74,12 @@
       <button class="admin-button admin-button-primary" type="submit">{{phrase.save}}</button>
     </footer>
   </form>
-</div>
+</section>
 <!-- /kami:template -->
 
 <!-- kami:template groups -->
-<div class="admin-page">
-  <header class="admin-page-header">
+<section class="admin-panel">
+		<header class="admin-page-header">
     <div>
       <a class="admin-back-link" href="{{back_url}}"><svg class="icon icon-chevron-left icon-sm" aria-hidden="true"></svg><span>{{phrase.back}}</span></a>
       <h2 class="admin-page-title">{{phrase.groups_acl}}</h2>
@@ -96,7 +96,7 @@
       <tbody>{{group_rows}}</tbody>
     </table>
   </div>
-</div>
+</section>
 <!-- /kami:template -->
 
 <!-- kami:template group-row -->
@@ -120,8 +120,8 @@
 <!-- /kami:template -->
 
 <!-- kami:template group-edit -->
-<div class="admin-page">
-  <header class="admin-page-header">
+<section class="admin-panel">
+		<header class="admin-page-header">
     <div>
       <a class="admin-back-link" href="{{back_url}}"><svg class="icon icon-chevron-left icon-sm" aria-hidden="true"></svg><span>{{phrase.back_to_groups}}</span></a>
       <h2 class="admin-page-title">{{page_title}}</h2>
@@ -129,24 +129,25 @@
   </header>
   <form method="post" action="{{save_url}}" class="admin-form">
     <input type="hidden" name="usergroup_id" value="{{group_id}}">
-    <section class="admin-panel"><div class="admin-form-fields">{{fields}}</div></section>
+    <section class="simple admin-pad"><div class="admin-form-fields">{{fields}}</div></section>
     <footer class="admin-form-actions" style="padding:16px 20px 20px">
       <a class="admin-button admin-button-secondary" href="{{back_url}}">{{phrase.cancel}}</a>
       <button class="admin-button admin-button-primary" type="submit">{{phrase.save}}</button>
     </footer>
   </form>
-</div>
+</section>
 <!-- /kami:template -->
 
 <!-- kami:template acl -->
-<div class="admin-page">
-  <header class="admin-page-header">
+<section class="admin-panel">
+		<header class="admin-page-header">
     <div>
       <a class="admin-back-link" href="{{back_url}}"><svg class="icon icon-chevron-left icon-sm" aria-hidden="true"></svg><span>{{phrase.back_to_groups}}</span></a>
       <h2 class="admin-page-title">{{phrase.permissions}}: {{group_title}}</h2>
       <p class="admin-page-description">{{group_name}}</p>
     </div>
   </header>
+</section>
 
   <form method="post" action="{{save_url}}" class="admin-form">
     <input type="hidden" name="usergroup_id" value="{{group_id}}">
@@ -173,7 +174,7 @@
       <button class="admin-button admin-button-primary" type="submit">{{phrase.save}}</button>
     </footer>
   </form>
-</div>
+
 <!-- /kami:template -->
 
 <!-- kami:template content-acl-row -->

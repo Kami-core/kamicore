@@ -132,12 +132,7 @@
 /* Shared admin UI primitives. */
 .admin-page {
   margin: 24px 0;
-  padding-top: 20px;
-  overflow: hidden;
-  border: 1px solid var(--admin-border);
-  border-radius: var(--admin-radius-lg);
-  background: var(--admin-surface);
-  box-shadow: var(--admin-shadow);
+  padding: 20px;
 }
 
 .admin-page-header {
@@ -145,7 +140,7 @@
   align-items: center;
   justify-content: space-between;
   gap: 24px;
-  padding: 16px 20px;
+  padding: 20px;
   border-bottom: 1px solid var(--admin-border);
 }
 
@@ -183,12 +178,6 @@
 
 .admin-toolbar-end {
   align-items: flex-end;
-}
-
-.admin-panel {
-  border: 1px solid var(--admin-border);
-  border-radius: var(--admin-radius-lg);
-  background: var(--admin-surface);
 }
 
 .admin-panel-raised {
@@ -420,6 +409,7 @@
 
 /* Shared form controls for Forms output inside admin managers. */
 .admin-form input[type="text"],
+.admin-form input[type="password"],
 .admin-form input[type="email"],
 .admin-form input[type="url"],
 .admin-form input[type="number"],
@@ -430,6 +420,7 @@
 .admin-form textarea,
 .admin-form select,
 .admin-form-fields input[type="text"],
+.admin-form-fields input[type="password"],
 .admin-form-fields input[type="email"],
 .admin-form-fields input[type="url"],
 .admin-form-fields input[type="number"],

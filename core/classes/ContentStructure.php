@@ -66,6 +66,7 @@ final class ContentStructure
                 'default_manager_plugin_id',
                 'manager_plugin_id',
                 'manager_overridden',
+                'canonical_viewer_plugin_id',
                 'has_slug',
             ] as $column) {
                 if (array_key_exists($column, $data)) {
@@ -253,9 +254,6 @@ final class ContentStructure
                 'type_id' => $typeId,
                 'system_name' => $systemName,
             ];
-            if (array_key_exists('variant_id', $data)) {
-                $write['variant_id'] = $data['variant_id'];
-            }
             if (array_key_exists('field_settings', $data)) {
                 $write['field_settings'] = \Core\Utils\JsonTool::encode($fieldSettings, false);
             }
@@ -278,7 +276,6 @@ final class ContentStructure
                 $row = array_replace($existing, $write);
                 $row['field_id'] = (int)$existing['field_id'];
             } else {
-                $write['variant_id'] ??= null;
                 $row = \DB::insert('fields', $write, 'field_id, uuid, system_name, type_id');
                 if (!is_array($row)) {
                     throw new \RuntimeException("Failed to create field '{$systemName}'.");

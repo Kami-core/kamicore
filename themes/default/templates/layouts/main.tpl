@@ -14,7 +14,7 @@
 	</div>
 </section>
 
-<section class='kc_section'>
+<section class='kc-section'>
 	<div class="kc-container content">
 		{{content_plugins}}
 	</div>

@@ -7,7 +7,7 @@
     <input type="hidden" name="page_id" value="{{page_id}}">
     <input type="hidden" id="page-layout" name="layout_json" value="[]">
 
-    <section class="admin-panel admin-panel-raised pm-editor-meta" aria-labelledby="pm-editor-title">
+    <section class="admin-panel admin-pad pm-editor-meta" aria-labelledby="pm-editor-title">
         <div class="pm-editor-heading">
             <div>
                 <a class="admin-back-link" href="{{back_url}}">
@@ -102,6 +102,12 @@
     </div>
 
     <footer class="admin-form-actions pm-editor-actions">
+        <a class="admin-button admin-button-secondary"
+           href="{{recipe_from_page_url}}"{{recipe_from_page_hidden}}
+           title="{{recipe_from_page_hint}}">
+            <svg class="icon icon-copy icon-sm" aria-hidden="true"></svg>
+            <span>{{recipe_from_page_label}}</span>
+        </a>
         <a class="admin-button admin-button-secondary" href="{{cancel_url}}">
             {{phrase.cancel}}
         </a>
@@ -692,7 +698,7 @@
 <!-- /kami:template -->
 
 <!-- kami:template pages -->
-<section id="domain-pages-block" class="admin-page" aria-labelledby="pm-pages-title">
+<section id="domain-pages-block" class="admin-panel" aria-labelledby="pm-pages-title">
     <header class="admin-page-header">
         <h2 id="pm-pages-title" class="admin-page-title">{{phrase.pages}}</h2>
         <div class="pm-page-header-actions">
@@ -874,6 +880,7 @@
     const layoutContainer = document.getElementById('layout-container');
     const parentContainer = document.getElementById('page-parent-container');
     const recipeMeta = {{recipe_meta}};
+    const canCreateRecipe = {{can_create_recipe}};
     const recipeCreateToggle = document.getElementById('page-recipe-create-toggle');
     const recipeCreateWrapper = document.getElementById('page-recipe-create-wrapper');
     const recipeCreateForm = document.getElementById('page-recipe-create-form');
@@ -1133,6 +1140,18 @@
             editLink.setAttribute('aria-label', text.editPage);
             editLink.appendChild(createIcon('pencil'));
 
+            let recipeLink = null;
+            if (canCreateRecipe) {
+                recipeLink = document.createElement('a');
+                recipeLink.className = 'admin-action-button';
+                recipeLink.href = pageRoute
+                    + '/pgm-action/recipes/pgm-pageId/'
+                    + encodeURIComponent(page.id);
+                recipeLink.title = text.createRecipeFromPage;
+                recipeLink.setAttribute('aria-label', text.createRecipeFromPage);
+                recipeLink.appendChild(createIcon('copy'));
+            }
+
             const deleteButton = document.createElement('button');
             deleteButton.className = 'admin-action-button admin-action-danger';
             deleteButton.type = 'button';
@@ -1143,7 +1162,9 @@
                 deletePage(page, row, deleteButton);
             });
 
-            actions.append(editLink, deleteButton);
+            actions.append(editLink);
+            if (recipeLink) actions.append(recipeLink);
+            actions.append(deleteButton);
             actionsCell.appendChild(actions);
             row.append(titleCell, slugCell, layoutCell, actionsCell);
             pagesTbody.appendChild(row);
@@ -1268,7 +1289,7 @@
 <!-- /kami:template -->
 
 <!-- kami:template recipes -->
-<section class="admin-page">
+<section class="admin-panel">
     <header class="admin-page-header">
         <div>
             <a class="admin-back-link" href="{{back_url}}">
@@ -1279,15 +1300,16 @@
             <p class="admin-page-description">{{phrase.page_recipes_description}}</p>
         </div>
     </header>
-
+</section>
     <div class="pm-recipes-grid">
-        <section class="admin-panel pm-recipe-panel">
+        <section class="admin-card admin-pad pm-recipe-panel">
             <h3>{{phrase.recipes}}</h3>
             <div class="pm-recipe-list">{{recipe_rows}}</div>
         </section>
 
-        <section class="admin-panel pm-recipe-panel">
-            <h3>{{phrase.edit_recipe}}</h3>
+        <section class="admin-card admin-pad pm-recipe-panel">
+            <h3>{{editor_title}}</h3>
+            {{draft_notice}}
             <form class="admin-form" method="post" action="{{save_action}}">
                 <input type="hidden" name="recipe_id" value="{{recipe_id}}">
                 <label>{{phrase.recipe_key}}
@@ -1308,7 +1330,7 @@
             </form>
         </section>
     </div>
-</section>
+
 <!-- /kami:template -->
 
 <!-- kami:template recipe-row -->

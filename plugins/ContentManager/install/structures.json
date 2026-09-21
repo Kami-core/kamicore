@@ -175,15 +175,6 @@
         "translatable": true
       }
     },
-    "article_preview": {
-      "title": "Article preview",
-      "type": "media",
-      "settings": {
-        "indexed": false,
-        "unique": false,
-        "translatable": false
-      }
-    },
     "article_categories": {
       "title": "Article categories",
       "description": "",
@@ -249,6 +240,15 @@
       "title": "Category page",
       "description": "Page used to display this category and its articles.",
       "type": "page_id",
+      "settings": {
+        "indexed": false,
+        "unique": false,
+        "translatable": false
+      }
+    },
+    "article_image": {
+      "title": "Article image",
+      "type": "media",
       "settings": {
         "indexed": false,
         "unique": false,
@@ -360,7 +360,7 @@
               "required": true
             }
           },
-          "article_preview": {
+          "article_image": {
             "displayorder": 8
           },
           "tags": {

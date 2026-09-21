@@ -392,6 +392,38 @@
       }
     },
     {
+      "name": "lang_code",
+      "parent": "string",
+      "title": {
+        "uk": "Код мови",
+        "en": "Language code"
+      },
+      "description": {
+        "uk": "Системний код мови з переліку доступних мов.",
+        "en": "System language code from the available languages."
+      },
+      "settings": {
+        "input": {
+          "template": "text_input"
+        },
+        "output": {
+          "template": "plain_text"
+        },
+        "sanitize": {
+          "handler": "plain_text"
+        },
+        "validation": {
+          "rules": [
+            "string"
+          ]
+        },
+        "storage": {
+          "normalizer": "string"
+        },
+        "compound_component": false
+      }
+    },
+    {
       "name": "domain_id",
       "parent": "integer",
       "title": {

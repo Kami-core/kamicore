@@ -80,6 +80,15 @@
         },
         "itemDelete": {
           "title": "Видалити елемент контенту"
+        },
+        "typeCanonicalViewerUpdate": {
+          "title": "Оновити канонічний переглядач контенту"
+        },
+        "fieldTypeList": {
+          "title": "Керування типами полів"
+        },
+        "fieldTypeDelete": {
+          "title": "Видалити тип поля"
         }
       }
     },
@@ -174,7 +183,7 @@
     "item_not_found": "Елемент контенту не знайдено.",
     "manage_type_managers": "Менеджери типів",
     "content_type_managers": "Менеджери типів контенту",
-    "content_type_managers_help": "Доступне лише Root призначення адміністративного плагіна, відповідального за кожен тип контенту.",
+    "content_type_managers_help": "Доступне лише Root призначення адміністративних менеджерів і канонічних переглядачів для типів контенту.",
     "back_to_content_types": "Назад до типів контенту",
     "content_type": "Тип контенту",
     "owner_plugin": "Плагін-власник",
@@ -217,7 +226,6 @@
     "invalid_parent_type": "Некоректний батьківський тип контенту.",
     "type_has_items": "Спочатку видаліть усі елементи цього типу.",
     "type_has_children": "Цей тип контенту має дочірні типи.",
-    "declarative_structure_notice": "Цю структуру оголошено плагіном. Під час наступного оновлення плагіна ручні зміни можуть бути відновлені з install/structures.json.",
     "fields": "Поля",
     "fields_help": "Додавайте наявні поля, створюйте нові та змінюйте їхній порядок.",
     "field": "Поле",
@@ -303,6 +311,20 @@
     "autocomplete_source_invalid": "Поля-джерела автодоповнення мають бути індексованими текстовими полями.",
     "multiple_boolean_not_supported": "Булеве поле не може містити кілька значень.",
     "manage_fields": "Поля",
+    "manage_field_types": "Типи полів",
+    "field_types": "Типи полів",
+    "field_types_help": "Переглядайте успадкування типів полів і видаляйте типи, які більше не використовуються.",
+    "search_field_types": "Пошук типів полів…",
+    "field_type_count": "{count} типів полів",
+    "no_field_types": "Типів полів не знайдено.",
+    "parent_type": "Батьківський тип",
+    "child_types": "Дочірні типи",
+    "delete_field_type": "Видалити тип поля",
+    "confirm_delete_field_type": "Видалити \"{title}\"? Цю дію неможливо скасувати.",
+    "delete_field_type_failed": "Не вдалося видалити тип поля.",
+    "field_type_deleted": "Тип поля видалено.",
+    "field_type_used_lock": "Цей тип використовується полями, тому його не можна видалити.",
+    "field_type_children_lock": "Спочатку видаліть або перепризначте дочірні типи полів.",
     "field_definitions": "Поля",
     "field_definitions_help": "Переглядайте й редагуйте глобальні визначення полів або видаляйте поля, які більше не використовуються.",
     "search_fields": "Пошук полів…",
@@ -331,7 +353,13 @@
     "compound_components_invalid": "Некоректне визначення компонентів складеного поля.",
     "remove": "Видалити",
     "compound_component_name_duplicate": "Системні назви компонентів не можуть повторюватися.",
-    "compound_select_options_invalid": "Опції мають бути коректним JSON-масивом."
+    "compound_select_options_invalid": "Опції мають бути коректним JSON-масивом.",
+    "canonical_viewer": "Канонічний переглядач",
+    "no_canonical_viewer": "Без канонічного переглядача",
+    "save_canonical_viewer": "Зберегти канонічний переглядач",
+    "canonical_viewer_saved": "Канонічний переглядач збережений.",
+    "canonical_viewer_save_failed": "Не вдалося зберегти канонічний переглядач.",
+    "canonical_viewer_not_found": "Плагін канонічного переглядача не знайдено."
   },
   "fields": {
     "internal_title": {
@@ -394,12 +422,12 @@
       "title": "Короткий опис",
       "description": "Короткий опис для списків і попереднього перегляду статей."
     },
-    "article_preview": {
-      "title": "Обкладинка",
-      "description": ""
-    },
     "tags": {
       "title": "Теги",
+      "description": ""
+    },
+    "article_image": {
+      "title": "Зображення статті",
       "description": ""
     }
   }

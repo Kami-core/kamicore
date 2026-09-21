@@ -3,12 +3,7 @@
     "title": "Менеджер сторінок",
     "description": "Створення сторінок, вибір макетів і розміщення плагінів у секціях сторінки."
   },
-  "settings": {
-    "test": {
-      "title": "Тестове налаштування",
-      "description": "Тимчасове налаштування для розробки."
-    }
-  },
+  "settings": {},
   "handlers": {
     "manage": {
       "title": "Керування сторінками",
@@ -123,6 +118,9 @@
     "recipe": "Recipe",
     "select_recipe": "Оберіть recipe…",
     "create_from_recipe": "З recipe",
+    "create_recipe_from_page": "Створити recipe зі сторінки",
+    "recipe_from_saved_page_hint": "Створити чернетку recipe зі збереженого стану цієї сторінки.",
+    "recipe_draft_from_page": "Чернетку сформовано зі збереженої сторінки «{title}». Перевірте recipe перед збереженням.",
     "create_from_recipe_for": "Нова сторінка з recipe для",
     "recipe_key": "Ключ recipe",
     "name": "Назва",

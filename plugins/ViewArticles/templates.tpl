@@ -1,35 +1,3 @@
-<!-- kami:template page -->
-<div>{{content}}</div>
-<!-- /kami:template -->
-
-<!-- kami:template single -->
-<div>{{content}}</div>
-<!-- /kami:template -->
-
-<!-- kami:template default -->
-<div>
-	{{title}}
-	{{content}}
-</div>
-<!-- /kami:template -->
-
-<!-- kami:template responsive_grid -->
-	{{title}}
-
-	<div class="responsive_grid" style="--columns: {{max_items_per_row}}; --min-width: {{min_item_width}}px; --gap: 20px;">
-		{{content}}
-	</div>
-</div>
-<!-- /kami:template -->
-
-<!-- kami:template card -->
-<div class='card'>{{content}}</div>
-<!-- /kami:template -->
-
-<!-- kami:template block_title -->
-<h3>{{content}}</h3>
-<!-- /kami:template -->
-
 <!-- kami:template articles-list -->
 <div class="articles-list">
     {{items_per_page_selector}}
@@ -68,7 +36,7 @@
 <!-- /kami:template -->
 
 <!-- kami:template items-per-page-selector -->
-<div class="card card-sm">
+<div>
 <form class="articles-per-page" method="get" action="{{action_url}}">
     <label>
         <span>{{label}}</span>
@@ -80,4 +48,32 @@
 
 <!-- kami:template items-per-page-option -->
 <option value="{{value}}"{{selected}}>{{label}}</option>
+<!-- /kami:template -->
+
+<!-- kami:template article-page -->
+<div class="article-page">
+	<div class="article-preview">
+		<!-- <img src="{{article_image}}"> -->
+		{{preview}}
+	</div>
+
+	<div class="article-headbox">
+		<h1>{{title}}</h1>
+
+		<time class="article-date" datetime="{{published_at_iso}}">
+			<svg class="icon icon-calendar icon-sm" aria-hidden="true"></svg>
+			<span>{{published_at}}</span>
+		</time>
+
+		<aside>{{summary}}</aside>
+	</div>
+
+	<div class="article-body">
+		{{article_body}}
+	</div>
+</div>
+<!-- /kami:template -->
+
+<!-- kami:template article-img -->
+    <img src="{{preview}}" alt="{{alt}}">
 <!-- /kami:template -->

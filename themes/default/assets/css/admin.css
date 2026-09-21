@@ -33,8 +33,31 @@ body.kami-admin {
 	width: 100%;
 }
 
+.admin-area section {
+	padding: 0;
+}
+
 .admin-panel {
 	margin: 20px;
+}
+
+.admin-panel h2 {
+	margin: 10px 0;
+}
+
+.admin-area section.simple {
+	border: 0;
+	background: transparent;
+}
+
+.admin-panel, .admin-card {
+  border: 1px solid var(--admin-border);
+  border-radius: var(--admin-radius-lg);
+  background: var(--admin-surface);
+}
+
+.admin-area .admin-pad {
+	padding: 20px;
 }
 
 .admin-main {
@@ -232,3 +255,36 @@ ul.admin-nav-sidebar {
       border-top: 1px solid #e5e5e5;
       background: #fff;
     }
+
+.richtext-modes {
+	margin-bottom: 10px;
+}
+
+.richtext-modes button {
+	box-sizing: border-box;
+	min-height: 32px;
+	padding: 3px 15px;
+	border: 1px solid transparent;
+	border-radius: var(--admin-radius);
+	font: inherit;
+	font-size: 0.86rem;
+	line-height: 16px;
+	text-decoration: none;
+	white-space: nowrap;
+	cursor: pointer;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	gap: 7px;
+	transition: border-color .12s ease, background-color .12s ease, color .12s ease;
+}
+
+.richtext-modes button:hover {
+	background: var(--admin-accent-hover);
+	color: #FFF;
+}
+
+.richtext-modes button[aria-pressed=true] {
+	background: var(--admin-accent);
+	color: #FFF;
+}

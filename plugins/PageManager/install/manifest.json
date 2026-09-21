@@ -12,7 +12,7 @@
       "author": "Kami team"
     },
     "prefix": "pgm",
-    "version": "1.0.8",
+    "version": "1.0.10",
     "category": "content",
     "dependencies": [
       "Forms"
@@ -74,14 +74,6 @@
       "default_handler": "manage",
       "default_language": "en"
     },
-    "settings": {
-      "test": {
-        "title": "Some setting",
-        "description": "",
-        "type": "text",
-        "default": "-",
-        "global": 0
-      }
-    }
+    "settings": {}
   }
 }

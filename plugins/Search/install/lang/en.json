@@ -1,0 +1,28 @@
+{
+  "plugin": {
+    "title": "Search",
+    "description": "Full-text content search with autocomplete and pagination."
+  },
+  "handlers": {
+    "form": {
+      "title": "Search form",
+      "actions": {
+        "showForm": {"title": "Show search form"},
+        "autocomplete": {"title": "Autocomplete"}
+      }
+    },
+    "results": {
+      "title": "Search results",
+      "actions": {
+        "showResults": {"title": "Show search results"}
+      }
+    }
+  },
+  "phrases": {
+    "search": "Search",
+    "placeholder": "Search...",
+    "search_results": "Search results",
+    "results_for": "Search results for “%s”",
+    "no_results": "No results found."
+  }
+}

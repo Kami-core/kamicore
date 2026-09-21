@@ -160,6 +160,7 @@
   display: grid;
   gap: .75rem;
   padding: 20px;
+  background: inherit;
 }
 
 .tm-batch-controls {

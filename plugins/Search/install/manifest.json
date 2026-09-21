@@ -1,0 +1,90 @@
+{
+  "schema_version": "1.0",
+  "type": "plugin",
+  "data": {
+    "info": {
+      "uuid": "b124cb3a-9a6c-4cd2-9298-ad45ab3b1527",
+      "name": "Search",
+      "title": "Search",
+      "description": "Full-text content search with autocomplete and pagination.",
+      "origin_type": "local",
+      "origin_ref": null,
+      "author": "Kami team"
+    },
+    "prefix": "search",
+    "version": "0.1.0",
+    "category": "content",
+    "dependencies": [
+      "ContentManager",
+      "ViewContent",
+      "Forms",
+      "Pagination"
+    ],
+    "config": {
+      "handlers": {
+        "form": {
+          "title": "Search form",
+          "actions": {
+            "showForm": {
+              "title": "Show search form"
+            },
+            "autocomplete": {
+              "title": "Autocomplete"
+            }
+          },
+          "default_action": "showForm",
+          "instance_params": {
+            "content_types": {
+              "title": "Content types",
+              "description": "Override the content types searched by this form. Leave empty to use the plugin setting.",
+              "type": "content_type_id",
+              "multiple": true,
+              "default": null
+            },
+            "page_id": {
+              "title": "Results page",
+              "description": "Override the page that receives search queries. Leave empty to use the plugin setting.",
+              "type": "page_id",
+              "default": null
+            }
+          }
+        },
+        "results": {
+          "title": "Search results",
+          "actions": {
+            "showResults": {
+              "title": "Show search results"
+            }
+          },
+          "default_action": "showResults",
+          "instance_params": {
+            "content_types": {
+              "title": "Content types",
+              "description": "Override the content types searched by this results instance. Leave empty to use the plugin setting.",
+              "type": "content_type_id",
+              "multiple": true,
+              "default": null
+            }
+          }
+        }
+      },
+      "default_handler": "form",
+      "default_language": "en"
+    },
+    "settings": {
+      "content_types": {
+        "title": "Content types",
+        "description": "Content types included in search by default.",
+        "type": "content_type_id",
+        "multiple": true,
+        "default": null
+      },
+      "page_id": {
+        "title": "Results page",
+        "description": "Page used to display search results by default.",
+        "type": "page_id",
+        "default": null
+      }
+    }
+  }
+}

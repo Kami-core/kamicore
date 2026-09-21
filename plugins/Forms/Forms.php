@@ -29,6 +29,7 @@ final class Forms extends \Core\BasePlugin
         'field_type_id',
         'page_id',
         'domain_id',
+        'lang_code',
         'plugin_id',
         'user_id',
         'usergroup_id',
@@ -64,6 +65,7 @@ final class Forms extends \Core\BasePlugin
         'slug' => 'string',
         'domain_id' => 'integer',
         'page_id' => 'integer',
+        'lang_code' => 'string',
         'plugin_id' => 'integer',
         'content_type_id' => 'integer',
         'field_type_id' => 'integer',
@@ -87,6 +89,15 @@ final class Forms extends \Core\BasePlugin
         'string' => null,
         'checkbox' => null,
     ];
+
+    /**
+     * Register dependencies required by entity-backed fields that will be
+     * inserted into the page after the initial render.
+     */
+    public function registerEntityFieldAssets(): void
+    {
+        $this->registerTomSelectAssets();
+    }
 
     public function renderForm(
         array $fields,
@@ -520,7 +531,7 @@ final class Forms extends \Core\BasePlugin
         }
 
         $query = trim((string) ($data['q'] ?? ''));
-        $ids = self::normalizeEntityIds($data['ids'] ?? []);
+        $ids = self::normalizeEntityValues($type, $data['ids'] ?? []);
         $limit = max(1, min(50, (int) ($data['limit'] ?? 20)));
         $parameters = self::entityParameters($type, $data, $data);
 
@@ -610,16 +621,16 @@ final class Forms extends \Core\BasePlugin
         mixed $value,
         array $parameters
     ): array {
-        $ids = self::normalizeEntityIds($value);
+        $ids = self::normalizeEntityValues($type, $value);
         if ($ids === []) {
             return [];
         }
 
         if (\Core\User::isGuest()) {
             return array_map(
-                static fn(int $id): array => [
+                static fn(int|string $id): array => [
                     'value' => (string) $id,
-                    'label' => "#{$id}",
+                    'label' => self::entityFallbackLabel($type, $id),
                 ],
                 $ids
             );
@@ -647,7 +658,7 @@ final class Forms extends \Core\BasePlugin
             $key = (string) $id;
             $ordered[] = $byValue[$key] ?? [
                 'value' => $key,
-                'label' => "#{$id}",
+                'label' => self::entityFallbackLabel($type, $id),
             ];
         }
 
@@ -790,6 +801,14 @@ final class Forms extends \Core\BasePlugin
                 'subtitle' => 'entity.domain_name',
                 'domain' => 'entity.domain_id',
             ],
+            'lang_code' => [
+                'from' => 'languages entity',
+                'id' => 'entity.lang_code',
+                'name' => 'entity.lang_name',
+                'label' => "entity.lang_name || ' (' || entity.lang_code || ')'",
+                'subtitle' => 'entity.lang_code',
+                'value_type' => 'text',
+            ],
             'plugin_id' => [
                 'from' => 'plugins entity',
                 'id' => 'entity.plugin_id',
@@ -840,9 +859,16 @@ final class Forms extends \Core\BasePlugin
         if ($type === 'user_id') {
             $where[] = 'entity.user_id > 0';
         }
+        if ($type === 'lang_code') {
+            $where[] = 'entity.is_active=true';
+        }
         if ($ids !== []) {
-            $bind[] = \DB::prepareIdArray($ids);
-            $where[] = $config['id'] . '=ANY($' . count($bind) . '::int[])';
+            $valueType = (string) ($config['value_type'] ?? 'int');
+            $bind[] = $valueType === 'text'
+                ? \DB::prepareTextArray($ids)
+                : \DB::prepareIdArray($ids);
+            $where[] = $config['id'] . '=ANY($' . count($bind)
+                . ($valueType === 'text' ? '::text[])' : '::int[])');
         } elseif ($query !== '') {
             $bind[] = $query;
             $exactParam = '$' . count($bind);
@@ -1408,6 +1434,28 @@ final class Forms extends \Core\BasePlugin
         }
 
         return array_values(array_unique($items));
+    }
+
+    private static function entityFallbackLabel(string $type, int|string $value): string
+    {
+        return $type === 'lang_code' ? (string) $value : '#' . $value;
+    }
+
+    /** @return list<int|string> */
+    private static function normalizeEntityValues(string $type, mixed $value): array
+    {
+        if ($type === 'lang_code') {
+            return array_values(array_unique(array_filter(
+                array_map(
+                    static fn(string $code): string => strtolower(trim($code)),
+                    self::normalizeEntityList($value)
+                ),
+                static fn(string $code): bool => $code !== ''
+                    && preg_match('/^[a-z0-9_-]+$/', $code) === 1
+            )));
+        }
+
+        return self::normalizeEntityIds($value);
     }
 
     /** @return list<int> */

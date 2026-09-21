@@ -37,6 +37,8 @@
             const source = panel.dataset.source || '';
             const target = panel.querySelector('[name="trm-batch-target"]')?.value || '';
             const provider = panel.querySelector('[name="trm-batch-provider"]')?.value || '';
+            const context = panel.querySelector('[name="trm-batch-context"]')?.value || '';
+            const instructions = panel.querySelector('[name="trm-batch-instructions"]')?.value || '';
             const scope = panel.querySelector('[name="tm-batch-scope"]:checked')?.value || 'all';
             const kind = panel.dataset.kind || '';
 
@@ -79,6 +81,8 @@
                         source,
                         target,
                         provider,
+                        context,
+                        instructions,
                         cursor,
                         type_id: panel.dataset.typeId || 0,
                         entity_type: panel.dataset.entityType || ''
@@ -144,7 +148,7 @@
             stopButton.hidden = !isRunning;
             stopButton.disabled = false;
 
-            panel.querySelectorAll('select, input[type="radio"], [data-tm-batch-item]')
+            panel.querySelectorAll('select, textarea, input[type="radio"], [data-tm-batch-item]')
                 .forEach(control => {
                     control.disabled = isRunning;
                 });

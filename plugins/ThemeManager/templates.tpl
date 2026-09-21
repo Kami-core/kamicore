@@ -1,6 +1,6 @@
 <!-- kami:template themes -->
-<section class="admin-page">
-    <header class="admin-page-header">
+<section class="admin-panel">
+		<header class="admin-page-header">
         <div>
             <h2 class="admin-page-title">{{phrase.themes}}</h2>
             <p class="admin-page-description">{{phrase.themes_help}}</p>

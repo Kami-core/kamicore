@@ -161,7 +161,7 @@ class ContentManager extends \Core\BasePlugin {
 
 		return $this->render('fields-list', [
 			'fields_json' => \Core\Utils\JsonTool::encodeForHtml($fields),
-			'ui_text' => \Core\Utils\JsonTool::encode([
+			'ui_text' => \Core\Utils\JsonTool::encodeForHtml([
 				'fieldCount' => $this->phrases['field_count'] ?? '{count} fields',
 				'noFields' => $this->phrases['no_fields'] ?? 'No fields found.',
 				'unused' => $this->phrases['field_unused'] ?? 'Unused',
@@ -180,7 +180,88 @@ class ContentManager extends \Core\BasePlugin {
 					?? 'Detach this field from all content types before deleting it.',
 			], false),
 			'back_link' => '/' . PAGE_SLUG . '/cm-action/typeList',
+			'field_types_link' => '/' . PAGE_SLUG . '/cm-action/fieldTypeList',
 			'delete_endpoint' => '/ajax/ContentManager/fieldDelete',
+		]);
+	}
+
+
+	public function fieldTypeList($contextVars): string {
+		$this->addCss('/plugins/ContentManager/assets/content-manager.css');
+		if (!$this->isRoot()) {
+			return $this->notice(
+				$this->phrases['root_only'] ?? 'Root access required.',
+				'error'
+			);
+		}
+
+		$fieldNamesByType = [];
+		$fieldRows = \DB::query(
+			'select type_id, system_name from fields order by system_name'
+		);
+		while ($field = \DB::fetchRow($fieldRows)) {
+			$fieldNamesByType[(int)$field['type_id']][] = (string)$field['system_name'];
+		}
+
+		$types = [];
+		$childrenByType = [];
+		$rows = \DB::query(
+			'select ft.type_id, ft.uuid, ft.system_name, ft.parent_id,
+				parent.system_name as parent_name
+			from field_types ft
+			left join field_types parent on parent.type_id=ft.parent_id'
+		);
+		while ($type = \DB::fetchRow($rows)) {
+			$typeId = (int)$type['type_id'];
+			$parentId = (int)($type['parent_id'] ?? 0);
+			if ($parentId > 0) {
+				$childrenByType[$parentId][] = (string)$type['system_name'];
+			}
+
+			$translation = \Core\Translation::get((string)$type['uuid']) ?? [];
+			$types[$typeId] = [
+				'type_id' => $typeId,
+				'title' => (string)($translation['title'] ?? $type['system_name']),
+				'description' => (string)($translation['description'] ?? ''),
+				'system_name' => (string)$type['system_name'],
+				'parent_name' => $type['parent_name'] !== null
+					? (string)$type['parent_name']
+					: null,
+			];
+		}
+
+		$result = [];
+		foreach ($types as $typeId => $type) {
+			$fieldNames = $fieldNamesByType[$typeId] ?? [];
+			$childNames = $childrenByType[$typeId] ?? [];
+			$type['fields'] = $fieldNames;
+			$type['field_count'] = count($fieldNames);
+			$type['children'] = $childNames;
+			$type['child_count'] = count($childNames);
+			$type['deletable'] = $fieldNames === [] && $childNames === [];
+			$result[] = $type;
+		}
+		$result = \Core\Translation::sortByTitle($result, 'title', 'system_name');
+
+		return $this->render('field-types-list', [
+			'field_types_json' => \Core\Utils\JsonTool::encodeForHtml($result),
+			'ui_text' => \Core\Utils\JsonTool::encode([
+				'typeCount' => $this->phrases['field_type_count'] ?? '{count} field types',
+				'noTypes' => $this->phrases['no_field_types'] ?? 'No field types found.',
+				'noParent' => $this->phrases['no_parent_type'] ?? 'No parent type',
+				'deleteType' => $this->phrases['delete_field_type'] ?? 'Delete field type',
+				'confirmDelete' => $this->phrases['confirm_delete_field_type']
+					?? 'Delete "{title}"? This action cannot be undone.',
+				'deleteFailed' => $this->phrases['delete_field_type_failed']
+					?? 'Failed to delete the field type.',
+				'deleted' => $this->phrases['field_type_deleted'] ?? 'Field type deleted.',
+				'usedLock' => $this->phrases['field_type_used_lock']
+					?? 'This field type is used by fields and cannot be deleted.',
+				'childrenLock' => $this->phrases['field_type_children_lock']
+					?? 'Delete or reassign child field types first.',
+			]),
+			'back_link' => '/' . PAGE_SLUG . '/cm-action/fieldList',
+			'delete_endpoint' => '/ajax/ContentManager/fieldTypeDelete',
 		]);
 	}
 
@@ -210,7 +291,7 @@ class ContentManager extends \Core\BasePlugin {
 		$typeRows = \DB::query(
 			'select ct.ct_id, ct.uuid, ct.system_name, ct.plugin_id,
 				ct.default_manager_plugin_id, ct.manager_plugin_id,
-				ct.manager_overridden,
+				ct.manager_overridden, ct.canonical_viewer_plugin_id,
 				owner.system_name as owner_name,
 				default_manager.system_name as default_manager_name
 			from content_types ct
@@ -224,15 +305,26 @@ class ContentManager extends \Core\BasePlugin {
 				. \Core\Html::escape($this->phrases['no_manager'] ?? 'No manager')
 				. '</option>';
 
+			$canonicalOptions = '<option value="">'
+				. \Core\Html::escape($this->phrases['no_canonical_viewer'] ?? 'No canonical viewer')
+				. '</option>';
 			foreach ($plugins as $plugin) {
-				$selected = (int)$type['manager_plugin_id'] === $plugin['id']
-					? ' selected'
-					: '';
 				$label = $plugin['title'] . ' (' . $plugin['name'] . ')';
 				if (!$plugin['active']) {
 					$label .= ' — ' . ($this->phrases['inactive'] ?? 'inactive');
 				}
+
+				$selected = (int)$type['manager_plugin_id'] === $plugin['id']
+					? ' selected'
+					: '';
 				$options .= '<option value="' . $plugin['id'] . '"' . $selected . '>'
+					. \Core\Html::escape($label)
+					. '</option>';
+
+				$canonicalSelected = (int)($type['canonical_viewer_plugin_id'] ?? 0) === $plugin['id']
+					? ' selected'
+					: '';
+				$canonicalOptions .= '<option value="' . $plugin['id'] . '"' . $canonicalSelected . '>'
 					. \Core\Html::escape($label)
 					. '</option>';
 			}
@@ -249,6 +341,7 @@ class ContentManager extends \Core\BasePlugin {
 					'default_manager' => \Core\Html::escape((string)($type['default_manager_name']
 							?? ($this->phrases['no_manager'] ?? 'No manager'))),
 					'manager_options' => $options,
+					'canonical_viewer_options' => $canonicalOptions,
 					'override_label' => \Core\Html::escape(!empty($type['manager_overridden'])
 							? ($this->phrases['overridden'] ?? 'Overridden')
 							: ($type['plugin_id'] === null
@@ -280,6 +373,10 @@ class ContentManager extends \Core\BasePlugin {
 			'fromManifest' => $this->phrases['from_manifest'] ?? 'From manifest',
 			'manualDefault' => $this->phrases['manual_default'] ?? 'Manual default',
 			'overridden' => $this->phrases['overridden'] ?? 'Overridden',
+			'canonicalViewerSaved' => $this->phrases['canonical_viewer_saved']
+				?? 'Canonical viewer saved.',
+			'canonicalViewerSaveFailed' => $this->phrases['canonical_viewer_save_failed']
+				?? 'Failed to save the canonical viewer.',
 		]) ?: '{}';
 
 		return $this->render('type-managers', [
@@ -364,6 +461,57 @@ class ContentManager extends \Core\BasePlugin {
 			'message' => $mode === 'reset'
 				? ($this->phrases['manager_reset'] ?? 'Default manager restored.')
 				: ($this->phrases['manager_saved'] ?? 'Manager saved.'),
+		], false);
+	}
+
+	public function typeCanonicalViewerUpdate(?array $data): string {
+		if (!$this->isRoot()) {
+			\Core\Response::addHeader('HTTP/1.1 403 Forbidden');
+			return \Core\Utils\JsonTool::encode([
+				'status' => 'error',
+				'error' => $this->phrases['root_only'] ?? 'Root access required.',
+			], false);
+		}
+
+		$data = array_replace($data ?? [], \Core\Request::all());
+		$typeId = (int)($data['ct_id'] ?? 0);
+		if (!\DB::getOne('select 1 from content_types where ct_id=$1', [$typeId])) {
+			\Core\Response::addHeader('HTTP/1.1 404 Not Found');
+			return \Core\Utils\JsonTool::encode([
+				'status' => 'error',
+				'error' => $this->phrases['content_type_not_found'] ?? 'Content type not found.',
+			], false);
+		}
+
+		$rawViewerId = $data['canonical_viewer_plugin_id'] ?? null;
+		$viewerId = $rawViewerId === '' || $rawViewerId === null
+			? null
+			: (int)$rawViewerId;
+		if ($viewerId !== null && ($viewerId < 1 || !\DB::getOne(
+			'select 1 from plugins where plugin_id=$1',
+			[$viewerId]
+		))) {
+			return \Core\Utils\JsonTool::encode([
+				'status' => 'error',
+				'error' => $this->phrases['canonical_viewer_not_found'] ?? 'Canonical viewer plugin not found.',
+			], false);
+		}
+
+		try {
+			\Core\ContentStructure::saveContentType($typeId, [
+				'canonical_viewer_plugin_id' => $viewerId,
+			]);
+		} catch (\Throwable $error) {
+			return \Core\Utils\JsonTool::encode([
+				'status' => 'error',
+				'error' => $error->getMessage(),
+			], false);
+		}
+
+		return \Core\Utils\JsonTool::encode([
+			'status' => 'ok',
+			'canonical_viewer_id' => $viewerId,
+			'message' => $this->phrases['canonical_viewer_saved'] ?? 'Canonical viewer saved.',
 		], false);
 	}
 
@@ -493,14 +641,6 @@ class ContentManager extends \Core\BasePlugin {
 			$resolvedFields,
 			(string)($schema['summary_field'] ?? '')
 		);
-		$declarativeNotice = !empty($type['plugin_id'])
-			? $this->notice(
-				$this->phrases['declarative_structure_notice']
-					?? 'This structure is declared by a plugin and may be restored on plugin update.',
-				'warning'
-			)
-			: '';
-
 		return $this->render('type-edit', [
 			'page_title' => \Core\Html::escape($typeId > 0
 				? ($this->phrases['edit_content_type'] ?? 'Edit content type')
@@ -519,7 +659,6 @@ class ContentManager extends \Core\BasePlugin {
 			'new_field_link' => '/' . PAGE_SLUG . "/cm-action/fieldEdit/cm-type/{$typeId}",
 			'back_link' => '/' . PAGE_SLUG . '/cm-action/typeList',
 			'save_action' => '/' . PAGE_SLUG . '/cm-action/typeSave',
-			'declarative_notice' => $declarativeNotice,
 			'ui_text' => \Core\Utils\JsonTool::encode([
 				'confirmDetach' => $this->phrases['confirm_detach_field']
 					?? 'Remove this field from the structure?',
@@ -1069,7 +1208,6 @@ class ContentManager extends \Core\BasePlugin {
 			\DB::beginTransaction();
 			$field = \Core\ContentStructure::saveField(null, [
 				'type_id' => $fieldTypeId,
-				'variant_id' => null,
 				'system_name' => $systemName,
 				'field_settings' => $fieldSettings,
 			]);
@@ -1170,6 +1308,34 @@ class ContentManager extends \Core\BasePlugin {
 		return \Core\Utils\JsonTool::encode(['status' => 'ok', 'message' =>
 			$this->phrases['field_deleted'] ?? 'Field deleted.'], false);
 	}
+
+	public function fieldTypeDelete(?array $input): string {
+		if (!$this->isRoot()) {
+			\Core\Response::addHeader('HTTP/1.1 403 Forbidden');
+			return \Core\Utils\JsonTool::encode([
+				'status' => 'error',
+				'error' => $this->phrases['root_only'] ?? 'Root access required.',
+			], false);
+		}
+
+		$data = array_replace($input ?? [], \Core\Request::all());
+		$typeId = (int)($data['type_id'] ?? 0);
+
+		try {
+			\Core\ContentStructure::deleteFieldType($typeId);
+		} catch (\Throwable $error) {
+			return \Core\Utils\JsonTool::encode([
+				'status' => 'error',
+				'error' => $error->getMessage(),
+			], false);
+		}
+
+		return \Core\Utils\JsonTool::encode([
+			'status' => 'ok',
+			'message' => $this->phrases['field_type_deleted'] ?? 'Field type deleted.',
+		], false);
+	}
+
 	public function itemList($context_vars) {
 		$this->addCss('/plugins/ContentManager/assets/content-manager.css');
 		$data = $this->params(['type', 'page', 'q'], \Core\Request::getPrefixedParams($this->prefix));
@@ -2641,12 +2807,14 @@ private function notice(string $message, string $kind = 'success'): string {
 			        owner.system_name AS owner_name,
 			        default_manager.system_name AS default_manager_name,
 			        manager.system_name AS manager_name,
+			        canonical_viewer.system_name AS canonical_viewer_name,
 			        ct.manager_overridden
 			 FROM content_types ct
 			 LEFT JOIN content_types parent ON parent.ct_id=ct.parent_id
 			 LEFT JOIN plugins owner ON owner.plugin_id=ct.plugin_id
 			 LEFT JOIN plugins default_manager ON default_manager.plugin_id=ct.default_manager_plugin_id
 			 LEFT JOIN plugins manager ON manager.plugin_id=ct.manager_plugin_id
+			 LEFT JOIN plugins canonical_viewer ON canonical_viewer.plugin_id=ct.canonical_viewer_plugin_id
 			 WHERE ct.ct_id=ANY($1::int[])
 			 ORDER BY ct.system_name',
 			[\DB::prepareIdArray($allowedTypeIds)]
@@ -2664,6 +2832,9 @@ private function notice(string $message, string $kind = 'success'): string {
 					? (string)$row['default_manager_name']
 					: null,
 				'manager' => $row['manager_name'] !== null ? (string)$row['manager_name'] : null,
+				'canonical_viewer' => $row['canonical_viewer_name'] !== null
+					? (string)$row['canonical_viewer_name']
+					: null,
 				'manager_overridden' => (bool)$row['manager_overridden'],
 				'own_schema' => \Core\Utils\JsonTool::decodeArray($row['schema'] ?? null),
 			];
@@ -2699,12 +2870,14 @@ private function notice(string $message, string $kind = 'success'): string {
 			'SELECT ct.*, parent.system_name AS parent_name,
 			        owner.system_name AS owner_name,
 			        default_manager.system_name AS default_manager_name,
-			        manager.system_name AS manager_name
+			        manager.system_name AS manager_name,
+			        canonical_viewer.system_name AS canonical_viewer_name
 			 FROM content_types ct
 			 LEFT JOIN content_types parent ON parent.ct_id=ct.parent_id
 			 LEFT JOIN plugins owner ON owner.plugin_id=ct.plugin_id
 			 LEFT JOIN plugins default_manager ON default_manager.plugin_id=ct.default_manager_plugin_id
 			 LEFT JOIN plugins manager ON manager.plugin_id=ct.manager_plugin_id
+			 LEFT JOIN plugins canonical_viewer ON canonical_viewer.plugin_id=ct.canonical_viewer_plugin_id
 			 WHERE ' . $where . '
 			 LIMIT 1',
 			$params
@@ -2738,6 +2911,9 @@ private function notice(string $message, string $kind = 'success'): string {
 					? (string)$row['default_manager_name']
 					: null,
 				'manager' => $row['manager_name'] !== null ? (string)$row['manager_name'] : null,
+				'canonical_viewer' => $row['canonical_viewer_name'] !== null
+					? (string)$row['canonical_viewer_name']
+					: null,
 				'manager_overridden' => (bool)$row['manager_overridden'],
 				'title' => (string)($effective['title'] ?? $row['system_name']),
 				'description' => $effective['description'] ?? null,
@@ -2850,10 +3026,9 @@ private function notice(string $message, string $kind = 'success'): string {
 		$fields = [];
 		$result = \DB::query(
 			'SELECT f.field_id, f.uuid, f.system_name, f.field_settings,
-			        ft.system_name AS type_name, fv.variant_name
+			        ft.system_name AS type_name
 			 FROM fields f
 			 JOIN field_types ft ON ft.type_id=f.type_id
-			 LEFT JOIN field_variants fv ON fv.variant_id=f.variant_id
 			 ORDER BY f.system_name'
 		);
 
@@ -2863,7 +3038,6 @@ private function notice(string $message, string $kind = 'success'): string {
 				'uuid' => (string)$row['uuid'],
 				'system_name' => (string)$row['system_name'],
 				'type' => (string)$row['type_name'],
-				'variant' => $row['variant_name'] !== null ? (string)$row['variant_name'] : null,
 				'own_settings' => \Core\Utils\JsonTool::decodeArray($row['field_settings'] ?? null),
 			];
 		}
@@ -2895,10 +3069,9 @@ private function notice(string $message, string $kind = 'success'): string {
 		}
 
 		$row = \DB::getRow(
-			'SELECT f.*, ft.system_name AS type_name, fv.variant_name
+			'SELECT f.*, ft.system_name AS type_name
 			 FROM fields f
 			 JOIN field_types ft ON ft.type_id=f.type_id
-			 LEFT JOIN field_variants fv ON fv.variant_id=f.variant_id
 			 WHERE ' . $where . '
 			 LIMIT 1',
 			$params
@@ -2943,7 +3116,6 @@ private function notice(string $message, string $kind = 'success'): string {
 				'uuid' => (string)$row['uuid'],
 				'system_name' => (string)$row['system_name'],
 				'type' => (string)$row['type_name'],
-				'variant' => $row['variant_name'] !== null ? (string)$row['variant_name'] : null,
 				'root_type' => (string)($fieldType['root_type_name'] ?? $row['type_name']),
 				'own_settings' => $ownSettings,
 				'effective_settings' => $effectiveSettings,

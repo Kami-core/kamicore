@@ -12,7 +12,7 @@
       "author": "Kami team"
     },
     "prefix": "vc",
-    "version": "1.0.0",
+    "version": "1.0.2",
     "category": "display",
     "dependencies": [
       "Pagination"
@@ -64,8 +64,14 @@
               "description": "Sort direction for the selected sort field.",
               "type": "select",
               "options": [
-                {"title": "Ascending", "value": "asc"},
-                {"title": "Descending", "value": "desc"}
+                {
+                  "title": "Ascending",
+                  "value": "asc"
+                },
+                {
+                  "title": "Descending",
+                  "value": "desc"
+                }
               ],
               "default": "asc"
             }
@@ -116,8 +122,14 @@
               "description": "Sort direction for the selected sort field.",
               "type": "select",
               "options": [
-                {"title": "Ascending", "value": "asc"},
-                {"title": "Descending", "value": "desc"}
+                {
+                  "title": "Ascending",
+                  "value": "asc"
+                },
+                {
+                  "title": "Descending",
+                  "value": "desc"
+                }
               ],
               "default": "asc"
             }
@@ -153,8 +165,14 @@
               "description": "Full renders the complete tree. Lazy loads closed branches through AJAX when first opened.",
               "type": "select",
               "options": [
-                {"title": "Full tree", "value": "full"},
-                {"title": "Lazy loading", "value": "lazy"}
+                {
+                  "title": "Full tree",
+                  "value": "full"
+                },
+                {
+                  "title": "Lazy loading",
+                  "value": "lazy"
+                }
               ],
               "default": "full"
             },
@@ -169,8 +187,14 @@
               "description": "Sort direction for the selected sort field.",
               "type": "select",
               "options": [
-                {"title": "Ascending", "value": "asc"},
-                {"title": "Descending", "value": "desc"}
+                {
+                  "title": "Ascending",
+                  "value": "asc"
+                },
+                {
+                  "title": "Descending",
+                  "value": "desc"
+                }
               ],
               "default": "asc"
             }

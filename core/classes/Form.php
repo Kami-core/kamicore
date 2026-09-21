@@ -74,22 +74,9 @@ final class Form
     {
 		$field_settings = [];
 		$field_settings_field = [];
-		$field_settings_variant = [];
 		$field_settings_type = [];
-			 // default tpl
 
 		$field_settings_field = $field['settings'] ?? [];
-
-		if(isset($field['variant']) && !empty($field['variant'])) {
-			$field_settings_variant = \Cache::get("globals:field_settings:{$field['variant']}");
-			if(!$field_settings_variant) {
-				$row = \DB::getRow(
-					'select * from field_variants where variant_name=$1',
-					[(string)$field['variant']]
-				);
-				$field_settings_variant = \Core\Utils\JsonTool::decodeArray($row['variant_settings'] ?? null);
-			}
-		}
 
 		$type = $field['type'] ?? 'text';
 		$field_settings_type = \Cache::get("globals:field_settings:{$type}");
@@ -102,15 +89,12 @@ final class Form
 			\Cache::set("globals:field_settings:{$type}", $field_settings_type);
 		}
 
-		$field['settings'] = array_replace($field_settings_type, $field_settings_variant, $field_settings_field);
+		$field['settings'] = array_replace($field_settings_type, $field_settings_field);
 		$field['settings']['multiple'] ??= false;
 
         $tpl = !empty($field['tpl'])
             ? (string)$field['tpl']
-            : ($field['settings']['templates']['edit']
-                ?? (!empty($field['variant'])
-                    ? "form-{$field['variant']}"
-                    : "form-{$type}"));
+            : ($field['settings']['templates']['edit'] ?? "form-{$type}");
 
         if ($tpl === 'form-html') {
             Assets::css('/third-party/frontend/quill/quill.snow.css');

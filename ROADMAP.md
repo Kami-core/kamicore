@@ -1,52 +1,35 @@
 # KamiCore Roadmap
 
-This roadmap describes the current direction of KamiCore development. It is not a release schedule: items may move, change scope, or be replaced as the architecture evolves. No item below has a fixed delivery date unless it is announced separately in a release plan.
+This roadmap describes the current direction of KamiCore development. It is not a fixed release schedule: scope may move between releases as real projects expose better priorities.
 
-## Current focus
+## 0.8 — Themes and administration
 
-The next major development focus is the public API. KamiCore already has token-based access control, API-aware plugin actions, content permissions, and the first read/write endpoints; the next step is to turn these pieces into a coherent and documented API that can be used by external applications.
+The main focus for 0.8 is making themes genuinely interchangeable rather than treating a theme switch as a simple directory change.
 
-Near-term API work includes:
+Planned work:
 
-- Define and stabilize the public request/response conventions.
-- Expand content and structure endpoints for practical external use.
-- Keep API permissions constrained by both the user's rights and the token scope.
-- Add documentation and examples once the contracts are stable enough to publish.
+- Add a second production-ready theme with meaningfully different layouts and wrappers.
+- Build a safe, page-centric theme migration workflow that can compare the current and target themes, map compatible layouts/wrappers, surface unresolved differences, and avoid leaving a site in a partially migrated state.
+- Refine theme compatibility metadata and validation where the second-theme implementation shows that explicit contracts are useful.
+- Add a small **Admin Dashboard** plugin with a compact operational summary such as the current core version, installed plugin/theme versions, core and plugin migration history, and a few other useful system facts.
 
-## Existing plugins
+The exact migration UI and compatibility rules will be driven by the real differences between the default theme and the second theme rather than designed purely in the abstract.
 
-The following areas are expected to receive further work in the near term:
+## 0.9+ — Developer tools
 
-- **UserAccount** — add Telegram authentication and Telegram-based two-factor authentication, then make additional authentication providers easier to integrate.
-- **ViewArticles** — add more sorting and presentation options while keeping the default viewer intentionally small.
-- **PluginManager** — add lightweight plugin categories for administration and prepare metadata for a future extension repository.
+A later release is expected to introduce a dedicated **DevTools** plugin.
 
-## Planned plugins and features
+Its main direction is tooling for developers who need to clone, export/import, and migrate plugins and themes between installations or development environments. Additional validation, inspection, and development utilities may be added where they make those workflows safer and clearer.
 
-These are likely additions, but their exact shape is still open to change:
+The exact DevTools scope is intentionally not fixed to 0.9 yet.
 
-- **Search** — configurable search across selected content types, with full-text, substring, and tag-oriented search modes where appropriate.
-- **Markdown support** — a dedicated Markdown field type with plain textarea editing and a small viewer plugin. Markdown content will remain Markdown rather than being treated as a generic rich-text format.
-- **SeoSimple** — a small SEO plugin for essential page/content metadata and canonical output, integrated with the existing layout and breadcrumb lifecycle. More advanced SEO automation can remain a separate future plugin.
-- **Developer tools** — utilities for inspecting extension manifests, cloning plugin/theme skeletons, and other development-oriented tasks where they provide clear value.
+## Longer-term directions
 
-## Longer-term ideas
+Other areas expected to evolve over time include:
 
-These are exploratory and should not be read as commitments for the next release:
+- broader public API write/structure operations and documentation;
+- additional authentication providers and account-security options;
+- extension distribution and repository workflows;
+- larger application modules built on top of the open-source core when real projects justify them.
 
-- A standalone catalog/e-commerce foundation with products, categories, customers, and orders, followed by more advanced offer and pricing models if the basic architecture proves useful.
-- More authentication providers and account-security options.
-- Broader extension distribution and commercial plugin/theme workflows around the open-source core.
-
-## Recently completed
-
-KamiCore 0.5.0 established several pieces that the next work can build on:
-
-- Core and plugin database migrations with a CLI upgrade workflow.
-- Compound content fields.
-- Dedicated session and client-context handling.
-- Breadcrumb generation through the page/content lifecycle.
-- System language activation management.
-- Late renderer finalization for layout parameters and placeholders.
-
-For release history and completed changes, see [CHANGELOG.md](CHANGELOG.md).
+For completed work and release history, see [CHANGELOG.md](CHANGELOG.md).

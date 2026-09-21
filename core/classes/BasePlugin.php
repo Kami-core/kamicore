@@ -36,6 +36,7 @@ abstract class BasePlugin {
     protected ?array $data = null;
 
 	protected PluginRegistry $plugins;
+	protected int $domainId;
 
 	protected array $layoutParams = [];
 
@@ -57,14 +58,15 @@ abstract class BasePlugin {
 		]
 	];
 
-    public function __construct(PluginRegistry $plugins) {
+    public function __construct(PluginRegistry $plugins, ?int $domainId = null) {
 		$this->plugins = $plugins;
+		$this->domainId = $domainId ?? DOMAIN_ID;
 
 		$class = static::class;
 		$pos = strrpos($class, '\\');
 		$this->name = $pos === false ? $class : substr($class, $pos + 1);
 
-		$full_data = \Cache::get('d_'.DOMAIN_ID.":plugin:{$this->name}");
+		$full_data = \Cache::get('d_'.$this->domainId.":plugin:{$this->name}");
 
 		if(!$full_data) {
 			$main_data = \DB::getRow(
@@ -78,7 +80,7 @@ abstract class BasePlugin {
 
 			$domain_data = \DB::getRow(
 				'select local_settings from plugin_domains where plugin_id=$1 and domain_id=$2',
-				[(int)$main_data['plugin_id'], DOMAIN_ID]
+				[(int)$main_data['plugin_id'], $this->domainId]
 			) ?: null;
 			if(!$domain_data) {
 				trigger_error("Plugin is not allowed on this domain", E_USER_WARNING);
@@ -99,7 +101,7 @@ abstract class BasePlugin {
 				"prefix" => $main_data['plugin_prefix'],
 			];
 
-			\Cache::set('d_'.DOMAIN_ID.":plugin:{$this->name}", $full_data);
+			\Cache::set('d_'.$this->domainId.":plugin:{$this->name}", $full_data);
 		} else {
 			$this->config = $full_data['config'];
 			$this->settings = $full_data['settings'];

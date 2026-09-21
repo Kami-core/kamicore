@@ -84,6 +84,15 @@
         },
         "itemDelete": {
           "title": "Delete content item"
+        },
+        "typeCanonicalViewerUpdate": {
+          "title": "Update canonical content viewer"
+        },
+        "fieldTypeList": {
+          "title": "Manage field types"
+        },
+        "fieldTypeDelete": {
+          "title": "Delete field type"
         }
       }
     },
@@ -178,7 +187,7 @@
     "item_not_found": "Content item not found.",
     "manage_type_managers": "Type managers",
     "content_type_managers": "Content type managers",
-    "content_type_managers_help": "Root-only assignment of the administrative plugin responsible for each content type.",
+    "content_type_managers_help": "Root-only assignment of administrative managers and canonical viewers for content types.",
     "back_to_content_types": "Back to content types",
     "content_type": "Content type",
     "owner_plugin": "Owner plugin",
@@ -221,7 +230,6 @@
     "invalid_parent_type": "Invalid parent content type.",
     "type_has_items": "Delete all content items first.",
     "type_has_children": "This content type has child types.",
-    "declarative_structure_notice": "This structure is declared by a plugin. Manual changes can be restored the next time that plugin is updated.",
     "fields": "Fields",
     "fields_help": "Add existing fields, create new ones and set their order.",
     "field": "Field",
@@ -307,6 +315,20 @@
     "autocomplete_source_invalid": "Autocomplete source fields must be indexed text fields.",
     "multiple_boolean_not_supported": "Boolean fields cannot contain multiple values.",
     "manage_fields": "Fields",
+    "manage_field_types": "Field types",
+    "field_types": "Field types",
+    "field_types_help": "Review field type inheritance and remove unused field types.",
+    "search_field_types": "Search field types…",
+    "field_type_count": "{count} field types",
+    "no_field_types": "No field types found.",
+    "parent_type": "Parent type",
+    "child_types": "Child types",
+    "delete_field_type": "Delete field type",
+    "confirm_delete_field_type": "Delete \"{title}\"? This action cannot be undone.",
+    "delete_field_type_failed": "Failed to delete the field type.",
+    "field_type_deleted": "Field type deleted.",
+    "field_type_used_lock": "This field type is used by fields and cannot be deleted.",
+    "field_type_children_lock": "Delete or reassign child field types first.",
     "field_definitions": "Fields",
     "field_definitions_help": "Review and edit global field definitions, or remove fields that are no longer used.",
     "search_fields": "Search fields…",
@@ -335,7 +357,13 @@
     "compound_components_invalid": "Compound components are invalid.",
     "remove": "Remove",
     "compound_component_name_duplicate": "Compound component names must be unique.",
-    "compound_select_options_invalid": "Options must be a valid JSON array."
+    "compound_select_options_invalid": "Options must be a valid JSON array.",
+    "canonical_viewer": "Canonical viewer",
+    "no_canonical_viewer": "No canonical viewer",
+    "save_canonical_viewer": "Save canonical viewer",
+    "canonical_viewer_saved": "Canonical viewer saved.",
+    "canonical_viewer_save_failed": "Failed to save the canonical viewer.",
+    "canonical_viewer_not_found": "Canonical viewer plugin not found."
   },
   "fields": {
     "internal_title": {
@@ -398,9 +426,6 @@
       "title": "Summary",
       "description": "Short summary displayed in article lists and previews."
     },
-    "article_preview": {
-      "title": "Article preview"
-    },
     "article_categories": {
       "title": "Article categories",
       "description": ""
@@ -420,6 +445,9 @@
     "category_page": {
       "title": "Category page",
       "description": "Page used to display this category and its articles."
+    },
+    "article_image": {
+      "title": "Article image"
     }
   }
 }
