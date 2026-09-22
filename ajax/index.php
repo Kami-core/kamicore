@@ -73,8 +73,18 @@ debug_step("URL parsed");
 Core\Request::init();
 $data = Core\Request::all();
 debug_step("Request processed");
-Core\ClientContext::init();
+
 Core\Session::init();
+
+if (!Core\Csrf::validate(Core\Request::header(Core\Csrf::HEADER))) {
+    Core\Response::json([
+        'status' => 'error',
+        'error' => 'Forbidden',
+    ], 403);
+    exit;
+}
+
+Core\ClientContext::init();
 Core\User::init();
 $userdata = Core\User::getUser();
 

@@ -221,6 +221,16 @@ define('SYSTEM_DICTIONARY', $system_lang);
 
 debug_step("Language ($lang) prepared");
 
+if (
+    !in_array(Core\Request::method(), ['GET', 'HEAD', 'OPTIONS'], true)
+    && !Core\Csrf::validate((string) Core\Request::input(Core\Csrf::FIELD, ''))
+) {
+    Core\Response::addHeader('HTTP/1.1 403 Forbidden', true, 403);
+    Core\Response::addHeader('X-Powered-By: Kami');
+    Core\Response::send(Core\Renderer::finalize(Core\Renderer::renderError(403)));
+    exit;
+}
+
 Core\ClientContext::init();
 debug_step('Client context init');
 
@@ -245,6 +255,11 @@ if (!Core\User::canPage($page_id)) {
 	Core\Response::send(Core\Renderer::finalize(Core\Renderer::renderError(403)));
 	exit;
 }
+
+// A normal browser page always has a CSRF token bound to its current session.
+$csrfToken = Core\Csrf::token();
+Core\Response::addCookie('csrf_token', $csrfToken);
+debug_step('CSRF token prepared');
 
 define('PAGE_ID', $page_id);
 define('PAGE_SLUG', $page_slug);
@@ -274,7 +289,7 @@ $wrappers = [];
 // System assets are registered first; plugin assets follow in request order.
 Core\Assets::css('/assets/css/system.css');
 Core\Assets::js('/assets/js/icons.js');
-Core\Assets::js('/assets/js/common.js');
+Core\Assets::js('/assets/js/common.js', false);
 
 $plugins = new \Core\PluginRegistry();
 $wrappers = [];

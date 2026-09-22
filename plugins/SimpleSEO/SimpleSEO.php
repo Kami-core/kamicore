@@ -22,10 +22,13 @@ final class SimpleSEO extends \Core\BasePlugin
     private ?array $schemaCache = null;
     private ?array $domainSettings = null;
 
+    public function init(array $instanceParams = []): void
+    {
+        $this->renderRequested = true;
+    }
+
     public function renderPlaceholder(array $instanceParams = []): string
     {
-        if ($this->renderRequested) return '';
-        $this->renderRequested = true;
         return '{{seo-data}}';
     }
 

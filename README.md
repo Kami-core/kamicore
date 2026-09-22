@@ -127,6 +127,8 @@ KamiCore keeps its master encryption key outside the public document root and st
 
 API authentication is provided through the optional bundled ApiAccess plugin and uses bearer tokens whose stored values are hashed. Token permissions can only narrow the permissions already granted to the user by the normal ACL model.
 
+Browser state-changing requests are protected by session-bound CSRF tokens. The core browser runtime automatically attaches the current token to all internal `/ajax/` requests and to same-origin non-GET form submissions, including dynamically inserted forms. Custom browser requests outside the standard `/ajax/` transport must attach the CSRF token explicitly when they use unsafe frontend methods. API requests and plugin-owned virtual endpoints keep their own authentication or endpoint-specific trust model instead of inheriting browser CSRF handling.
+
 As with any alpha software, review your deployment environment and configuration before exposing an installation to untrusted traffic.
 
 ## License

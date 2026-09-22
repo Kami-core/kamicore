@@ -25,7 +25,7 @@ final class Assets
     /** @var array<string, true> */
     private static array $css = [];
 
-    /** @var array<string, true> */
+    /** @var array<string, bool> path => defer */
     private static array $js = [];
 
     public static function css(string $path): void
@@ -52,14 +52,14 @@ final class Assets
         return implode("\n", $html);
     }
 
-    public static function js(string $path): void
+    public static function js(string $path, bool $defer = true): void
     {
         $path = trim($path);
-        if ($path === '') {
+        if ($path === '' || array_key_exists($path, self::$js)) {
             return;
         }
 
-        self::$js[$path] = true;
+        self::$js[$path] = $defer;
     }
 
     public static function renderJs(): string
@@ -69,8 +69,9 @@ final class Assets
         }
 
         $html = [];
-        foreach (array_keys(self::$js) as $path) {
-            $html[] = '<script src="' . Html::escape($path) . '" defer></script>';
+        foreach (self::$js as $path => $defer) {
+            $deferAttribute = $defer ? ' defer' : '';
+            $html[] = '<script src="' . Html::escape($path) . '"' . $deferAttribute . '></script>';
         }
 
         return implode("\n", $html);

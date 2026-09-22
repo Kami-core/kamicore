@@ -13,7 +13,7 @@ if(!IN_KAMI) die();
 require_once ROOT_PATH . 'core/autoload.php';
 
 // Use a deterministic timezone until installation-wide settings are loaded.
-define('CORE_VERSION', '0.7.0');
+define('CORE_VERSION', '0.7.1');
 
 date_default_timezone_set('UTC');
 define('TIME_NOW', time());

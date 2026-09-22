@@ -754,6 +754,10 @@ class UserAccount extends \Core\BasePlugin {
         int $status,
         bool $allowResend = false
     ): void {
+        if ($allowResend) {
+            $this->prepareBrowserCsrf();
+        }
+
         $homeUrl = '/';
         $template = $success ? 'verification_success_page' : 'verification_error_page';
         $resendForm = $allowResend
@@ -764,6 +768,7 @@ class UserAccount extends \Core\BasePlugin {
         $content = $this->render($template, [
             'message' => \Core\Html::escape($message),
             'resend_form' => $resendForm,
+            'common_js' => $allowResend ? '<script src="/assets/js/common.js"></script>' : '',
             'home_url' => \Core\Html::escape($homeUrl),
             'language' => \Core\Html::escape((string)(defined('LANG') ? LANG : (DOMAIN_CONFIG['default_language'] ?? 'en'))),
         ]);
@@ -826,6 +831,8 @@ class UserAccount extends \Core\BasePlugin {
             return;
         }
 
+        $this->prepareBrowserCsrf();
+
         $content = $this->render('password_reset_page', [
             'token' => \Core\Html::escape($rawToken),
             'ajax_url' => '/ajax/UserAccount/reset_password',
@@ -837,6 +844,12 @@ class UserAccount extends \Core\BasePlugin {
         \Core\Response::addHeader('Cache-Control: no-store, no-cache, must-revalidate');
         \Core\Response::addHeader('X-Powered-By: Kami');
         \Core\Response::send(\Core\Renderer::finalize($content));
+    }
+
+    private function prepareBrowserCsrf(): void
+    {
+        \Core\Session::init();
+        \Core\Response::addCookie('csrf_token', \Core\Csrf::token());
     }
 
     private function sendPasswordResetError(int $status): void

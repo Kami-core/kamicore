@@ -2,6 +2,25 @@
 
 All notable changes to KamiCore will be documented in this file.
 
+## [0.7.1] - 2026-09-22
+
+### Security
+
+- Added centralized session-bound CSRF protection for all `/ajax/` requests and all unsafe frontend requests. The core browser runtime reads the current token from a secure same-origin cookie and automatically attaches it to AJAX headers and same-origin non-GET form data, including dynamically inserted forms.
+- Kept API requests and plugin-owned virtual endpoints outside the browser CSRF policy so they can continue using their own authentication, signatures, one-time tokens, or other endpoint-specific trust mechanisms.
+- Updated standalone UserAccount browser flows that call protected AJAX actions so they initialize the browser CSRF context and load the core browser runtime.
+
+### Changed
+
+- Extended the asset registry so individual JavaScript assets can opt out of deferred execution.
+- Load `assets/js/common.js` before deferred/plugin scripts so core browser request security is active before inline plugin code can issue initial AJAX requests.
+- Updated bundled package versions for UserAccount and SimpleSEO and synchronized the clean-install plugin metadata.
+
+### Fixed
+
+- Fixed initial page-load AJAX requests being rejected with `403` before the deferred core browser runtime had initialized.
+- Fixed SimpleSEO finalization so SEO generation is enabled during plugin initialization instead of depending on placeholder rendering order.
+
 ## [0.7.0] - 2026-09-21
 
 ### Added

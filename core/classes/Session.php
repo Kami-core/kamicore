@@ -113,6 +113,99 @@ final class Session
         return self::$session['session_id'] ?? self::$sessionId;
     }
 
+    public static function get(string $key, mixed $default = null): mixed
+    {
+        self::init();
+        self::assertDataKey($key);
+
+        return array_key_exists($key, self::$session['data'])
+            ? self::$session['data'][$key]
+            : $default;
+    }
+
+    public static function set(string $key, mixed $value): void
+    {
+        self::init();
+        self::assertDataKey($key);
+
+        if (!self::$sessionId || !is_array(self::$session)) {
+            throw new \RuntimeException('An active session is required.');
+        }
+
+        $json = json_encode(
+            $value,
+            JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES
+        );
+
+        $updated = \DB::query(
+            'UPDATE sessions
+             SET data=jsonb_set(data, ARRAY[$1]::text[], $2::jsonb, true)
+             WHERE domain_id=$3
+               AND session_id=$4',
+            [$key, $json, DOMAIN_ID, self::$sessionId]
+        );
+
+        if ($updated !== 1) {
+            throw new \RuntimeException('Failed to update session data.');
+        }
+
+        self::$session['data'][$key] = $value;
+        \Cache::set(self::cacheKey(DOMAIN_ID, self::$sessionId), self::$session);
+    }
+
+    public static function setIfAbsent(string $key, mixed $value): mixed
+    {
+        self::init();
+        self::assertDataKey($key);
+
+        if (!self::$sessionId || !is_array(self::$session)) {
+            throw new \RuntimeException('An active session is required.');
+        }
+
+        if (array_key_exists($key, self::$session['data'])) {
+            return self::$session['data'][$key];
+        }
+
+        $json = json_encode(
+            $value,
+            JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES
+        );
+
+        $stored = \DB::query(
+            'UPDATE sessions
+             SET data=jsonb_set(data, ARRAY[$1]::text[], $2::jsonb, true)
+             WHERE domain_id=$3
+               AND session_id=$4
+               AND NOT (data ? $1)
+             RETURNING data -> $1',
+            [$key, $json, DOMAIN_ID, self::$sessionId]
+        );
+
+        if ($stored === false) {
+            throw new \RuntimeException('Failed to initialize session data.');
+        }
+
+        if ($stored === []) {
+            $stored = \DB::getOne(
+                'SELECT data -> $1
+                 FROM sessions
+                 WHERE domain_id=$2
+                   AND session_id=$3',
+                [$key, DOMAIN_ID, self::$sessionId]
+            );
+        }
+
+        if (!is_string($stored)) {
+            throw new \RuntimeException('Failed to read initialized session data.');
+        }
+
+        $storedValue = json_decode($stored, true, 512, JSON_THROW_ON_ERROR);
+        self::$session['data'][$key] = $storedValue;
+        \Cache::set(self::cacheKey(DOMAIN_ID, self::$sessionId), self::$session);
+
+        return $storedValue;
+    }
+
     public static function userId(): int
     {
         return (int)(self::$session['user_id'] ?? 0);
@@ -262,6 +355,13 @@ final class Session
         self::$session['data'] = \Core\Utils\JsonTool::decodeArray(
             self::$session['data'] ?? null
         );
+    }
+
+    private static function assertDataKey(string $key): void
+    {
+        if ($key === '') {
+            throw new \InvalidArgumentException('Session data key cannot be empty.');
+        }
     }
 
     private static function generateId(): string

@@ -4,9 +4,14 @@
     let activeModal = null;
     let previousFocus = null;
     const initializers = [];
+    const formSubmissions = new WeakMap();
+
+    installSecureAjaxFetch();
 
     document.addEventListener('click', handleClick);
+    document.addEventListener('submit', rememberFormSubmission, true);
     document.addEventListener('submit', handleSubmit);
+    document.addEventListener('formdata', handleFormData, true);
     document.addEventListener('keydown', handleKeydown);
 
     function handleClick(event) {
@@ -55,12 +60,46 @@
         closeOpenMenus(event.target);
     }
 
+    function rememberFormSubmission(event) {
+        if (!(event.target instanceof HTMLFormElement)) return;
+
+        const submission = {
+            submitter: event.submitter instanceof HTMLElement ? event.submitter : null
+        };
+
+        formSubmissions.set(event.target, submission);
+
+        window.setTimeout(() => {
+            if (formSubmissions.get(event.target) === submission) {
+                formSubmissions.delete(event.target);
+            }
+        }, 0);
+    }
+
+    function handleFormData(event) {
+        if (!(event.target instanceof HTMLFormElement)) return;
+
+        const form = event.target;
+        const submission = formSubmissions.get(form);
+        const submitter = submission?.submitter || null;
+
+        formSubmissions.delete(form);
+
+        if (getFormMethod(form, submitter) === 'GET') return;
+        if (!isInternalFormAction(form, submitter)) return;
+
+        const csrfToken = getCsrfToken();
+        if (csrfToken) {
+            event.formData.set('csrf_token', csrfToken);
+        }
+    }
+
     function handleSubmit(event) {
         const form = event.target.closest('form[data-ajax-form], form.ajax');
         if (!form) return;
 
         event.preventDefault();
-        submitAjaxForm(form);
+        submitAjaxForm(form, event.submitter);
     }
 
     function handleKeydown(event) {
@@ -153,13 +192,15 @@
             });
     }
 
-    async function submitAjaxForm(form) {
-        const action = form.getAttribute('action');
+    async function submitAjaxForm(form, submitter = null) {
+        const action = getFormAction(form, submitter);
         if (!action) return;
         if (form.dataset.confirm && !window.confirm(form.dataset.confirm)) return;
 
-        const method = (form.getAttribute('method') || 'POST').toUpperCase();
-        const formData = new FormData(form);
+        const method = getAjaxFormMethod(form, submitter);
+        const formData = submitter
+            ? new FormData(form, submitter)
+            : new FormData(form);
         const request = createRequest(method, formData);
         const url = method === 'GET'
             ? appendQuery(normalizeAjaxUrl(action), new URLSearchParams(formData))
@@ -376,6 +417,92 @@
         }
     }
 
+    function getFormMethod(form, submitter = null) {
+        if (submitter?.hasAttribute?.('formmethod')) {
+            return submitter.formMethod.toUpperCase();
+        }
+
+        return form.method.toUpperCase();
+    }
+
+    function getAjaxFormMethod(form, submitter = null) {
+        const submitterMethod = submitter?.getAttribute?.('formmethod');
+        const method = submitterMethod || form.getAttribute('method') || 'POST';
+
+        return method.toUpperCase();
+    }
+
+    function getFormAction(form, submitter = null) {
+        return submitter?.getAttribute?.('formaction')
+            || form.getAttribute('action')
+            || window.location.href;
+    }
+
+    function isInternalFormAction(form, submitter = null) {
+        try {
+            const action = submitter?.hasAttribute?.('formaction')
+                ? submitter.formAction
+                : form.action;
+            const url = new URL(action || window.location.href, document.baseURI);
+
+            return url.origin === window.location.origin;
+        } catch {
+            return false;
+        }
+    }
+
+    function getCsrfToken() {
+        const cookieName = '__Host-kami_csrf_token=';
+        const cookie = document.cookie
+            .split(';')
+            .map(part => part.trim())
+            .find(part => part.startsWith(cookieName));
+
+        return cookie ? cookie.slice(cookieName.length) : '';
+    }
+
+    function installSecureAjaxFetch() {
+        const nativeFetch = window.fetch.bind(window);
+
+        window.fetch = function (input, init = {}) {
+            let url;
+
+            try {
+                url = new URL(
+                    input instanceof Request ? input.url : String(input),
+                    document.baseURI
+                );
+            } catch {
+                return nativeFetch(input, init);
+            }
+
+            if (
+                url.origin !== window.location.origin
+                || !url.pathname.startsWith('/ajax/')
+            ) {
+                return nativeFetch(input, init);
+            }
+
+            const headers = new Headers(
+                input instanceof Request ? input.headers : undefined
+            );
+
+            new Headers(init.headers || {}).forEach((value, name) => {
+                headers.set(name, value);
+            });
+
+            const csrfToken = getCsrfToken();
+            if (csrfToken) {
+                headers.set('X-Kami-CSRF', csrfToken);
+            }
+
+            return nativeFetch(input, {
+                ...init,
+                headers
+            });
+        };
+    }
+
     function normalizeAjaxUrl(url) {
         if (/^(?:https?:)?\/\//.test(url) || url.startsWith('/')) {
             return url;
@@ -394,6 +521,7 @@
     window.Kami = Object.assign(window.Kami || {}, {
         closeModal,
         executeScripts,
+        getCsrfToken,
         initDynamic,
         notify,
         openModal,

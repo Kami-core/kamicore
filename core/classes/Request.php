@@ -240,6 +240,22 @@ class Request
         return self::$method;
     }
 
+    public static function header(string $name): ?string
+    {
+        $name = strtoupper(str_replace('-', '_', trim($name)));
+        if ($name === '') {
+            return null;
+        }
+
+        $key = in_array($name, ['CONTENT_TYPE', 'CONTENT_LENGTH'], true)
+            ? $name
+            : 'HTTP_' . $name;
+
+        $value = $_SERVER[$key] ?? null;
+
+        return is_string($value) && $value !== '' ? $value : null;
+    }
+
     public static function contentType(): string
     {
         return self::$contentType;

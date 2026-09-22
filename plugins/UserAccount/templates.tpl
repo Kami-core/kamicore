@@ -316,6 +316,7 @@ Best regards,
     </form>
     <a class="reset-home" href="{{home_url}}">{{phrase.return_to_site}}</a>
   </main>
+  <script src="/assets/js/common.js"></script>
   <script>
   (function(){
     var form=document.querySelector('[data-password-reset-form]');
@@ -506,6 +507,7 @@ Best regards,
     {{resend_form}}
     <a class="verify-button" href="{{home_url}}">{{phrase.return_to_site}}</a>
   </main>
+  {{common_js}}
 </body>
 </html>
 <!-- /kami:template -->
