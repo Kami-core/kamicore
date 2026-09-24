@@ -146,6 +146,8 @@ class PluginManager extends \Core\BasePlugin
         }
 
         $settingsStructure = $this->pluginManifestSettings($pluginName);
+        // Local settings are loaded dynamically and may contain entity-backed fields.
+        $this->forms()->registerEntityFieldAssets();
         $baseValues = \Core\Utils\JsonTool::decodeArray($plugin['settings'] ?? null);
         $settingsTranslation = \Core\Translation::get((string)$plugin['uuid'])['settings'] ?? [];
         $globalFields = '';

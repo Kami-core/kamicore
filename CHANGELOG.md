@@ -13,6 +13,7 @@ All notable changes to KamiCore will be documented in this file.
 ### Fixed
 
 - Fixed PluginManager per-domain settings loading after the administration layout refactor by restoring the settings data attributes to the settings panel.
+- Fixed TomSelect initialization for dynamically loaded per-domain plugin settings.
 - Fixed editable form values containing renderer placeholders such as `{{version}}` so they remain literal while editing instead of being resolved or removed by later renderer passes. This also covers rich-text, textarea, and repeatable fields.
 
 ## [0.7.1] - 2026-09-22
