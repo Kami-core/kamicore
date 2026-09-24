@@ -67,7 +67,7 @@ final class SimpleSEO extends \Core\BasePlugin
             $schema['customized'] = false;
         }
         unset($schema);
-        foreach ($this->rows('SELECT * FROM seo_schemas WHERE domain_id=$1 ORDER BY title', [DOMAIN_ID]) as $row) {
+        foreach ($this->rows("SELECT * FROM seo_schemas WHERE domain_id=$1 AND schema_key<>'home' ORDER BY title", [DOMAIN_ID]) as $row) {
             $key = $row['schema_key'];
             $schemas[$key] = array_replace($row, [
                 'preset' => isset($schemas[$key]),
@@ -156,8 +156,19 @@ final class SimpleSEO extends \Core\BasePlugin
             $html .= '<link rel="alternate" hreflang="' . self::escape($language) . '" href="' . self::escape($alternate) . '">' . "\n";
         }
 
-        $schemaKeys = $options['schemas'] ?? [$item ? 'webpage' : ($page['page_slug'] === '/' ? 'home' : 'webpage')];
-        $graph = [];
+        $schemaKeys = (array)($options['schemas'] ?? ['webpage']);
+        // Legacy Home preset was a WebSite + WebPage bundle. WebSite is now automatic.
+        $schemaKeys = array_values(array_unique(array_map(
+            static fn(string $key): string => $key === 'home' ? 'webpage' : $key,
+            array_filter($schemaKeys, 'is_string')
+        )));
+        $graph = [[
+            '@type'=>'WebSite',
+            '@id'=>$values['site_url'].'#website',
+            'url'=>$values['site_url'],
+            'name'=>$values['site_name'],
+            'inLanguage'=>$lang,
+        ]];
         $warnings = [];
         $errors = [];
         $schemas = $this->schemas();
@@ -209,13 +220,16 @@ final class SimpleSEO extends \Core\BasePlugin
         // Connect page entities to automatic navigation/list nodes where applicable.
         foreach ($graph as &$node) {
             if (in_array($node['@type'] ?? '', ['WebPage','CollectionPage','AboutPage','ContactPage'], true)) {
+                $node['isPartOf'] ??= ['@id'=>$values['site_url'].'#website'];
                 if (count($trail) >= 2) $node['breadcrumb'] ??= ['@id'=>$canonical.'#breadcrumbs'];
                 if ($items && ($node['@type'] ?? '') === 'CollectionPage') $node['mainEntity'] ??= ['@id'=>$canonical.'#list'];
             }
         }
         unset($node);
         if ($graph) {
-            $html .= '<script type="application/ld+json">' . Schema::scriptJson(['@context'=>'https://schema.org','@graph'=>$graph]) . '</script>';
+            $html .= '<script type="application/ld+json">' . PHP_EOL
+                . Schema::scriptJson(['@context'=>'https://schema.org','@graph'=>$graph], true) . PHP_EOL
+                . '</script>';
         }
         return ['title'=>$title,'description'=>$description,'canonical'=>$canonical,'html'=>$html,'graph'=>$graph,'warnings'=>array_values(array_unique($warnings)), 'errors'=>$errors];
     }

@@ -125,10 +125,11 @@ Fields from item['data'] are available by their system names. Reserved names:
 Reserved names take precedence over item fields. An image field with a different
 name, for example article_image, remains directly available.
 
-Built-in presets include Home (WebSite + WebPage), WebPage, CollectionPage,
-Article, BlogPosting, AboutPage, ContactPage, Organization and Person. A page/type
-can select several blocks. They are emitted in one @graph. CollectionPage links
-to an automatically supplied ItemList; page nodes link to BreadcrumbList.
+Built-in presets include WebPage, CollectionPage, Article, BlogPosting,
+AboutPage, ContactPage, Organization and Person. A page/type can select several
+blocks. They are emitted in one @graph together with an automatic WebSite entity.
+Page nodes reference that WebSite through isPartOf. CollectionPage links to an
+automatically supplied ItemList; page nodes link to BreadcrumbList.
 
 Presets can be edited per domain and restored. Custom schemas can be created,
 duplicated and disabled. A custom schema still assigned to a page/type cannot be

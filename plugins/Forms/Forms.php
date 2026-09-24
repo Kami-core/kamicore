@@ -440,7 +440,9 @@ final class Forms extends \Core\BasePlugin
             'id_json' => \Core\Utils\JsonTool::encodeForHtml($id),
             'name' => \Core\Html::escape($name),
             'label' => \Core\Html::escape($label),
-            'value' => \Core\Html::escape(self::inputValue($type, $value)),
+            'value' => \Core\Renderer::protectPlaceholders(
+                \Core\Html::escape(self::inputValue($type, $value))
+            ),
             'placeholder' => \Core\Html::escape($placeholder),
             'field_attributes' => self::renderAttributes($attributes),
             'checkbox_value' => \Core\Html::escape(
@@ -1266,7 +1268,9 @@ final class Forms extends \Core\BasePlugin
         $normalizedValue = self::inputValue($type, $value);
 
         if (self::isTypeOrDescendant($type, 'richtext')) {
-            $htmlValue = \Core\Html::escape(self::scalarValue($value));
+            $htmlValue = \Core\Renderer::protectPlaceholders(
+                \Core\Html::escape(self::scalarValue($value))
+            );
             return '<div class="form-repeatable-row form-repeatable-row-richtext" data-repeatable-row>'
                 . '<div class="form-field-richtext" data-richtext '
                 . 'data-output-id="' . $safeId . '-output" '
@@ -1293,10 +1297,12 @@ final class Forms extends \Core\BasePlugin
         if (self::isTypeOrDescendant($type, 'textarea')) {
             $control = '<textarea id="' . $safeId . '" name="' . $safeName . '" placeholder="'
                 . $safePlaceholder . '"' . self::renderAttributes($attributes) . '>'
-                . \Core\Html::escape($normalizedValue) . '</textarea>';
+                . \Core\Renderer::protectPlaceholders(\Core\Html::escape($normalizedValue))
+                . '</textarea>';
         } else {
             $control = '<input type="' . \Core\Html::escape($inputType) . '" id="' . $safeId
-                . '" name="' . $safeName . '" value="' . \Core\Html::escape($normalizedValue)
+                . '" name="' . $safeName . '" value="'
+                . \Core\Renderer::protectPlaceholders(\Core\Html::escape($normalizedValue))
                 . '" placeholder="' . $safePlaceholder . '"'
                 . self::renderAttributes($attributes) . '>';
         }

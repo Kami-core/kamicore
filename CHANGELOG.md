@@ -2,6 +2,19 @@
 
 All notable changes to KamiCore will be documented in this file.
 
+## [0.7.2] - 2026-09-24
+
+### Changed
+
+- Improved SimpleSEO JSON-LD output formatting so generated structured data is emitted as readable pretty-printed JSON without changing its safe encoding.
+- Simplified SimpleSEO page schemas: `WebSite` is now emitted automatically, page entities reference it through `isPartOf`, and the separate Home preset is no longer needed. Existing `home` schema assignments remain compatible and are treated as `WebPage`.
+- Updated bundled package versions for Forms, PluginManager, and SimpleSEO and synchronized the clean-install plugin metadata.
+
+### Fixed
+
+- Fixed PluginManager per-domain settings loading after the administration layout refactor by restoring the settings data attributes to the settings panel.
+- Fixed editable form values containing renderer placeholders such as `{{version}}` so they remain literal while editing instead of being resolved or removed by later renderer passes. This also covers rich-text, textarea, and repeatable fields.
+
 ## [0.7.1] - 2026-09-22
 
 ### Security

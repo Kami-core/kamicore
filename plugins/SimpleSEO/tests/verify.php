@@ -56,6 +56,9 @@ try {
     $json=Schema::scriptJson($schema);
     check(!str_contains($json,'</script>') && !str_contains($json,'{{other}}'),'Unsafe script or second-pass placeholder');
     check(json_decode($json,true,512,JSON_THROW_ON_ERROR)===$schema,'Safe JSON encoding changed data');
+    $prettyJson=Schema::scriptJson($schema,true);
+    check(str_contains($prettyJson,PHP_EOL . '    "@type"'),'Pretty JSON-LD formatting missing');
+    check(json_decode($prettyJson,true,512,JSON_THROW_ON_ERROR)===$schema,'Pretty JSON-LD changed data');
     check(Schema::text('{{title}} / {{other}}',['title'=>'{{other}}','other'=>'ok'])==='{{other}} / ok','Text was recursively substituted');
     foreach (['{"@type":', '{"@graph":"invalid"}', '{"@graph":[42]}', '{"@type":42}'] as $invalidTemplate) {
         $rejected = false;
@@ -67,12 +70,21 @@ try {
     $override=['metadata'=>[LANG=>['title'=>'Test "title" {{site_name}}','description'=>'Description','image'=>'/media/test.png']],
         'options'=>['schemas'=>['webpage'],'robots'=>'noindex, follow']];
     $result=invoke($seo,'build',$page,[],LANG,$layout,[['title'=>'Home','link'=>'/'],['title'=>'Here']],$override);
-    check(count($result['graph'])===4,'Expected page, breadcrumbs, FAQ and list');
+    check(count($result['graph'])===5,'Expected website, page, breadcrumbs, FAQ and list');
+    check($result['graph'][0]['@type']==='WebSite','Automatic WebSite missing');
+    check($result['graph'][1]['isPartOf']['@id']===$result['graph'][0]['@id'],'WebPage is not linked to WebSite');
+    $legacy=invoke($seo,'build',$page,[],LANG,[],[],[
+        'metadata'=>[LANG=>['title'=>'Legacy home']],
+        'options'=>['schemas'=>['home']]
+    ]);
+    check(count(array_filter($legacy['graph'], static fn(array $node): bool => ($node['@type'] ?? '') === 'WebSite'))===1,
+        'Legacy Home assignment duplicated WebSite');
+    check(($legacy['graph'][1]['@type'] ?? '')==='WebPage','Legacy Home assignment did not map to WebPage');
     check(str_contains($result['html'],'noindex, follow'),'Robots missing');
     check(str_contains($result['html'],'https://'.DOMAIN_CONFIG['name_orig'].'/media/test.png'),'Asset URL includes language prefix');
     check(!str_contains($result['html'],'javascript:'),'Unsafe URL emitted');
-    check(count($result['graph'][3]['itemListElement'])===1,'Invalid list URL retained');
-    check($result['graph'][1]['itemListElement'][1]['position']===2,'Breadcrumb positions incorrect');
+    check(count($result['graph'][4]['itemListElement'])===1,'Invalid list URL retained');
+    check($result['graph'][2]['itemListElement'][1]['position']===2,'Breadcrumb positions incorrect');
     $token=invoke($seo,'csrf');
     check(invoke($seo,'csrf')===$token,'CSRF token changes between requests');
 
@@ -127,7 +139,8 @@ try {
         $item=Core\Content::getItem((int)$itemRow['item_id'],LANG);
         $result=invoke($seo,'build',$page,$item,LANG,['_seo_preview'=>true]);
         check(str_starts_with($result['title'],'Item: '),'Routed item used page metadata');
-        check($result['graph'][0]['@type']==='Article','Routed item used page schema');
+        check($result['graph'][0]['@type']==='WebSite','Routed item is missing automatic WebSite');
+        check($result['graph'][1]['@type']==='Article','Routed item used page schema');
         input(['seo-section'=>'schemas','seo-id'=>'article','seo_csrf'=>$token,'schema_key'=>'article',
             'schema_title'=>'Article','template'=>'{"@type":"Article","headline":"{{title}}"}','enabled'=>'1',
             'preview_language'=>LANG,'preview_page'=>$page['page_id'],'preview_item'=>$itemRow['item_id']]);

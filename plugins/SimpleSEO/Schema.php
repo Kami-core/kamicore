@@ -93,19 +93,19 @@ final class Schema
             Renderer::render(params: $params, compiledTemplate: $template));
     }
 
-    public static function encode(mixed $data): string
+    public static function encode(mixed $data, bool $pretty = false): string
     {
         return str_replace(['<', '>', '&', "'"],
             ['\u003C', '\u003E', '\u0026', '\u0027'],
-            JsonTool::encode($data, false));
+            JsonTool::encode($data, $pretty));
     }
 
     /** Escape braces inside strings without escaping structural JSON braces. */
-    public static function scriptJson(mixed $data): string
+    public static function scriptJson(mixed $data, bool $pretty = false): string
     {
         return preg_replace_callback('/"(?:[^"\\\\]|\\\\.)*"/s',
             static fn(array $m): string => str_replace(['{','}'], ['\u007B','\u007D'], $m[0]),
-            self::encode($data));
+            self::encode($data, $pretty));
     }
 
     private static function clean(array $data): array

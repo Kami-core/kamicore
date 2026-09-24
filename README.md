@@ -14,6 +14,7 @@ KamiCore is a modular content management system built with PHP and PostgreSQL. I
 
 - Structured content types with reusable field definitions, compound fields, hierarchy, and PostgreSQL-backed indexing.
 - Plugin-based page composition and lifecycle extensions.
+- Dynamic renderer placeholders can be embedded in stored content and remain literal while that content is being edited.
 - Themes with overridable templates and layouts.
 - Multi-domain support with per-domain themes, plugin activation/settings, languages, and content presentation.
 - Multilingual content and system dictionaries with fallback support and assisted translation workflows.

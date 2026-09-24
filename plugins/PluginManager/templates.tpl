@@ -38,7 +38,7 @@
 <!-- /kami:template -->
 
 <!-- kami:template plugin-detail -->
-<section class="admin-panel" data-plugin-settings data-plugin="{{system_name}}" data-settings-url="{{settings_load_url}}">
+<section class="admin-panel">
     <header class="admin-page-header">
         <div>
             <a class="admin-back-link" href="{{back_url}}">
@@ -59,7 +59,7 @@
         </form>
     </section>
 
-    <section class="admin-panel admin-pad plm-panel">
+    <section class="admin-panel admin-pad plm-panel" data-plugin-settings data-plugin="{{system_name}}" data-settings-url="{{settings_load_url}}">
         <h3>{{phrase.settings}}</h3>
         <form method="post" action="{{settings_action}}">
             <input type="hidden" name="plugin" value="{{system_name}}">

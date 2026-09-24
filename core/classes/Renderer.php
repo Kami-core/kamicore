@@ -185,6 +185,19 @@ final class Renderer
         return $content;
     }
 
+    /**
+     * Protect literal placeholders from subsequent renderer passes.
+     * HTML decodes the entities back to braces in editable form controls.
+     */
+    public static function protectPlaceholders(string $content): string
+    {
+        return str_replace(
+            ['{{', '}}'],
+            ['&#123;&#123;', '&#125;&#125;'],
+            $content
+        );
+    }
+
     public static function finalize(string $content): string
     {
         return preg_replace('/{{\s*[\w]+\s*}}/', '', $content) ?? $content;

@@ -1,8 +1,4 @@
 {
-  "home": {
-    "title": "Home page",
-    "template": "{\n  \"@context\": \"https://schema.org\",\n  \"@graph\": [\n    {\n      \"@type\": \"WebSite\",\n      \"@id\": \"{{site_url}}#website\",\n      \"url\": \"{{site_url}}\",\n      \"name\": \"{{site_name}}\",\n      \"inLanguage\": \"{{language}}\"\n    },\n    {\n      \"@type\": \"WebPage\",\n      \"@id\": \"{{canonical_url}}#webpage\",\n      \"url\": \"{{canonical_url}}\",\n      \"name\": \"{{title}}\",\n      \"description\": \"{{description}}\",\n      \"isPartOf\": {\n        \"@id\": \"{{site_url}}#website\"\n      }\n    }\n  ]\n}"
-  },
   "webpage": {
     "title": "WebPage",
     "template": "{\n  \"@context\": \"https://schema.org\",\n  \"@type\": \"WebPage\",\n  \"@id\": \"{{canonical_url}}#webpage\",\n  \"url\": \"{{canonical_url}}\",\n  \"name\": \"{{title}}\",\n  \"description\": \"{{description}}\",\n  \"inLanguage\": \"{{language}}\"\n}"

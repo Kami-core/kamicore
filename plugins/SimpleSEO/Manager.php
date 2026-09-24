@@ -209,7 +209,7 @@ trait Manager
     private function metadataEditor(string $section, int $id, array $record): string
     {
         $data = $this->draft ?? $this->record($section, $id);
-        $defaultSchema = $section === 'pages' && $record['page']['page_slug'] === '/' ? 'home' : 'webpage';
+        $defaultSchema = 'webpage';
         $html = '<h2>' . self::escape($record['title']) . '</h2><p class="seo-muted">' . self::escape($this->t('metadata_help')) . '</p>';
         $html .= $this->formStart($section,(string)$id);
         $html .= $this->languageFields($data['metadata'], [
@@ -221,7 +221,12 @@ trait Manager
         ],$data['options']['robots'] ?? 'index, follow');
         $html .= $this->select('og_type',$this->t('og_type'),['website'=>'website','article'=>'article'], $data['options']['og_type'] ?? ($section === 'types' ? 'article' : 'website')) . '</div>';
         $html .= '<fieldset><legend>' . self::escape($this->t('schemas')) . '</legend><div class="seo-schema-choices">';
-        $selected = $data['options']['schemas'] ?? [$defaultSchema];
+        $selected = (array)($data['options']['schemas'] ?? [$defaultSchema]);
+        // Keep existing Home assignments working while presenting the new WebPage model.
+        $selected = array_values(array_unique(array_map(
+            static fn(string $key): string => $key === 'home' ? 'webpage' : $key,
+            array_filter($selected, 'is_string')
+        )));
         foreach ($this->schemas() as $key => $schema) {
             $html .= '<label><input type="checkbox" name="schemas[]" value="' . self::escape($key) . '"' .
                 (in_array($key,$selected,true) ? ' checked' : '') . '> ' . self::escape($schema['title']) .
