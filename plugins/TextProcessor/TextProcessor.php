@@ -13,6 +13,7 @@ declare(strict_types=1);
 namespace Plugins\TextProcessor;
 
 use Core\SecretStore;
+use Plugins\TextProcessor\Providers\ClaudeProvider;
 use Plugins\TextProcessor\Providers\DeepLProvider;
 use Plugins\TextProcessor\Providers\OpenAIProvider;
 use Plugins\TextProcessor\Providers\ProviderInterface;
@@ -38,6 +39,11 @@ final class TextProcessor extends \Core\BasePlugin
             'title' => 'OpenAI',
             'class' => OpenAIProvider::class,
             'secret' => 'openai.api_key',
+        ],
+        'claude' => [
+            'title' => 'Claude',
+            'class' => ClaudeProvider::class,
+            'secret' => 'anthropic.api_key',
         ],
     ];
 
@@ -145,9 +151,7 @@ final class TextProcessor extends \Core\BasePlugin
 
         $provider = new $providerClass([
             'api_key' => $apiKey,
-            'model' => $providerKey === 'openai'
-                ? ($this->settings['openai_model'] ?? null)
-                : null,
+            'model' => $this->settings[$providerKey . '_model'] ?? null,
             'endpoint' => $this->settings[$providerKey . '_endpoint'] ?? null,
         ]);
 

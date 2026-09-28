@@ -519,40 +519,105 @@ class Navigation extends \Core\BasePlugin {
 		return $url;
 	}
 
-	private function visibleMenuItemTemplates(int $parentId, int $groupId, string $menuTemplate): array {
-		$templates = [];
+	private function visibleMenuItemTemplates(int $menuId, int $groupId, string $menuTemplate): array {
+		$itemsByParent = $this->loadMenuItemTree($menuId);
+		return $this->buildVisibleMenuItemTemplates($menuId, $groupId, $menuTemplate, $itemsByParent);
+	}
 
-		$childIds = \DB::getArr(
-			"SELECT item_id
-			 FROM content_items
-			 WHERE parent_id=$1 AND ct_id=$2
-			 ORDER BY COALESCE(NULLIF(common_data->>'displayorder', '')::int, 0), item_id",
-			[$parentId, $this->navItemTypeId()]
+	private function loadMenuItemTree(int $menuId): array {
+		$itemTypeId = $this->navItemTypeId();
+		$result = \DB::query(
+			"WITH RECURSIVE menu_tree AS (
+				SELECT item_id, item_uuid, parent_id, common_data
+				FROM content_items
+				WHERE parent_id=$1 AND ct_id=$2
+				UNION ALL
+				SELECT child.item_id, child.item_uuid, child.parent_id, child.common_data
+				FROM content_items child
+				JOIN menu_tree tree ON child.parent_id=tree.item_id
+				WHERE child.ct_id=$2
+			)
+			SELECT item_id, item_uuid, parent_id, common_data
+			FROM menu_tree
+			ORDER BY COALESCE(NULLIF(common_data->>'displayorder', '')::int, 0), item_id",
+			[$menuId, $itemTypeId]
 		);
 
-		foreach ($childIds as $childId) {
-			$item = \Core\Content::getItem((int)$childId);
+		$rows = [];
+		$uuids = [];
+		while ($row = \DB::fetchRow($result)) {
+			$row['item_id'] = (int)$row['item_id'];
+			$row['parent_id'] = (int)$row['parent_id'];
+			$row['common_data'] = \Core\Utils\JsonTool::decodeArray($row['common_data'] ?? null);
+			$rows[] = $row;
+			$uuids[] = (string)$row['item_uuid'];
+		}
 
-			if (!$item || ($item['content_type_name'] ?? '') !== 'navmenu_item') {
-				continue;
+		if ($rows === []) {
+			return [];
+		}
+
+		$translations = \Core\Translation::getMany($uuids, defined('LANG') ? LANG : null);
+		$structure = \Core\Content::getStructure('navmenu_item');
+		$translatableFields = [];
+		foreach ($structure as $fieldName => $field) {
+			if (!empty($field['settings']['translatable'])) {
+				$translatableFields[(string)$fieldName] = true;
 			}
+		}
 
-			$data = is_array($item['data'] ?? null) ? $item['data'] : [];
+		$itemsByParent = [];
+		foreach ($rows as $row) {
+			$data = $row['common_data'];
+			$translated = $translations[(string)$row['item_uuid']] ?? [];
+			foreach ($translatableFields as $fieldName => $_) {
+				if (array_key_exists($fieldName, $translated)) {
+					$data[$fieldName] = $translated[$fieldName];
+				}
+			}
+			$itemsByParent[$row['parent_id']][] = [
+				'item_id' => $row['item_id'],
+				'data' => $data,
+			];
+		}
+
+		return $itemsByParent;
+	}
+
+	private function buildVisibleMenuItemTemplates(
+		int $parentId,
+		int $groupId,
+		string $menuTemplate,
+		array $itemsByParent
+	): array {
+		$templates = [];
+
+		foreach ($itemsByParent[$parentId] ?? [] as $item) {
+			$data = $item['data'];
 			if (!$this->isVisibleToGroup($data, $groupId)) {
 				continue;
 			}
 
-			if(!empty($data['item_icon'])) {
+			if (!empty($data['item_icon'])) {
 				$data['rendered_icon'] = $this->render('item_icon', ['icon' => $data['item_icon']]);
 			}
 
-			$data['menu_children'] = $this->visibleMenuItemTemplates((int)$childId, $groupId, $menuTemplate);
+			$data['menu_children'] = $this->buildVisibleMenuItemTemplates(
+				(int)$item['item_id'],
+				$groupId,
+				$menuTemplate,
+				$itemsByParent
+			);
 
-			if(is_array($data['menu_children']) && count($data['menu_children'])) {
-				$data['submenu'] = $this->render($menuTemplate.'_children', ['menu_children' => $data['menu_children']]);
+			if ($data['menu_children'] !== []) {
+				$data['submenu'] = $this->render(
+					$menuTemplate . '_children',
+					['menu_children' => $data['menu_children']]
+				);
 			}
+
 			$templates[] = [
-				'template' => $menuTemplate.'_item',
+				'template' => $menuTemplate . '_item',
 				'params' => $data,
 			];
 		}

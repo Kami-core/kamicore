@@ -19,38 +19,65 @@ final class Csrf
     public const FIELD = 'csrf_token';
     public const HEADER = 'X-Kami-CSRF';
 
-    private const SESSION_KEY = 'csrf_token';
+    private const SIGNATURE_PURPOSE = 'csrf:v1';
+    private const TOKEN_PATTERN = '/^([a-f0-9]{64})\.([a-f0-9]{64})$/D';
 
+    private static ?string $token = null;
+
+    /**
+     * Return a valid stateless CSRF token and ensure the matching cookie exists.
+     */
     public static function token(): string
     {
-        $token = Session::get(self::SESSION_KEY);
-
-        if (is_string($token) && $token !== '') {
-            return $token;
+        if (self::$token !== null) {
+            return self::$token;
         }
 
-        $token = Session::setIfAbsent(
-            self::SESSION_KEY,
-            Crypto::randomHex()
+        $cookieToken = (string)(Request::cookie()[self::FIELD] ?? '');
+        if (self::verifyToken($cookieToken)) {
+            return self::$token = $cookieToken;
+        }
+
+        $nonce = Crypto::randomHex();
+        $signature = Crypto::sign(
+            self::SIGNATURE_PURPOSE,
+            DOMAIN_ID . "\0" . $nonce
         );
 
-        if (!is_string($token) || $token === '') {
-            throw new \RuntimeException('Failed to initialize CSRF token.');
-        }
+        self::$token = $nonce . '.' . $signature;
+        Response::addCookie(self::FIELD, self::$token);
 
-        return $token;
+        return self::$token;
     }
 
+    /**
+     * Validate the submitted token against the first-party cookie and its signature.
+     */
     public static function validate(?string $token): bool
     {
-        if (!is_string($token) || $token === '') {
+        $token = is_string($token) ? trim($token) : '';
+        if ($token === '') {
             return false;
         }
 
-        $storedToken = Session::get(self::SESSION_KEY);
+        $cookieToken = (string)(Request::cookie()[self::FIELD] ?? '');
+        if ($cookieToken === '' || !hash_equals($cookieToken, $token)) {
+            return false;
+        }
 
-        return is_string($storedToken)
-            && $storedToken !== ''
-            && hash_equals($storedToken, $token);
+        return self::verifyToken($token);
+    }
+
+    private static function verifyToken(string $token): bool
+    {
+        if (!preg_match(self::TOKEN_PATTERN, $token, $matches)) {
+            return false;
+        }
+
+        return Crypto::verifySignature(
+            self::SIGNATURE_PURPOSE,
+            DOMAIN_ID . "\0" . $matches[1],
+            $matches[2]
+        );
     }
 }

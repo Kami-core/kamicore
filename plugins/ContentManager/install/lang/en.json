@@ -58,6 +58,12 @@
         "typeDelete": {
           "title": "Delete content type"
         },
+        "typeExport": {
+          "title": "Export content types"
+        },
+        "typeImport": {
+          "title": "Import content types"
+        },
         "typeManagerList": {
           "title": "Manage content type managers"
         },
@@ -173,6 +179,18 @@
     "item_count": "{count} items",
     "create_content_type": "Create content type",
     "no_content_types": "No content types found.",
+    "export_content_types": "Export",
+    "import_content_types": "Import",
+    "select_all_content_types": "Select all visible content types",
+    "select_content_type": "Select {title}",
+    "content_type_export_failed": "Failed to export content types.",
+    "content_type_import_failed": "Failed to import content types.",
+    "content_type_import_completed": "Content type import completed.",
+    "content_type_import_summary": "Imported {types} content types and {fields} new fields; reused {reused} existing fields.",
+    "content_type_import_file_required": "Select a JSON file to import.",
+    "content_type_import_file_empty": "The import file is empty.",
+    "content_type_import_invalid_upload": "Invalid uploaded file.",
+    "content_type_import_read_failed": "Failed to read the import file.",
     "open_items": "Open items",
     "edit_structure": "Edit structure",
     "edit_item": "Edit item",

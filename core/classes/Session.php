@@ -21,102 +21,100 @@ final class Session
     private static ?array $session = null;
     private static bool $initialized = false;
 
-    public static function init(): void
+    /**
+     * Load an existing session from the request cookie.
+     *
+     * Missing or invalid sessions remain anonymous and never create server-side state.
+     */
+    public static function load(): void
     {
         if (self::$initialized) {
             return;
         }
 
+        self::$initialized = true;
         self::$sessionId = Request::cookie()['session_id'] ?? null;
         self::$uaHash = hash('sha256', self::normalizeUserAgent());
 
         if (!self::$sessionId) {
-            self::create();
+            return;
+        }
+
+        self::$session = \Cache::get(self::cacheKey(DOMAIN_ID, self::$sessionId));
+
+        if (is_array(self::$session)) {
+            $updatedAt = strtotime((string)(self::$session['updated_at'] ?? '')) ?: 0;
+            $invalid = (string)(self::$session['ua_hash'] ?? '') !== self::$uaHash
+                || (
+                    $updatedAt < TIME_NOW - (int)GLOBAL_SETTINGS['session_timeout']
+                    && empty(self::$session['is_persistent'])
+                );
+
+            if ($invalid) {
+                self::discardInvalidSession();
+                return;
+            }
         } else {
-            self::$session = \Cache::get(self::cacheKey(DOMAIN_ID, self::$sessionId));
+            self::$session = \DB::getRow(
+                "SELECT domain_id, session_id, user_id, ua_hash, is_persistent, created_at, updated_at, data
+                 FROM sessions
+                 WHERE domain_id=$1
+                   AND session_id=$2
+                   AND ua_hash=$3
+                   AND (is_persistent OR updated_at>=NOW()-($4::integer * INTERVAL '1 second'))
+                 LIMIT 1",
+                [DOMAIN_ID, self::$sessionId, self::$uaHash, (int)GLOBAL_SETTINGS['session_timeout']]
+            ) ?: null;
 
-            if (
-                is_array(self::$session)
-                && (
-                    (string)(self::$session['ua_hash'] ?? '') !== self::$uaHash
-                    || (
-                        strtotime((string)(self::$session['updated_at'] ?? '')) < TIME_NOW - (int)GLOBAL_SETTINGS['session_timeout']
-                        && empty(self::$session['is_persistent'])
-                    )
-                )
-            ) {
-                self::create();
-            } elseif (!is_array(self::$session)) {
-                self::$session = \DB::getRow(
-                    "SELECT domain_id, session_id, user_id, ua_hash, is_persistent, created_at, updated_at, data
-                     FROM sessions
-                     WHERE domain_id=$1
-                       AND session_id=$2
-                       AND ua_hash=$3
-                       AND (is_persistent OR updated_at>=NOW()-($4::integer * INTERVAL '1 second'))
-                     LIMIT 1",
-                    [DOMAIN_ID, self::$sessionId, self::$uaHash, (int)GLOBAL_SETTINGS['session_timeout']]
-                ) ?: null;
-
-                if (!self::$session) {
-                    self::create();
-                }
+            if (!self::$session) {
+                self::discardInvalidSession();
+                return;
             }
         }
 
         self::normalize();
-        self::$initialized = true;
         self::touch();
+    }
+
+    /**
+     * Backward-compatible alias. Session initialization is now lazy and never creates state.
+     */
+    public static function init(): void
+    {
+        self::load();
+    }
+
+    /**
+     * Return the current session ID, creating an anonymous session only when required.
+     */
+    public static function ensure(): string
+    {
+        self::load();
+
+        return self::$sessionId && is_array(self::$session)
+            ? self::$sessionId
+            : self::create();
     }
 
     public static function create(): string
     {
-        self::$uaHash ??= hash('sha256', self::normalizeUserAgent());
-
-        $sessionId = self::$sessionId = self::generateId();
-        $createdAt = date('Y-m-d H:i:s.uP');
-        $sessionData = [
-            'domain_id' => DOMAIN_ID,
-            'session_id' => $sessionId,
-            'user_id' => 0,
-            'ua_hash' => self::$uaHash,
-            'is_persistent' => false,
-            'created_at' => $createdAt,
-            'updated_at' => $createdAt,
-            'data' => [],
-        ];
-
-        $created = \DB::insert('sessions', [
-            'domain_id' => $sessionData['domain_id'],
-            'session_id' => $sessionData['session_id'],
-            'user_id' => $sessionData['user_id'],
-            'ua_hash' => $sessionData['ua_hash'],
-            'is_persistent' => $sessionData['is_persistent'],
-            'created_at' => $sessionData['created_at'],
-            'updated_at' => $sessionData['updated_at'],
-        ]);
-        if ($created !== 1) {
-            throw new \RuntimeException('Failed to create session.');
-        }
-
-        Response::addCookie('session_id', $sessionId, 0, true);
-
-        self::$session = $sessionData;
-        self::$initialized = true;
-        \Cache::set(self::cacheKey(DOMAIN_ID, $sessionId), self::$session);
-
-        return $sessionId;
+        return self::createSession(0, false);
     }
 
     public static function id(): ?string
     {
+        self::load();
         return self::$session['session_id'] ?? self::$sessionId;
     }
 
     public static function get(string $key, mixed $default = null): mixed
     {
-        self::init();
+        self::load();
         self::assertDataKey($key);
+
+        if (!is_array(self::$session)) {
+            return $default;
+        }
 
         return array_key_exists($key, self::$session['data'])
             ? self::$session['data'][$key]
@@ -125,12 +123,8 @@ final class Session
 
     public static function set(string $key, mixed $value): void
     {
-        self::init();
+        self::ensure();
         self::assertDataKey($key);
-
-        if (!self::$sessionId || !is_array(self::$session)) {
-            throw new \RuntimeException('An active session is required.');
-        }
 
         $json = json_encode(
             $value,
@@ -155,12 +149,8 @@ final class Session
 
     public static function setIfAbsent(string $key, mixed $value): mixed
     {
-        self::init();
+        self::ensure();
         self::assertDataKey($key);
-
-        if (!self::$sessionId || !is_array(self::$session)) {
-            throw new \RuntimeException('An active session is required.');
-        }
 
         if (array_key_exists($key, self::$session['data'])) {
             return self::$session['data'][$key];
@@ -208,6 +198,7 @@ final class Session
 
     public static function userId(): int
     {
+        self::load();
         return (int)(self::$session['user_id'] ?? 0);
     }
 
@@ -217,12 +208,19 @@ final class Session
             throw new \InvalidArgumentException('A positive user ID is required.');
         }
 
+        self::load();
+
+        if (!self::$sessionId || !is_array(self::$session)) {
+            self::createSession($userId, $remember);
+            return;
+        }
+
         self::rotate($userId, $remember);
     }
 
     public static function logout(): void
     {
-        self::init();
+        self::load();
         if (self::userId() === 0) {
             return;
         }
@@ -232,7 +230,7 @@ final class Session
 
     public static function rotate(int $userId, bool $persistent = false): string
     {
-        self::init();
+        self::load();
 
         if ($userId < 0 || !self::$sessionId || !is_array(self::$session)) {
             throw new \InvalidArgumentException('An active session and non-negative user ID are required.');
@@ -324,6 +322,58 @@ final class Session
         }
 
         return $sessions;
+    }
+
+
+    private static function createSession(int $userId, bool $persistent): string
+    {
+        if ($userId < 0) {
+            throw new \InvalidArgumentException('A non-negative user ID is required.');
+        }
+
+        self::$uaHash ??= hash('sha256', self::normalizeUserAgent());
+
+        $sessionId = self::generateId();
+        $createdAt = date('Y-m-d H:i:s.uP');
+        $sessionData = [
+            'domain_id' => DOMAIN_ID,
+            'session_id' => $sessionId,
+            'user_id' => $userId,
+            'ua_hash' => self::$uaHash,
+            'is_persistent' => $persistent,
+            'created_at' => $createdAt,
+            'updated_at' => $createdAt,
+            'data' => [],
+        ];
+
+        $created = \DB::insert('sessions', [
+            'domain_id' => $sessionData['domain_id'],
+            'session_id' => $sessionData['session_id'],
+            'user_id' => $sessionData['user_id'],
+            'ua_hash' => $sessionData['ua_hash'],
+            'is_persistent' => $sessionData['is_persistent'],
+            'created_at' => $sessionData['created_at'],
+            'updated_at' => $sessionData['updated_at'],
+        ]);
+        if ($created !== 1) {
+            throw new \RuntimeException('Failed to create session.');
+        }
+
+        self::$sessionId = $sessionId;
+        self::$session = $sessionData;
+        self::$initialized = true;
+
+        \Cache::set(self::cacheKey(DOMAIN_ID, $sessionId), self::$session);
+        Response::addCookie('session_id', $sessionId, 0, true);
+
+        return $sessionId;
+    }
+
+    private static function discardInvalidSession(): void
+    {
+        self::$sessionId = null;
+        self::$session = null;
+        Response::addCookie('session_id', '', TIME_NOW - 3600, true);
     }
 
     private static function touch(): void

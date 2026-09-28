@@ -176,7 +176,7 @@
                 main.addEventListener('click', () => this.load(entry.path));
             } else if (entry.previewable && entry.url) {
                 const image = document.createElement('img');
-                image.src = entry.url;
+                image.src = entry.preview_url || entry.url;
                 image.alt = '';
                 image.loading = 'lazy';
                 preview.append(image);

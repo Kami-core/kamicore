@@ -1,0 +1,31 @@
+{
+  "schema_version": "1.0",
+  "type": "plugin",
+  "data": {
+    "info": {
+      "uuid": "2db69f7a-9e97-4c72-9b97-cd6f7827f7d5",
+      "name": "BotDetector",
+      "title": "Bot detector",
+      "description": "Detects known crawlers and automated HTTP clients by User-Agent for analytics and behavior optimization. Detection is heuristic and must not be used as a security or access-control mechanism.",
+      "origin_type": "local",
+      "origin_ref": null,
+      "author": "Kami team"
+    },
+    "prefix": "botdetector",
+    "version": "0.1.0",
+    "category": "utilities",
+    "dependencies": [],
+    "config": {
+      "default_language": "en"
+    },
+    "settings": {
+      "signatures": {
+        "title": "Automated client signatures",
+        "description": "One case-insensitive User-Agent substring per line. Empty lines and lines starting with # are ignored. This list identifies likely automated clients; it must not be used for security decisions.",
+        "type": "textarea",
+        "global": 1,
+        "default": "# Search engines\ngooglebot\ngoogle-agent\nbingbot\nduckduckbot\napplebot\nbaiduspider\nyandexbot\nbytespider\namazonbot\npetalbot\nccbot\nsemrushbot\nahrefsbot\nmj12bot\ndotbot\n\n# AI crawlers and user-triggered fetchers\noai-searchbot\noai-adsbot\ngptbot\nchatgpt-user\nclaudebot\nclaude-user\nclaude-searchbot\nperplexitybot\nperplexity-user\nmeta-externalagent\nmeta-externalfetcher\n\n# Social and preview crawlers\nfacebookexternalhit\nfacebot\ntwitterbot\nlinkedinbot\nslackbot\ndiscordbot\ntelegrambot\npinterestbot\n\n# Command-line and HTTP clients\ncurl/\nwget/\nhttpie/\npostmanruntime/\npython-requests/\npython-httpx/\naiohttp/\ngo-http-client/\nguzzlehttp/\nlibwww-perl/\napache-httpclient/\nokhttp/\naxios/\nnode-fetch/\nundici\nheadlesschrome/\nuptimerobot/"
+      }
+    }
+  }
+}

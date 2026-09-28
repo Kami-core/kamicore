@@ -1,0 +1,125 @@
+{
+  "schema_version": "1.0",
+  "type": "plugin",
+  "data": {
+    "info": {
+      "uuid": "7ed20a6e-b04e-4cb8-bef3-79e702f23cc0",
+      "name": "ContactForm",
+      "title": "Contact form",
+      "description": "Public forms backed by content types, persistent submissions, and pluggable notification channels.",
+      "origin_type": "local",
+      "origin_ref": null,
+      "author": "Kami team"
+    },
+    "prefix": "contact",
+    "version": "0.1.0",
+    "category": "content",
+    "dependencies": [
+      "Forms",
+      "ContentManager"
+    ],
+    "config": {
+      "handlers": {
+        "view": {
+          "title": "Contact form",
+          "actions": {
+            "show": {
+              "title": "Show form"
+            },
+            "submit": {
+              "title": "Submit form"
+            }
+          },
+          "default_action": "show",
+          "instance_params": {
+            "title": {
+              "title": "Form title",
+              "description": "Optional heading displayed above this form.",
+              "type": "string",
+              "translatable": true,
+              "default": ""
+            },
+            "content_type": {
+              "title": "Content type",
+              "description": "Content type whose fields define this form.",
+              "type": "content_type_id",
+              "default": null
+            },
+            "recipient_override": {
+              "title": "Recipient override",
+              "description": "Optional comma-separated email recipients for this form instance.",
+              "type": "string",
+              "default": ""
+            },
+            "subject_override": {
+              "title": "Subject override",
+              "description": "Optional email subject for this form instance.",
+              "type": "string",
+              "default": ""
+            }
+          }
+        }
+      },
+      "default_handler": "view",
+      "default_language": "en"
+    },
+    "settings": {
+      "rate_limit_enabled": {
+        "title": "Enable rate limit",
+        "type": "checkbox",
+        "default": true,
+        "global": 1
+      },
+      "rate_limit_count": {
+        "title": "Rate limit",
+        "description": "Maximum accepted submissions from one IP or client context during the configured window.",
+        "type": "integer",
+        "default": 5,
+        "global": 1
+      },
+      "rate_limit_window": {
+        "title": "Rate limit window",
+        "description": "Rate limit window in seconds.",
+        "type": "integer",
+        "default": 300,
+        "global": 1
+      },
+      "notification_channels": {
+        "title": "Notification channels",
+        "description": "Channels used to deliver new submissions.",
+        "type": "select",
+        "multiple": true,
+        "options": [
+          {
+            "title": "Email",
+            "value": "mail"
+          }
+        ],
+        "default": [
+          "mail"
+        ],
+        "global": 0
+      },
+      "recipient": {
+        "title": "Email recipients",
+        "type": "string",
+        "default": "",
+        "global": 0,
+        "description": "One or more email addresses separated by commas."
+      },
+      "subject": {
+        "title": "Email subject",
+        "type": "string",
+        "default": "New form submission",
+        "global": 0
+      },
+      "save_item": {
+        "title": "Save content item",
+        "description": "Store the submitted form as a content item in addition to the immutable submission snapshot.",
+        "type": "checkbox",
+        "default": true,
+        "global": 0
+      }
+    }
+  }
+}

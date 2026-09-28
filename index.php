@@ -160,8 +160,8 @@ $data = \Core\Request::all();
 
 debug_step("Request processed");
 
-Core\Session::init();
-debug_step('Session init');
+Core\Session::load();
+debug_step('Session load');
 
 // Detecting language: 1 - from cookies (if available), 2 - search available from browser, 3 - domain default.
 
@@ -256,9 +256,8 @@ if (!Core\User::canPage($page_id)) {
 	exit;
 }
 
-// A normal browser page always has a CSRF token bound to its current session.
-$csrfToken = Core\Csrf::token();
-Core\Response::addCookie('csrf_token', $csrfToken);
+// Normal browser pages use a signed stateless CSRF token independent of server-side sessions.
+Core\Csrf::token();
 debug_step('CSRF token prepared');
 
 define('PAGE_ID', $page_id);

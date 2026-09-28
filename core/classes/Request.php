@@ -38,7 +38,7 @@ class Request
      * Initialize normalized API input without mixing query and body sources.
      * The API front controller is responsible for decoding and validating the payload.
      */
-    public static function initApi(array $data, ?string $raw = null): void
+    public static function initApi(array $data, ?string $raw = null, array $files = []): void
     {
         if (self::$initialized) {
             throw new \LogicException('Request is already initialized.');
@@ -52,9 +52,9 @@ class Request
             'method' => self::$method,
             'contentType' => self::$contentType,
             'get' => self::$method === 'GET' ? $data : [],
-            'post' => [],
+            'post' => self::$method === 'GET' ? [] : $data,
             'cookie' => [],
-            'files' => [],
+            'files' => $files,
             'merged' => $data,
             'raw' => $raw,
         ];

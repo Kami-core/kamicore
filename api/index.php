@@ -35,6 +35,7 @@ $requestFormat = static function (string $contentType): ?string {
 
     return match ($mediaType) {
         'application/json' => 'json',
+        'multipart/form-data' => 'multipart',
         default => null,
     };
 };
@@ -171,15 +172,17 @@ if ($responseType === null) {
     $apiError(406, 'Not Acceptable');
 }
 
-$rawInput = file_get_contents('php://input');
-if ($rawInput === false) {
-    $apiError(400, 'Bad Request');
-}
-
-$rawInput = trim($rawInput);
+$rawInput = null;
 $data = [];
+$files = [];
 
 if ($requestMethod === 'GET') {
+    $input = file_get_contents('php://input');
+    if ($input === false) {
+        $apiError(400, 'Bad Request');
+    }
+
+    $rawInput = trim($input);
     if ($rawInput !== '') {
         $apiError(400, 'GET requests must not contain a body');
     }
@@ -192,24 +195,36 @@ if ($requestMethod === 'GET') {
         $apiError(400, 'Query parameters are not allowed for this method');
     }
 
-    if ($rawInput !== '') {
-        $requestType = $requestFormat((string)($_SERVER['CONTENT_TYPE'] ?? ''));
-        if ($requestType === null) {
-            $apiError(415, 'Unsupported Media Type');
+    $contentTypeHeader = (string)($_SERVER['CONTENT_TYPE'] ?? '');
+    $requestType = $requestFormat($contentTypeHeader);
+
+    if ($requestType === 'multipart') {
+        $data = is_array($_POST ?? null) ? $_POST : [];
+        $files = is_array($_FILES ?? null) ? $_FILES : [];
+    } else {
+        $input = file_get_contents('php://input');
+        if ($input === false) {
+            $apiError(400, 'Bad Request');
         }
 
-        try {
-            $data = match ($requestType) {
-                'json' => Core\Utils\JsonTool::decode($rawInput),
-                default => throw new RuntimeException('Unsupported API request format.'),
-            };
-        } catch (RuntimeException) {
-            $apiError(400, 'Invalid request body');
+        $rawInput = trim($input);
+        if ($rawInput !== '') {
+            if ($requestType !== 'json') {
+                $apiError(415, 'Unsupported Media Type');
+            }
+
+            try {
+                $data = Core\Utils\JsonTool::decode($rawInput);
+            } catch (RuntimeException) {
+                $apiError(400, 'Invalid request body');
+            }
+        } elseif (trim($contentTypeHeader) !== '' && $requestType === null) {
+            $apiError(415, 'Unsupported Media Type');
         }
     }
 }
 
-Core\Request::initApi($data, $rawInput !== '' ? $rawInput : null);
+Core\Request::initApi($data, $rawInput !== '' ? $rawInput : null, $files);
 debug_step('API request processed');
 
 try {
@@ -218,14 +233,21 @@ try {
     $status = match ($e->getCode()) {
         Core\PluginActionException::BAD_REQUEST => 400,
         Core\PluginActionException::FORBIDDEN => 403,
+        Core\PluginActionException::CONFLICT => 409,
+        Core\PluginActionException::PAYLOAD_TOO_LARGE => 413,
         default => 404,
     };
     $error = match ($status) {
         400 => $e->getMessage() !== '' ? $e->getMessage() : 'Bad Request',
         403 => 'Forbidden',
+        409 => $e->getMessage() !== '' ? $e->getMessage() : 'Conflict',
+        413 => $e->getMessage() !== '' ? $e->getMessage() : 'Payload Too Large',
         default => 'Not Found',
     };
     $apiError($status, $error);
+} catch (Throwable $e) {
+    error_log("[error][API] {$className}.{$action}: {$e->getMessage()}");
+    $apiError(500, 'Internal Server Error');
 }
 
 if (!is_array($result)) {

@@ -17,4 +17,6 @@ final class PluginActionException extends \RuntimeException
     public const BAD_REQUEST = 400;
     public const NOT_FOUND = 404;
     public const FORBIDDEN = 403;
+    public const CONFLICT = 409;
+    public const PAYLOAD_TOO_LARGE = 413;
 }

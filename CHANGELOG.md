@@ -2,6 +2,32 @@
 
 All notable changes to KamiCore will be documented in this file.
 
+## [0.8.0] - 2026-09-28
+
+### Added
+
+- Added ContentManager write APIs for creating, updating, and deleting content items with ACL enforcement, multilingual and compound-field validation, parent references, and explicit conflict handling.
+- Added portable ContentManager import/export for content-type structures, including required global fields, compound definitions, and translations, with compatibility checks and transactional imports.
+- Added configurable indexing for global fields and compound components. Unindexed values are no longer projected into typed index tables, while unique fields and autocomplete sources continue to require indexing.
+- Added Media image variants with configurable thumbnail and midsize dimensions, generated during upload with Imagick and GD support and stored in the managed _variants/ tree.
+- Added multipart Media uploads through the API, returning the public file URL and an available preview URL while reusing the normal Media validation and collision-handling pipeline.
+- Added translatable plugin instance parameters, including per-language editing in PageManager and runtime language fallback in BasePlugin.
+- Added Claude as a TextProcessor provider and exposed current language configuration through the TranslationManager API.
+- Added the bundled optional ContactForm plugin with content-type-backed forms, persistent submissions, honeypot and rate limiting, configurable mail notifications, and translatable per-instance titles.
+- Added the bundled optional BotDetector plugin for heuristic identification of known crawlers and automated HTTP clients by configurable User-Agent signatures.
+- Added lightweight core Litebox JavaScript and CSS assets for image previews and galleries without loading them globally by default.
+
+### Changed
+
+- Changed session initialization to be lazy: anonymous requests no longer create server-side sessions unless state is actually required.
+- Extended the API request pipeline with multipart/form-data support, file payloads, explicit 409 Conflict and 413 Payload Too Large responses, and safe handling of unexpected server errors.
+- Updated affected bundled plugin versions and synchronized clean-install plugin metadata with the 0.8 package manifests.
+
+### Security
+
+- Replaced session-bound CSRF state with signed stateless CSRF tokens scoped to the current domain. Browser CSRF protection no longer requires creating a server-side session for otherwise stateless visitors.
+- Added reusable application-data signing and signature verification through the installation master key.
+
 ## [0.7.2] - 2026-09-24
 
 ### Changed

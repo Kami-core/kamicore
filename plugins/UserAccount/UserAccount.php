@@ -848,8 +848,7 @@ class UserAccount extends \Core\BasePlugin {
 
     private function prepareBrowserCsrf(): void
     {
-        \Core\Session::init();
-        \Core\Response::addCookie('csrf_token', \Core\Csrf::token());
+        \Core\Csrf::token();
     }
 
     private function sendPasswordResetError(int $status): void

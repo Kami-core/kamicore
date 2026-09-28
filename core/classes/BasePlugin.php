@@ -364,6 +364,35 @@ abstract class BasePlugin {
     {
     }
 
+	private function resolveLocalizedInstanceParams(array $params, array $handlerConfig): array {
+		$definitions = is_array($handlerConfig['instance_params'] ?? null)
+			? $handlerConfig['instance_params']
+			: [];
+		foreach ($definitions as $name => $definition) {
+			if (!is_array($definition) || empty($definition['translatable'])) continue;
+			if (!array_key_exists($name, $params) || !is_array($params[$name])) continue;
+			$params[$name] = $this->localizedValue($params[$name]);
+		}
+		return $params;
+	}
+
+	private function localizedValue(array $value): mixed {
+		$lang = strtolower(trim((string)(defined('LANG') ? LANG : '')));
+		if ($lang !== '' && array_key_exists($lang, $value)) return $value[$lang];
+
+		$fallbacks = [];
+		if (defined('DOMAIN_CONFIG') && !empty(DOMAIN_CONFIG['default_language'])) {
+			$fallbacks[] = strtolower((string)DOMAIN_CONFIG['default_language']);
+		}
+		if (!empty($this->config['default_language'])) {
+			$fallbacks[] = strtolower((string)$this->config['default_language']);
+		}
+		foreach (array_unique($fallbacks) as $fallback) {
+			if (array_key_exists($fallback, $value)) return $value[$fallback];
+		}
+		return $value !== [] ? reset($value) : null;
+	}
+
 	public function handle(array $instance_params = []):string {
 
 		if(!$this->active) {
@@ -382,6 +411,7 @@ abstract class BasePlugin {
 				?? $this->config['default_handler']
 				?? array_key_first($handlers);
 			$handlerConfig = $handlers[$handler] ?? [];
+			$instance_params = $this->resolveLocalizedInstanceParams($instance_params, $handlerConfig);
 			$allowedActions = $handlerConfig['actions'] ?? [];
 			$defaultAction = $handlerConfig['default_action']
 				?? $handlerConfig['default']

@@ -44,6 +44,7 @@ class ContentManager extends \Core\BasePlugin {
 			$translation = \Core\Translation::get($row['uuid']) ?? [];
 			$types[] = [
 				"type_id" => $row['ct_id'],
+				"system_name" => $row['system_name'],
 				"title" => $translation['title'] ?? ucwords(str_replace(['_', '-'], ' ', $row['system_name'])),
 				"description" => $translation['description'] ?? null,
 				"items_count" => $items_count,
@@ -65,10 +66,20 @@ class ContentManager extends \Core\BasePlugin {
 			'deleteFailed' => $this->phrases['delete_content_type_failed']
 				?? 'Failed to delete the content type.',
 			'typeDeleted' => $this->phrases['content_type_deleted'] ?? 'Content type deleted.',
+			'selectType' => $this->phrases['select_content_type'] ?? 'Select {title}',
+			'exportFailed' => $this->phrases['content_type_export_failed']
+				?? 'Failed to export content types.',
+			'importFailed' => $this->phrases['content_type_import_failed']
+				?? 'Failed to import content types.',
+			'importCompleted' => $this->phrases['content_type_import_summary']
+				?? 'Imported {types} content types and {fields} new fields; reused {reused} existing fields.',
 		]) ?: '{}';
 
 		$managerTools = '';
-		if ($this->isRoot()) {
+		$transferTools = '';
+		$selectionHeading = '';
+		$transferEnabled = $this->isRoot();
+		if ($transferEnabled) {
 			$managerTools = '<a class="admin-button admin-button-secondary" href="/'
 				. PAGE_SLUG . '/cm-action/fieldList">'
 				. '<svg class="icon icon-menu icon-sm"></svg>'
@@ -81,15 +92,132 @@ class ContentManager extends \Core\BasePlugin {
 				. '<span>'
 				. \Core\Html::escape($this->phrases['manage_type_managers'] ?? 'Type managers')
 				. '</span></a>';
+
+			$transferTools = '<button class="admin-button admin-button-secondary" type="button" '
+				. 'data-export-types disabled>'
+				. '<svg class="icon icon-download icon-sm"></svg>'
+				. '<span>' . \Core\Html::escape($this->phrases['export_content_types'] ?? 'Export') . '</span>'
+				. '</button>'
+				. '<button class="admin-button admin-button-secondary" type="button" data-import-types>'
+				. '<svg class="icon icon-upload icon-sm"></svg>'
+				. '<span>' . \Core\Html::escape($this->phrases['import_content_types'] ?? 'Import') . '</span>'
+				. '</button>'
+				. '<input type="file" accept="application/json,.json" hidden data-import-types-file>';
+
+			$selectionHeading = '<th class="cm-select-heading">'
+				. '<input type="checkbox" data-select-all-types aria-label="'
+				. \Core\Html::escape($this->phrases['select_all_content_types'] ?? 'Select all visible content types')
+				. '"></th>';
 		}
 
 		return $this->render('types-list', [
 			'types_json' => $typesJson,
 			'ui_text' => $uiText,
 			'manager_tools' => $managerTools,
+			'transfer_tools' => $transferTools,
+			'selection_heading' => $selectionHeading,
+			'transfer_enabled' => $transferEnabled ? 'true' : 'false',
 			'create_link' => '/' . PAGE_SLUG . '/cm-action/typeEdit',
 			'delete_endpoint' => '/ajax/ContentManager/typeDelete',
+			'export_endpoint' => '/ajax/ContentManager/typeExport',
+			'import_endpoint' => '/ajax/ContentManager/typeImport',
 		]);
+	}
+
+	public function typeExport(): string {
+		if (!$this->isRoot()) {
+			\Core\Response::addHeader('HTTP/1.1 403 Forbidden');
+			return \Core\Utils\JsonTool::encode([
+				'status' => 'error',
+				'error' => $this->phrases['root_only'] ?? 'Root access required.',
+			], false);
+		}
+
+		$data = \Core\Request::all();
+		$typeIds = is_array($data['ct_ids'] ?? null) ? $data['ct_ids'] : [];
+		try {
+			$package = (new ContentTypeTransfer((int)$this->id))->export($typeIds);
+		} catch (\Throwable $error) {
+			\Core\Response::addHeader('HTTP/1.1 400 Bad Request');
+			\Core\Response::addHeader('Content-Type: application/json; charset=utf-8');
+			return \Core\Utils\JsonTool::encode([
+				'status' => 'error',
+				'error' => $error->getMessage(),
+			], false);
+		}
+
+		$filename = 'content-types-' . date('Ymd-His') . '.json';
+		\Core\Response::addHeader('Content-Type: application/json; charset=utf-8');
+		\Core\Response::addHeader('Content-Disposition: attachment; filename="' . $filename . '"');
+		\Core\Response::addHeader('X-Content-Type-Options: nosniff');
+
+		return \Core\Utils\JsonTool::encode($package) . PHP_EOL;
+	}
+
+	public function typeImport(): string {
+		\Core\Response::addHeader('Content-Type: application/json; charset=utf-8');
+
+		if (!$this->isRoot()) {
+			\Core\Response::addHeader('HTTP/1.1 403 Forbidden');
+			return \Core\Utils\JsonTool::encode([
+				'status' => 'error',
+				'error' => $this->phrases['root_only'] ?? 'Root access required.',
+			], false);
+		}
+
+		$file = \Core\Request::file('import_file');
+		try {
+			if (!$file || (int)($file['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) {
+				throw new \InvalidArgumentException(
+					$this->phrases['content_type_import_file_required'] ?? 'Select a JSON file to import.'
+				);
+			}
+			if ((int)($file['size'] ?? 0) < 1) {
+				throw new \InvalidArgumentException(
+					$this->phrases['content_type_import_file_empty'] ?? 'The import file is empty.'
+				);
+			}
+
+			$tmpName = (string)($file['tmp_name'] ?? '');
+			if ($tmpName === '' || !is_uploaded_file($tmpName)) {
+				throw new \RuntimeException(
+					$this->phrases['content_type_import_invalid_upload'] ?? 'Invalid uploaded file.'
+				);
+			}
+			$json = file_get_contents($tmpName);
+			if ($json === false) {
+				throw new \RuntimeException(
+					$this->phrases['content_type_import_read_failed'] ?? 'Failed to read the import file.'
+				);
+			}
+
+			$package = \Core\Utils\JsonTool::decode($json);
+			$result = (new ContentTypeTransfer((int)$this->id))->import(
+				$package,
+				\Core\User::getId()
+			);
+		} catch (\DomainException $error) {
+			\Core\Response::addHeader('HTTP/1.1 409 Conflict');
+			return \Core\Utils\JsonTool::encode([
+				'status' => 'error',
+				'error' => $error->getMessage(),
+			], false);
+		} catch (\Throwable $error) {
+			\Core\Response::addHeader('HTTP/1.1 400 Bad Request');
+			return \Core\Utils\JsonTool::encode([
+				'status' => 'error',
+				'error' => $error->getMessage(),
+			], false);
+		}
+
+		return \Core\Utils\JsonTool::encode([
+			'status' => 'ok',
+			'created_types' => $result['created_types'],
+			'created_fields' => $result['created_fields'],
+			'reused_fields' => $result['reused_fields'],
+			'message' => $this->phrases['content_type_import_completed']
+				?? 'Content type import completed.',
+		], false);
 	}
 
 	public function fieldList($contextVars): string {
@@ -1892,6 +2020,9 @@ class ContentManager extends \Core\BasePlugin {
 			. '<label><input type="checkbox" data-component-required'
 			. (!empty($component['required']) ? ' checked' : '') . '> '
 			. \Core\Html::escape($this->phrases['required'] ?? 'Required') . '</label>'
+			. '<label><input type="checkbox" data-component-indexed'
+			. (!array_key_exists('indexed', $component) || !empty($component['indexed']) ? ' checked' : '') . '> '
+			. \Core\Html::escape($this->phrases['indexed'] ?? 'Indexed') . '</label>'
 			. '</div>'
 			. '<div data-component-special="autocomplete">'
 			. '<label class="cm-field"><span>'
@@ -1973,7 +2104,8 @@ class ContentManager extends \Core\BasePlugin {
                 const component = {
                     type,
                     translatable: !!row.querySelector('[data-component-translatable]')?.checked,
-                    required: !!row.querySelector('[data-component-required]')?.checked
+                    required: !!row.querySelector('[data-component-required]')?.checked,
+                    indexed: !!row.querySelector('[data-component-indexed]')?.checked
                 };
                 const params = {};
                 if (type === 'autocomplete') {
@@ -2794,6 +2926,435 @@ private function notice(string $message, string $kind = 'success'): string {
 		];
 	}
 
+
+	private function apiAssertKeys(array $data, array $allowed, string $context): void {
+		$allowed = array_fill_keys($allowed, true);
+		foreach ($data as $key => $_value) {
+			if (!is_string($key) || !isset($allowed[$key])) {
+				throw new \Core\PluginActionException(
+					"Unknown {$context} parameter '{$key}'.",
+					\Core\PluginActionException::BAD_REQUEST
+				);
+			}
+		}
+	}
+
+	private function apiLanguages(): array {
+		$languages = defined('DOMAIN_CONFIG') && is_array(DOMAIN_CONFIG['languages'] ?? null)
+			? DOMAIN_CONFIG['languages']
+			: [];
+		if ($languages === []) {
+			$languages = \DB::getArr(
+				'SELECT lang_code FROM languages WHERE is_active=true ORDER BY lang_code'
+			);
+		}
+		return array_values(array_unique(array_filter(
+			array_map(static fn(mixed $lang): string => trim((string)$lang), $languages),
+			static fn(string $lang): bool => $lang !== ''
+		)));
+	}
+
+	private function apiLanguage(mixed $value): string {
+		if ($value !== null && !is_string($value)) {
+			throw new \Core\PluginActionException(
+				'lang must be a language code string.',
+				\Core\PluginActionException::BAD_REQUEST
+			);
+		}
+		$language = $value === null
+			? trim((string)(DOMAIN_CONFIG['default_language'] ?? ''))
+			: trim($value);
+		if ($language === '' || !in_array($language, $this->apiLanguages(), true)) {
+			throw new \Core\PluginActionException(
+				"Language '{$language}' is not available for this domain.",
+				\Core\PluginActionException::BAD_REQUEST
+			);
+		}
+		return $language;
+	}
+
+	private function apiResolveItemReference(mixed $reference, string $label = 'item'): array {
+		if (!is_array($reference)) {
+			throw new \Core\PluginActionException(
+				"{$label} must be an object containing exactly one of id, uuid or slug.",
+				\Core\PluginActionException::BAD_REQUEST
+			);
+		}
+		$this->apiAssertKeys($reference, ['id', 'uuid', 'slug'], $label);
+		$values = [];
+		foreach (['id', 'uuid', 'slug'] as $key) {
+			if (!array_key_exists($key, $reference)) {
+				continue;
+			}
+			$value = $reference[$key];
+			if (!is_int($value) && !is_string($value)) {
+				throw new \Core\PluginActionException(
+					"Invalid {$label} {$key}.",
+					\Core\PluginActionException::BAD_REQUEST
+				);
+			}
+			$value = trim((string)$value);
+			if ($value !== '') {
+				$values[$key] = $value;
+			}
+		}
+		if (count($values) !== 1) {
+			throw new \Core\PluginActionException(
+				"{$label} must contain exactly one of id, uuid or slug.",
+				\Core\PluginActionException::BAD_REQUEST
+			);
+		}
+
+		$key = array_key_first($values);
+		$value = $values[$key];
+		if ($key === 'id') {
+			if (!ctype_digit($value) || (int)$value < 1) {
+				throw new \Core\PluginActionException(
+					"Invalid {$label} ID.",
+					\Core\PluginActionException::BAD_REQUEST
+				);
+			}
+			$where = 'item_id=$1';
+			$params = [(int)$value];
+		} elseif ($key === 'uuid') {
+			if (!preg_match(
+				'/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i',
+				$value
+			)) {
+				throw new \Core\PluginActionException(
+					"Invalid {$label} UUID.",
+					\Core\PluginActionException::BAD_REQUEST
+				);
+			}
+			$where = 'item_uuid=$1';
+			$params = [$value];
+		} else {
+			$where = 'item_slug=$1';
+			$params = [$value];
+		}
+
+		$row = \DB::getRow(
+			'SELECT item_id, item_uuid, ct_id, item_slug, parent_id
+			 FROM content_items WHERE ' . $where . ' LIMIT 1',
+			$params
+		);
+		if (!$row) {
+			throw new \Core\PluginActionException(
+				ucfirst($label) . ' not found.',
+				\Core\PluginActionException::NOT_FOUND
+			);
+		}
+		return $row;
+	}
+
+	private function apiResolveParent(mixed $reference, ?int $itemId = null): ?int {
+		if ($reference === null) {
+			return null;
+		}
+		$parent = $this->apiResolveItemReference($reference, 'parent');
+		if (!\Core\User::canContent((int)$parent['ct_id'], 'view')) {
+			throw new \Core\PluginActionException(
+				'Parent item access denied.',
+				\Core\PluginActionException::FORBIDDEN
+			);
+		}
+		$parentId = (int)$parent['item_id'];
+		if ($itemId !== null && $this->wouldCreateItemCycle($itemId, $parentId)) {
+			throw new \Core\PluginActionException(
+				'The selected parent would create a hierarchy cycle.',
+				\Core\PluginActionException::BAD_REQUEST
+			);
+		}
+		return $parentId;
+	}
+
+	private function apiAssertSlugAvailable(string $slug, int $excludeItemId = 0): void {
+		$duplicate = \DB::getOne(
+			'SELECT item_id FROM content_items
+			 WHERE item_slug=$1 AND item_id<>$2 LIMIT 1',
+			[$slug, $excludeItemId]
+		);
+		if ($duplicate) {
+			throw new \Core\PluginActionException(
+				"Slug '{$slug}' is already used by another content item.",
+				\Core\PluginActionException::CONFLICT
+			);
+		}
+	}
+
+	private function apiValueIsEmpty(mixed $value): bool {
+		return $value === null
+			|| $value === []
+			|| (is_string($value) && trim($value) === '');
+	}
+
+	private function apiValidateScalarValue(
+		string $fieldName,
+		array $fieldType,
+		mixed $value
+	): void {
+		if ($value === null || $value === '') {
+			return;
+		}
+		if (is_array($value) || is_object($value)) {
+			throw new \Core\PluginActionException(
+				"Field '{$fieldName}' requires a scalar value.",
+				\Core\PluginActionException::BAD_REQUEST
+			);
+		}
+
+		$rules = is_array($fieldType['type_settings']['validation']['rules'] ?? null)
+			? $fieldType['type_settings']['validation']['rules']
+			: [];
+		$typeName = (string)($fieldType['system_name'] ?? '');
+		foreach ($rules as $rule) {
+			$rule = (string)$rule;
+			if (($rule === 'email' || $rule === 'url') && $typeName !== $rule) {
+				continue;
+			}
+			$valid = match ($rule) {
+				'string' => is_string($value),
+				'numeric' => is_int($value) || is_float($value) || (is_string($value) && is_numeric($value)),
+				'integer' => is_int($value) || (is_string($value) && preg_match('/^[+-]?\\d+$/', $value) === 1),
+				'boolean' => is_bool($value)
+					|| $value === 0 || $value === 1 || $value === '0' || $value === '1'
+					|| (is_string($value) && in_array(strtolower(trim($value)), ['true', 'false', 't', 'f', 'yes', 'no', 'y', 'n', 'on', 'off'], true)),
+				'email' => is_string($value) && filter_var($value, FILTER_VALIDATE_EMAIL) !== false,
+				'url' => is_string($value) && filter_var($value, FILTER_VALIDATE_URL) !== false,
+				'year' => is_string($value) && preg_match('/^\\d{4}$/', $value) === 1,
+				'year_month' => is_string($value) && preg_match('/^\\d{4}-(0[1-9]|1[0-2])$/', $value) === 1,
+				'date', 'datetime' => is_string($value) && $this->apiValidDateValue($value),
+				'time' => is_string($value) && preg_match('/^(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d)?$/', $value) === 1,
+				default => true,
+			};
+			if (!$valid) {
+				throw new \Core\PluginActionException(
+					"Invalid value for field '{$fieldName}' ({$rule}).",
+					\Core\PluginActionException::BAD_REQUEST
+				);
+			}
+		}
+	}
+
+	private function apiValidDateValue(string $value): bool {
+		try {
+			\Core\Date::value($value);
+			return true;
+		} catch (\InvalidArgumentException) {
+			return false;
+		}
+	}
+
+	private function apiValidateCompoundValue(
+		string $fieldName,
+		array $definition,
+		array $schemaField,
+		mixed $value,
+		bool $translation
+	): void {
+		if ($value === null || $value === []) {
+			return;
+		}
+		if (!is_array($value)) {
+			throw new \Core\PluginActionException(
+				"Compound field '{$fieldName}' must contain an object or array.",
+				\Core\PluginActionException::BAD_REQUEST
+			);
+		}
+		$params = is_array($definition['field_settings']['params'] ?? null)
+			? $definition['field_settings']['params']
+			: [];
+		$components = is_array($params['components'] ?? null) ? $params['components'] : [];
+		$multiple = !empty($schemaField['settings']['multiple']);
+		$rows = $multiple ? $value : [$value];
+
+		foreach ($rows as $row) {
+			if (!is_array($row)) {
+				throw new \Core\PluginActionException(
+					"Compound field '{$fieldName}' contains an invalid row.",
+					\Core\PluginActionException::BAD_REQUEST
+				);
+			}
+			foreach ($row as $componentName => $componentValue) {
+				if ($componentName === '_key' && $multiple) {
+					continue;
+				}
+				$component = is_string($componentName) ? ($components[$componentName] ?? null) : null;
+				if (!is_array($component)) {
+					throw new \Core\PluginActionException(
+						"Unknown component '{$fieldName}.{$componentName}'.",
+						\Core\PluginActionException::BAD_REQUEST
+					);
+				}
+				if ($translation && empty($component['translatable'])) {
+					throw new \Core\PluginActionException(
+						"Component '{$fieldName}.{$componentName}' is not translatable.",
+						\Core\PluginActionException::BAD_REQUEST
+					);
+				}
+				$componentType = \Core\Content::getFieldType((string)($component['type'] ?? 'string'));
+				$this->apiValidateScalarValue(
+					"{$fieldName}.{$componentName}",
+					$componentType,
+					$componentValue
+				);
+			}
+		}
+	}
+
+	private function apiValidateItemData(
+		array $contentType,
+		array $data,
+		bool $create,
+		bool $translation = false
+	): void {
+		$structure = is_array($contentType['schema']['fields'] ?? null)
+			? $contentType['schema']['fields']
+			: [];
+
+		foreach ($data as $fieldName => $value) {
+			$schemaField = is_string($fieldName) ? ($structure[$fieldName] ?? null) : null;
+			if (!is_array($schemaField)) {
+				throw new \Core\PluginActionException(
+					"Unknown field '{$fieldName}' for content type '{$contentType['system_name']}'.",
+					\Core\PluginActionException::BAD_REQUEST
+				);
+			}
+			$definition = \Core\Content::getField($fieldName);
+			if ((string)($definition['root_type_name'] ?? '') === 'compound') {
+				if ($translation) {
+					$params = is_array($definition['field_settings']['params'] ?? null)
+						? $definition['field_settings']['params']
+						: [];
+					$components = is_array($params['components'] ?? null) ? $params['components'] : [];
+					$hasTranslatable = false;
+					foreach ($components as $component) {
+						if (is_array($component) && !empty($component['translatable'])) {
+							$hasTranslatable = true;
+							break;
+						}
+					}
+					if (!$hasTranslatable) {
+						throw new \Core\PluginActionException(
+							"Field '{$fieldName}' is not translatable.",
+							\Core\PluginActionException::BAD_REQUEST
+						);
+					}
+				}
+				$this->apiValidateCompoundValue($fieldName, $definition, $schemaField, $value, $translation);
+				continue;
+			}
+
+			if ($translation && empty($schemaField['settings']['translatable'])) {
+				throw new \Core\PluginActionException(
+					"Field '{$fieldName}' is not translatable.",
+					\Core\PluginActionException::BAD_REQUEST
+				);
+			}
+
+			$multiple = !empty($schemaField['settings']['multiple']);
+			$fieldType = \Core\Content::getFieldType((int)$definition['type_id']);
+			if ($multiple) {
+				if ($value !== null && !is_array($value)) {
+					throw new \Core\PluginActionException(
+						"Field '{$fieldName}' requires an array of values.",
+						\Core\PluginActionException::BAD_REQUEST
+					);
+				}
+				foreach (is_array($value) ? $value : [] as $item) {
+					$this->apiValidateScalarValue($fieldName, $fieldType, $item);
+				}
+			} else {
+				$this->apiValidateScalarValue($fieldName, $fieldType, $value);
+			}
+		}
+
+		if (!$create || $translation) {
+			return;
+		}
+		foreach ($structure as $fieldName => $schemaField) {
+			if (!is_string($fieldName) || !is_array($schemaField) || empty($schemaField['settings']['required'])) {
+				continue;
+			}
+			if (!array_key_exists($fieldName, $data) || $this->apiValueIsEmpty($data[$fieldName])) {
+				throw new \Core\PluginActionException(
+					"Required field '{$fieldName}' is missing.",
+					\Core\PluginActionException::BAD_REQUEST
+				);
+			}
+		}
+	}
+
+	private function apiTranslations(
+		array $contentType,
+		mixed $translations,
+		string $primaryLanguage
+	): array {
+		if ($translations === null) {
+			return [];
+		}
+		if (!is_array($translations)) {
+			throw new \Core\PluginActionException(
+				'translations must be an object keyed by language code.',
+				\Core\PluginActionException::BAD_REQUEST
+			);
+		}
+		$result = [];
+		foreach ($translations as $language => $translationData) {
+			if (!is_string($language) || trim($language) === '') {
+				throw new \Core\PluginActionException(
+					'Invalid translation language code.',
+					\Core\PluginActionException::BAD_REQUEST
+				);
+			}
+			$language = $this->apiLanguage($language);
+			if ($language === $primaryLanguage) {
+				throw new \Core\PluginActionException(
+					"Language '{$language}' must be provided in data, not translations.",
+					\Core\PluginActionException::BAD_REQUEST
+				);
+			}
+			if (!is_array($translationData)) {
+				throw new \Core\PluginActionException(
+					"Translation '{$language}' must be an object.",
+					\Core\PluginActionException::BAD_REQUEST
+				);
+			}
+			$translatedType = \Core\Content::getContentType((int)$contentType['ct_id'], $language);
+			if ($translationData === []) {
+				continue;
+			}
+			$this->apiValidateItemData($translatedType, $translationData, false, true);
+			$result[$language] = $this->normalizeDateTimeFormData($translatedType, $translationData);
+		}
+		return $result;
+	}
+
+	private function apiMutationFailure(\Throwable $error): never {
+		if ($error instanceof \Core\PluginActionException) {
+			throw $error;
+		}
+		if ($error instanceof \DomainException && str_contains($error->getMessage(), 'requires unique values')) {
+			throw new \Core\PluginActionException(
+				$error->getMessage(),
+				\Core\PluginActionException::CONFLICT
+			);
+		}
+		if ($error instanceof \InvalidArgumentException || $error instanceof \DomainException) {
+			throw new \Core\PluginActionException(
+				$error->getMessage(),
+				\Core\PluginActionException::BAD_REQUEST
+			);
+		}
+		if ($error instanceof \OutOfBoundsException) {
+			throw new \Core\PluginActionException(
+				$error->getMessage(),
+				\Core\PluginActionException::NOT_FOUND
+			);
+		}
+		throw $error;
+	}
+
 	public function listTypes(array $data = []): array {
 		$allowedTypeIds = \Core\User::getAllowedContentTypeIds('view');
 		if ($allowedTypeIds === []) {
@@ -3128,7 +3689,14 @@ private function notice(string $message, string $kind = 'success'): string {
 	}
 
 	public function getItems(array $data = []): array {
-		$typeIdentifier = trim((string)($data['type'] ?? ''));
+		$typeValue = $data['type'] ?? null;
+		if (!is_int($typeValue) && !is_string($typeValue)) {
+			throw new \Core\PluginActionException(
+				'Content type is required.',
+				\Core\PluginActionException::BAD_REQUEST
+			);
+		}
+		$typeIdentifier = trim((string)$typeValue);
 		if ($typeIdentifier === '') {
 			throw new \Core\PluginActionException(
 				'Content type is required.',
@@ -3322,15 +3890,269 @@ private function notice(string $message, string $kind = 'success'): string {
 	}
 
 	public function createItem(array $data = []): array {
-		return [];
+		return $this->createItemInternal($data, true);
+	}
+
+	/**
+	 * Create an item for a trusted server-side plugin while keeping the same
+	 * structure validation and normalization as the public API action.
+	 */
+	public function createItemFromPlugin(array $data = []): array {
+		return $this->createItemInternal($data, false);
+	}
+
+	/**
+	 * Validate and normalize item data for a trusted server-side plugin
+	 * without creating an item.
+	 */
+	public function validateItemFromPlugin(int|string $type, array $data, ?string $lang = null): array {
+		$typeRow = $this->apiContentType(trim((string)$type));
+		if (!$typeRow) {
+			throw new \Core\PluginActionException(
+				'Content type not found.',
+				\Core\PluginActionException::NOT_FOUND
+			);
+		}
+		$language = $this->apiLanguage($lang);
+		$contentType = \Core\Content::getContentType((int)$typeRow['ct_id'], $language);
+		$this->apiValidateItemData($contentType, $data, true);
+		return $this->normalizeDateTimeFormData($contentType, $data);
+	}
+
+	private function createItemInternal(array $data, bool $enforceAcl): array {
+		$this->apiAssertKeys(
+			$data,
+			['type', 'lang', 'slug', 'parent', 'data', 'translations'],
+			'createItem'
+		);
+
+		$typeValue = $data['type'] ?? null;
+		if (!is_int($typeValue) && !is_string($typeValue)) {
+			throw new \Core\PluginActionException(
+				'Content type is required.',
+				\Core\PluginActionException::BAD_REQUEST
+			);
+		}
+		$typeIdentifier = trim((string)$typeValue);
+		if ($typeIdentifier === '') {
+			throw new \Core\PluginActionException(
+				'Content type is required.',
+				\Core\PluginActionException::BAD_REQUEST
+			);
+		}
+		$typeRow = $this->apiContentType($typeIdentifier);
+		if (!$typeRow) {
+			throw new \Core\PluginActionException(
+				'Content type not found.',
+				\Core\PluginActionException::NOT_FOUND
+			);
+		}
+		if ($enforceAcl && !\Core\User::canContent((int)$typeRow['ct_id'], 'create')) {
+			throw new \Core\PluginActionException(
+				'Content type access denied.',
+				\Core\PluginActionException::FORBIDDEN
+			);
+		}
+
+		$language = $this->apiLanguage($data['lang'] ?? null);
+		$contentType = \Core\Content::getContentType((int)$typeRow['ct_id'], $language);
+		if (!array_key_exists('data', $data) || !is_array($data['data'])) {
+			throw new \Core\PluginActionException(
+				'data must be an object.',
+				\Core\PluginActionException::BAD_REQUEST
+			);
+		}
+		$this->apiValidateItemData($contentType, $data['data'], true);
+		$itemData = $this->normalizeDateTimeFormData($contentType, $data['data']);
+		$translations = $this->apiTranslations(
+			$contentType,
+			$data['translations'] ?? null,
+			$language
+		);
+
+		if (array_key_exists('parent', $data)) {
+			$itemData['parent_id'] = $this->apiResolveParent($data['parent']);
+		}
+
+		$slug = null;
+		if (array_key_exists('slug', $data)) {
+			if (empty($contentType['has_slug'])) {
+				throw new \Core\PluginActionException(
+					"Content type '{$contentType['system_name']}' does not use slugs.",
+					\Core\PluginActionException::BAD_REQUEST
+				);
+			}
+			if (!is_string($data['slug']) || trim($data['slug']) === '') {
+				throw new \Core\PluginActionException(
+					'slug must be a non-empty string.',
+					\Core\PluginActionException::BAD_REQUEST
+				);
+			}
+			$slug = trim($data['slug']);
+		} elseif (!empty($contentType['has_slug'])) {
+			$titleField = $contentType['schema']['title_field'] ?? null;
+			$titleValue = is_string($titleField) ? ($itemData[$titleField] ?? null) : null;
+			if (is_scalar($titleValue) && trim((string)$titleValue) !== '') {
+				$slug = createSlug((string)$titleValue);
+				$slug = $slug !== '' ? $slug : null;
+			}
+		}
+		if ($slug !== null) {
+			$this->apiAssertSlugAvailable($slug);
+			$itemData['item_slug'] = $slug;
+		}
+
+		\DB::beginTransaction();
+		try {
+			$itemId = \Core\Content::create(
+				(string)$contentType['system_name'],
+				['author_id' => \Core\User::getId()]
+			);
+			\Core\Content::update(
+				$itemId,
+				$itemData,
+				$language,
+				array_keys($translations),
+				false
+			);
+			foreach ($translations as $translationLanguage => $translationData) {
+				\Core\Content::patchTranslation($itemId, $translationData, $translationLanguage);
+			}
+			\DB::commit();
+		} catch (\Throwable $error) {
+			\DB::rollBack();
+			$this->apiMutationFailure($error);
+		}
+
+		$item = \Core\Content::getItem($itemId, $language);
+		return ['item' => $this->apiItem($item)];
 	}
 
 	public function updateItem(array $data = []): array {
-		return [];
+		$this->apiAssertKeys(
+			$data,
+			['item', 'lang', 'slug', 'parent', 'data', 'translations'],
+			'updateItem'
+		);
+		if (!array_key_exists('item', $data)) {
+			throw new \Core\PluginActionException(
+				'item is required.',
+				\Core\PluginActionException::BAD_REQUEST
+			);
+		}
+
+		$row = $this->apiResolveItemReference($data['item']);
+		$itemId = (int)$row['item_id'];
+		if (!\Core\User::canContent((int)$row['ct_id'], 'edit')) {
+			throw new \Core\PluginActionException(
+				'Content item access denied.',
+				\Core\PluginActionException::FORBIDDEN
+			);
+		}
+
+		$language = $this->apiLanguage($data['lang'] ?? null);
+		$contentType = \Core\Content::getContentType((int)$row['ct_id'], $language);
+		$updateData = [];
+		if (array_key_exists('data', $data)) {
+			if (!is_array($data['data'])) {
+				throw new \Core\PluginActionException(
+					'data must be an object.',
+					\Core\PluginActionException::BAD_REQUEST
+				);
+			}
+			$this->apiValidateItemData($contentType, $data['data'], false);
+			$updateData = $this->normalizeDateTimeFormData($contentType, $data['data']);
+		}
+		$translations = $this->apiTranslations(
+			$contentType,
+			$data['translations'] ?? null,
+			$language
+		);
+
+		if (array_key_exists('slug', $data)) {
+			if (empty($contentType['has_slug'])) {
+				throw new \Core\PluginActionException(
+					"Content type '{$contentType['system_name']}' does not use slugs.",
+					\Core\PluginActionException::BAD_REQUEST
+				);
+			}
+			if (!is_string($data['slug']) || trim($data['slug']) === '') {
+				throw new \Core\PluginActionException(
+					'slug must be a non-empty string.',
+					\Core\PluginActionException::BAD_REQUEST
+				);
+			}
+			$slug = trim($data['slug']);
+			$this->apiAssertSlugAvailable($slug, $itemId);
+			$updateData['item_slug'] = $slug;
+		}
+
+		if (array_key_exists('parent', $data)) {
+			$updateData['parent_id'] = $this->apiResolveParent($data['parent'], $itemId);
+		}
+
+		$hasMutation = $updateData !== [] || $translations !== [];
+		if (!$hasMutation) {
+			throw new \Core\PluginActionException(
+				'No item changes were provided.',
+				\Core\PluginActionException::BAD_REQUEST
+			);
+		}
+
+		\DB::beginTransaction();
+		try {
+			if ($updateData !== []) {
+				\Core\Content::update(
+					$itemId,
+					$updateData,
+					$language,
+					array_keys($translations),
+					false
+				);
+			}
+			foreach ($translations as $translationLanguage => $translationData) {
+				\Core\Content::patchTranslation($itemId, $translationData, $translationLanguage);
+			}
+			\DB::commit();
+		} catch (\Throwable $error) {
+			\DB::rollBack();
+			$this->apiMutationFailure($error);
+		}
+
+		$item = \Core\Content::getItem($itemId, $language);
+		return ['item' => $this->apiItem($item)];
 	}
 
 	public function deleteItem(array $data = []): array {
-		return [];
+		$this->apiAssertKeys($data, ['item'], 'deleteItem');
+		if (!array_key_exists('item', $data)) {
+			throw new \Core\PluginActionException(
+				'item is required.',
+				\Core\PluginActionException::BAD_REQUEST
+			);
+		}
+
+		$row = $this->apiResolveItemReference($data['item']);
+		if (!\Core\User::canContent((int)$row['ct_id'], 'delete')) {
+			throw new \Core\PluginActionException(
+				'Content item access denied.',
+				\Core\PluginActionException::FORBIDDEN
+			);
+		}
+		$itemId = (int)$row['item_id'];
+		$uuid = (string)$row['item_uuid'];
+		if (!\Core\Content::delete($itemId)) {
+			throw new \Core\PluginActionException(
+				'Content item not found.',
+				\Core\PluginActionException::NOT_FOUND
+			);
+		}
+
+		return [
+			'deleted' => true,
+			'item_id' => $itemId,
+			'uuid' => $uuid,
+		];
 	}
 
 	public function updateType(array $data = []): array {

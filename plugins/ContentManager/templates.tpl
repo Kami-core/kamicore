@@ -239,6 +239,7 @@
         </div>
 
         <div class="cm-toolbar-actions">
+            {{transfer_tools}}
             {{manager_tools}}
             <a class="admin-button admin-button-primary" href="{{create_link}}">
                 <svg class="icon icon-plus icon-sm"></svg>
@@ -251,6 +252,7 @@
         <table class="admin-table">
             <thead>
                 <tr>
+                    {{selection_heading}}
                     <th>{{phrase.name_and_description}}</th>
                     <th class="cm-count-heading">{{phrase.items}}</th>
                     <th class="admin-actions-heading">{{phrase.actions}}</th>
@@ -269,9 +271,15 @@
     if (!root) return;
 
     const text = {{ui_text}};
+    const transferEnabled = {{transfer_enabled}};
     const search = root.querySelector('[data-content-types-search]');
     const rows = root.querySelector('[data-content-types-rows]');
     const status = root.querySelector('[data-content-types-status]');
+    const selectAll = root.querySelector('[data-select-all-types]');
+    const exportButton = root.querySelector('[data-export-types]');
+    const importButton = root.querySelector('[data-import-types]');
+    const importFile = root.querySelector('[data-import-types-file]');
+    const selectedIds = new Set();
     let contentTypes = {{types_json}};
 
     function format(pattern, values = {}) {
@@ -287,14 +295,29 @@
         return icon;
     }
 
-    function render() {
+    function visibleTypes() {
         const query = search.value.trim().toLowerCase();
-        const filtered = contentTypes.filter(type => {
+        return contentTypes.filter(type => {
             if (!query) return true;
 
             return String(type.title || '').toLowerCase().includes(query)
                 || String(type.description || '').toLowerCase().includes(query);
         });
+    }
+
+    function updateSelectionState(filtered = visibleTypes()) {
+        if (!transferEnabled) return;
+
+        const visibleIds = filtered.map(type => Number(type.type_id));
+        const selectedVisible = visibleIds.filter(id => selectedIds.has(id)).length;
+
+        exportButton.disabled = selectedIds.size === 0;
+        selectAll.checked = visibleIds.length > 0 && selectedVisible === visibleIds.length;
+        selectAll.indeterminate = selectedVisible > 0 && selectedVisible < visibleIds.length;
+    }
+
+    function render() {
+        const filtered = visibleTypes();
 
         rows.replaceChildren();
         status.textContent = format(text.typeCount, { count: filtered.length });
@@ -304,20 +327,38 @@
             row.className = 'cm-state-row';
 
             const cell = document.createElement('td');
-            cell.colSpan = 3;
+            cell.colSpan = transferEnabled ? 4 : 3;
             cell.className = 'admin-empty-state';
             cell.textContent = text.noTypes;
 
             row.appendChild(cell);
             rows.appendChild(row);
+            updateSelectionState(filtered);
             return;
         }
 
         filtered.forEach(type => rows.appendChild(createRow(type)));
+        updateSelectionState(filtered);
     }
 
     function createRow(type) {
         const row = document.createElement('tr');
+
+        if (transferEnabled) {
+            const select = document.createElement('td');
+            select.className = 'cm-select-cell';
+
+            const checkbox = document.createElement('input');
+            checkbox.type = 'checkbox';
+            checkbox.dataset.selectType = String(type.type_id);
+            checkbox.checked = selectedIds.has(Number(type.type_id));
+            checkbox.setAttribute(
+                'aria-label',
+                format(text.selectType, { title: type.title || type.system_name || '' })
+            );
+            select.appendChild(checkbox);
+            row.appendChild(select);
+        }
 
         const details = document.createElement('td');
         const title = document.createElement('a');
@@ -372,7 +413,120 @@
         return action;
     }
 
+    async function readError(response, fallback) {
+        try {
+            const data = await response.json();
+            return data.error || fallback;
+        } catch (error) {
+            return fallback;
+        }
+    }
+
+    async function exportSelected() {
+        if (!transferEnabled || selectedIds.size === 0) return;
+
+        exportButton.disabled = true;
+        try {
+            const formData = new FormData();
+            [...selectedIds].sort((left, right) => left - right).forEach(id => {
+                formData.append('ct_ids[]', String(id));
+            });
+
+            const response = await fetch('{{export_endpoint}}', {
+                method: 'POST',
+                body: formData,
+                credentials: 'same-origin',
+                headers: {
+                    'Accept': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest'
+                }
+            });
+            if (!response.ok) {
+                throw new Error(await readError(response, text.exportFailed));
+            }
+
+            const blob = await response.blob();
+            const disposition = response.headers.get('Content-Disposition') || '';
+            const match = disposition.match(/filename="([^"]+)"/i);
+            const filename = match ? match[1] : 'content-types.json';
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = filename;
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            URL.revokeObjectURL(url);
+        } catch (error) {
+            window.alert(error.message || text.exportFailed);
+        } finally {
+            updateSelectionState();
+        }
+    }
+
+    async function importSelected(file) {
+        if (!transferEnabled || !file) return;
+
+        importButton.disabled = true;
+        try {
+            const formData = new FormData();
+            formData.append('import_file', file);
+
+            const response = await fetch('{{import_endpoint}}', {
+                method: 'POST',
+                body: formData,
+                credentials: 'same-origin',
+                headers: {
+                    'Accept': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest'
+                }
+            });
+            const data = await response.json();
+            if (!response.ok || data.status !== 'ok') {
+                throw new Error(data.error || text.importFailed);
+            }
+
+            window.alert(format(text.importCompleted, {
+                types: data.created_types ?? 0,
+                fields: data.created_fields ?? 0,
+                reused: data.reused_fields ?? 0
+            }));
+            window.location.reload();
+        } catch (error) {
+            window.alert(error.message || text.importFailed);
+        } finally {
+            importButton.disabled = false;
+            importFile.value = '';
+        }
+    }
+
     search.addEventListener('input', render);
+
+    if (transferEnabled) {
+        rows.addEventListener('change', event => {
+            const checkbox = event.target.closest('[data-select-type]');
+            if (!checkbox) return;
+
+            const id = Number(checkbox.dataset.selectType);
+            if (checkbox.checked) selectedIds.add(id);
+            else selectedIds.delete(id);
+            updateSelectionState();
+        });
+
+        selectAll.addEventListener('change', () => {
+            visibleTypes().forEach(type => {
+                const id = Number(type.type_id);
+                if (selectAll.checked) selectedIds.add(id);
+                else selectedIds.delete(id);
+            });
+            render();
+        });
+
+        exportButton.addEventListener('click', exportSelected);
+        importButton.addEventListener('click', () => importFile.click());
+        importFile.addEventListener('change', () => importSelected(importFile.files?.[0] || null));
+    }
+
     rows.addEventListener('click', async event => {
         const button = event.target.closest('[data-delete-type]');
         if (!button) return;
@@ -403,7 +557,9 @@
             if (!response.ok || data.status !== 'ok') {
                 throw new Error(data.error || text.deleteFailed);
             }
-            contentTypes = contentTypes.filter(item => item.type_id !== type.type_id);
+            const deletedId = Number(type.type_id);
+            selectedIds.delete(deletedId);
+            contentTypes = contentTypes.filter(item => Number(item.type_id) !== deletedId);
             render();
             window.alert(data.message || text.typeDeleted);
         } catch (error) {

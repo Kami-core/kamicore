@@ -27,13 +27,12 @@ final class User
 
     public static function init(): void
     {
-        Session::init();
+        Session::load();
 
         self::$user = self::getUser();
         debug_step('get User');
 
         if (!self::$user) {
-            Session::create();
             self::$user = self::getUser(0);
         }
 

@@ -1,0 +1,12 @@
+{
+  "plugin": {
+    "title": "Bot detector",
+    "description": "Detects known crawlers and automated HTTP clients by User-Agent for analytics and behavior optimization. Detection is heuristic and must not be used as a security or access-control mechanism."
+  },
+  "settings": {
+    "signatures": {
+      "title": "Automated client signatures",
+      "description": "One case-insensitive User-Agent substring per line. Empty lines and lines starting with # are ignored. This list identifies likely automated clients; it must not be used for security decisions."
+    }
+  }
+}

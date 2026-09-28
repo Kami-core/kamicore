@@ -32,10 +32,7 @@ final class Form
 
     protected static function generateCsrfToken(): string
     {
-        if (!isset($_SESSION)) session_start();
-        $token = Crypto::randomHex();
-        $_SESSION['csrf_token'] = $token;
-        return $token;
+        return Csrf::token();
     }
 
     public static function render(array $config, ?string $template = null): string

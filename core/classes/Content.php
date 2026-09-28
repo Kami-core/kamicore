@@ -71,7 +71,8 @@ class Content
         int $id,
         array $data,
         ?string $lang = null,
-        array $syncLanguages = []
+        array $syncLanguages = [],
+        bool $autoSlugFromTitle = true
     ): bool {
         $lang ??= LANG;
         $syncLanguages = array_values(array_unique(array_filter(
@@ -215,7 +216,11 @@ class Content
             if (!empty($contentType['has_slug'])) {
                 if (array_key_exists('item_slug', $data) && trim((string) $data['item_slug']) !== '') {
                     $slug = trim((string) $data['item_slug']);
-                } elseif ($titleField && array_key_exists($titleField, $data)) {
+                } elseif (
+                    $autoSlugFromTitle
+                    && $titleField
+                    && array_key_exists($titleField, $data)
+                ) {
                     $titleValue = $data[$titleField];
                     $slug = is_scalar($titleValue) && (string) $titleValue !== ''
                         ? createSlug((string) $titleValue)
@@ -345,6 +350,13 @@ class Content
                         $data[$fieldName],
                         $multiple,
                         $commonData[$fieldName] ?? null
+                    );
+                    $value = self::mergeCompoundTranslationPatch(
+                        is_array($translatedData[$fieldName] ?? null)
+                            ? $translatedData[$fieldName]
+                            : [],
+                        $value,
+                        $multiple
                     );
                     self::storeJsonValue($translatedData, $fieldName, $value);
                     $changed = true;
@@ -1512,6 +1524,7 @@ class Content
     {
         if ($data === []) {
             \DB::delete('translations', 'entity_uuid=$1 AND lang_code=$2', [$uuid, $lang]);
+            \Core\Translation::forget($uuid, $lang);
             return;
         }
 
@@ -1524,6 +1537,7 @@ class Content
                  updated_at=EXCLUDED.updated_at',
             [$uuid, $lang, \Core\Utils\JsonTool::encode($data, false)]
         );
+        \Core\Translation::forget($uuid, $lang);
     }
 
     private static function savePatchedTranslation(
@@ -1534,6 +1548,7 @@ class Content
     ): void {
         if ($data === []) {
             \DB::delete('translations', 'entity_uuid=$1 AND lang_code=$2', [$uuid, $lang]);
+            \Core\Translation::forget($uuid, $lang);
             return;
         }
 
@@ -1544,6 +1559,7 @@ class Content
              DO UPDATE SET translated_data=EXCLUDED.translated_data',
             [$uuid, $lang, \Core\Utils\JsonTool::encode($data, false), $itemUpdatedAt]
         );
+        \Core\Translation::forget($uuid, $lang);
     }
 
     private static function assertUniqueFieldValue(
@@ -2321,21 +2337,19 @@ class Content
             $row = is_array($value) ? $value : [];
             $translated = [];
             foreach ($translatable as $name => $component) {
+                if (!array_key_exists($name, $row)) {
+                    continue;
+                }
                 $fieldType = self::getFieldType((string)$component['type']);
                 $normalized = self::normalizeCompoundScalar(
-                    $row[$name] ?? null,
+                    $row[$name],
                     $fieldType,
                     (string)$field['system_name'],
                     (string)$name
                 );
-                if (!empty($component['required']) && self::compoundScalarIsEmpty($normalized)) {
-                    throw new \DomainException(
-                        "Compound component '{$field['system_name']}.{$name}' is required."
-                    );
-                }
-                if (!self::compoundScalarIsEmpty($normalized)) {
-                    $translated[$name] = $normalized;
-                }
+                $translated[$name] = self::compoundScalarIsEmpty($normalized)
+                    ? null
+                    : $normalized;
             }
             return $translated;
         }
@@ -2367,26 +2381,62 @@ class Content
 
             $translated = [];
             foreach ($translatable as $name => $component) {
+                if (!array_key_exists($name, $row)) {
+                    continue;
+                }
                 $fieldType = self::getFieldType((string)$component['type']);
                 $normalized = self::normalizeCompoundScalar(
-                    $row[$name] ?? null,
+                    $row[$name],
                     $fieldType,
                     (string)$field['system_name'],
                     (string)$name
                 );
-                if (!empty($component['required']) && self::compoundScalarIsEmpty($normalized)) {
-                    throw new \DomainException(
-                        "Compound component '{$field['system_name']}.{$name}' is required."
-                    );
-                }
-                if (!self::compoundScalarIsEmpty($normalized)) {
-                    $translated[$name] = $normalized;
-                }
+                $translated[$name] = self::compoundScalarIsEmpty($normalized)
+                    ? null
+                    : $normalized;
             }
             if ($translated !== []) $translatedRows[$key] = $translated;
         }
 
         return $translatedRows;
+    }
+
+
+    private static function mergeCompoundTranslationPatch(
+        array $existing,
+        array $patch,
+        bool $multiple
+    ): array {
+        if (!$multiple) {
+            foreach ($patch as $name => $value) {
+                if ($value === null) {
+                    unset($existing[$name]);
+                } else {
+                    $existing[$name] = $value;
+                }
+            }
+            return $existing;
+        }
+
+        foreach ($patch as $key => $row) {
+            if (!is_string($key) || !is_array($row)) {
+                continue;
+            }
+            $current = is_array($existing[$key] ?? null) ? $existing[$key] : [];
+            foreach ($row as $name => $value) {
+                if ($value === null) {
+                    unset($current[$name]);
+                } else {
+                    $current[$name] = $value;
+                }
+            }
+            if ($current === []) {
+                unset($existing[$key]);
+            } else {
+                $existing[$key] = $current;
+            }
+        }
+        return $existing;
     }
 
     private static function mergeItemData(
@@ -2514,6 +2564,7 @@ class Content
 
         foreach ($components as $name => $component) {
             if (!is_string($name) || !is_array($component)) continue;
+            if (array_key_exists('indexed', $component) && empty($component['indexed'])) continue;
             $fieldType = self::getFieldType((string)($component['type'] ?? 'string'));
             $table = self::indexTable((string)$fieldType['root_type_name']);
 
@@ -2563,6 +2614,14 @@ class Content
                     if ($row !== null) $rows[$table][] = $row;
                 }
             }
+        }
+
+        if ($rows['item_bools'] !== []) {
+            $unique = [];
+            foreach ($rows['item_bools'] as $row) {
+                $unique[!empty($row['value']) ? '1' : '0'] = $row;
+            }
+            $rows['item_bools'] = array_values($unique);
         }
 
         return $rows;

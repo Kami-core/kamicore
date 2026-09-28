@@ -12,7 +12,7 @@
       "author": "Kami team"
     },
     "prefix": "pgm",
-    "version": "1.0.10",
+    "version": "1.0.11",
     "category": "content",
     "dependencies": [
       "Forms"

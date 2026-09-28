@@ -155,7 +155,7 @@ final class Forms extends \Core\BasePlugin
             'fields' => $renderedFields,
             'form_attributes' => self::renderAttributes($formAttributes),
             'ajax_attributes' => self::renderAttributes($ajaxAttributes),
-            'submit_label' => \Core\Html::escape($this->phrase('submit', 'Submit')),
+            'submit_label' => \Core\Html::escape((string)($options['submit_label'] ?? $this->phrase('submit', 'Submit'))),
         ]);
     }
 

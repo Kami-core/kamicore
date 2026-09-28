@@ -22,6 +22,32 @@ final class Media extends \Core\BasePlugin
 {
     private const MEDIA_DIRECTORY = 'media';
     private const MEDIA_URL = '/media/';
+    private const VARIANTS_DIRECTORY = '_variants';
+
+    private const IMAGE_VARIANTS = [
+        'thumbnail' => [
+            'enabled_setting' => 'thumbnail_enabled',
+            'width_setting' => 'thumbnail_width',
+            'height_setting' => 'thumbnail_height',
+            'default_width' => 400,
+            'default_height' => 300,
+        ],
+        'midsize' => [
+            'enabled_setting' => 'midsize_enabled',
+            'width_setting' => 'midsize_width',
+            'height_setting' => 'midsize_height',
+            'default_width' => 1200,
+            'default_height' => 900,
+        ],
+    ];
+
+    private const RESIZABLE_IMAGE_MIME = [
+        'image/jpeg',
+        'image/png',
+        'image/webp',
+        'image/avif',
+        'image/heif',
+    ];
 
     private const HARD_DENIED_EXTENSIONS = [
         'php', 'php3', 'php4', 'php5', 'php7', 'php8', 'pht', 'phtml', 'phar',
@@ -84,10 +110,31 @@ final class Media extends \Core\BasePlugin
         $this->addJs('/plugins/Media/assets/media-browser.js');
     }
 
+    public function variantUrl(string $url, string $variant): string
+    {
+        if (!isset(self::IMAGE_VARIANTS[$variant])) {
+            throw new \InvalidArgumentException("Unknown Media image variant '{$variant}'.");
+        }
+
+        $relative = $this->relativePathFromUrl($url);
+        if ($relative === null || $this->isVariantPath($relative)) {
+            return $url;
+        }
+
+        $variantRelative = $this->variantRelativePath($relative, $variant);
+        $variantAbsolute = $this->resolvePath($variantRelative, true);
+        if (!is_file($variantAbsolute) || is_link($variantAbsolute)) {
+            return $url;
+        }
+
+        return $this->urlForPath($variantRelative);
+    }
+
     public function browser(array $instanceParams = []): string
     {
         $this->registerBrowserAssets();
         $root = $this->normalizeRelativePath((string)($instanceParams['root'] ?? ''));
+        $this->assertPublicPath($root);
         $canManage = User::canPlugin((int)$this->id, 'manage');
 
         return $this->render('browser', [
@@ -107,6 +154,8 @@ final class Media extends \Core\BasePlugin
         return $this->jsonAction(function () use ($data): array {
             $root = $this->normalizeRelativePath((string)($data['root'] ?? ''));
             $path = $this->normalizeRelativePath((string)($data['path'] ?? $root));
+            $this->assertPublicPath($root);
+            $this->assertPublicPath($path);
             $this->assertWithinBrowserRoot($path, $root);
 
             return [
@@ -119,20 +168,10 @@ final class Media extends \Core\BasePlugin
     public function upload(array $data = []): string
     {
         return $this->jsonAction(function () use ($data): array {
-            $currentPath = $this->normalizeRelativePath((string)($data['path'] ?? ''));
-            $root = $this->normalizeRelativePath((string)($data['root'] ?? ''));
-            $this->assertWithinBrowserRoot($currentPath, $root);
-
-            $currentAbsolute = $this->resolveExistingPath($currentPath);
-            if (!is_dir($currentAbsolute)) {
-                throw new \InvalidArgumentException('Upload path must be an existing Media folder.');
-            }
-            $this->assertValidManagedPath($currentPath);
-
-            $targetRelative = $this->getUploadDirectory($currentPath);
-            $this->assertWithinBrowserRoot($targetRelative, $root);
-            $targetDirectory = $this->resolvePath($targetRelative, true);
-            $this->ensureDirectory($targetDirectory);
+            [$targetRelative, $targetDirectory] = $this->prepareUploadTarget(
+                (string)($data['path'] ?? ''),
+                (string)($data['root'] ?? '')
+            );
 
             $files = $this->normalizeUploadedFiles(Request::file('files'));
             if ($files === []) {
@@ -152,11 +191,93 @@ final class Media extends \Core\BasePlugin
         });
     }
 
+    public function uploadFile(array $data = []): array
+    {
+        foreach ($data as $key => $_value) {
+            if ($key !== 'path') {
+                throw new \Core\PluginActionException(
+                    "Unknown uploadFile parameter '{$key}'.",
+                    \Core\PluginActionException::BAD_REQUEST
+                );
+            }
+        }
+
+        if (array_key_exists('path', $data) && !is_string($data['path'])) {
+            throw new \Core\PluginActionException(
+                'path must be a string.',
+                \Core\PluginActionException::BAD_REQUEST
+            );
+        }
+
+        $file = Request::file('file');
+        if (!$file || !array_key_exists('name', $file)) {
+            throw new \Core\PluginActionException(
+                'Exactly one file is required.',
+                \Core\PluginActionException::BAD_REQUEST
+            );
+        }
+        if (is_array($file['name'])) {
+            throw new \Core\PluginActionException(
+                'Exactly one file is required.',
+                \Core\PluginActionException::BAD_REQUEST
+            );
+        }
+
+        $error = (int)($file['error'] ?? UPLOAD_ERR_NO_FILE);
+        if (in_array($error, [UPLOAD_ERR_INI_SIZE, UPLOAD_ERR_FORM_SIZE], true)) {
+            throw new \Core\PluginActionException(
+                $this->uploadErrorMessage($error),
+                \Core\PluginActionException::PAYLOAD_TOO_LARGE
+            );
+        }
+        if (in_array($error, [UPLOAD_ERR_PARTIAL, UPLOAD_ERR_NO_FILE], true)) {
+            throw new \Core\PluginActionException(
+                $this->uploadErrorMessage($error),
+                \Core\PluginActionException::BAD_REQUEST
+            );
+        }
+        if ($error !== UPLOAD_ERR_OK) {
+            throw new \RuntimeException($this->uploadErrorMessage($error));
+        }
+
+        $size = (int)($file['size'] ?? 0);
+        if ($size > $this->maxUploadBytes()) {
+            throw new \Core\PluginActionException(
+                'Uploaded file exceeds the Media maximum upload size.',
+                \Core\PluginActionException::PAYLOAD_TOO_LARGE
+            );
+        }
+
+        try {
+            [$targetRelative, $targetDirectory] = $this->prepareUploadTarget(
+                (string)($data['path'] ?? '')
+            );
+            $stored = $this->storeUploadedFile($file, $targetRelative, $targetDirectory);
+        } catch (\InvalidArgumentException $error) {
+            throw new \Core\PluginActionException(
+                $error->getMessage(),
+                \Core\PluginActionException::BAD_REQUEST
+            );
+        } catch (\RuntimeException $error) {
+            if ($error->getMessage() === 'Invalid uploaded file.') {
+                throw new \Core\PluginActionException(
+                    $error->getMessage(),
+                    \Core\PluginActionException::BAD_REQUEST
+                );
+            }
+            throw $error;
+        }
+
+        return ['file' => $stored];
+    }
+
     public function createFolder(array $data = []): string
     {
         return $this->jsonAction(function () use ($data): array {
             $path = $this->normalizeRelativePath((string)($data['path'] ?? ''));
             $root = $this->normalizeRelativePath((string)($data['root'] ?? ''));
+            $this->assertPublicPath($root);
+            $this->assertPublicPath($path);
             $this->assertWithinBrowserRoot($path, $root);
 
             $parentAbsolute = $this->resolveExistingPath($path);
@@ -169,6 +290,9 @@ final class Media extends \Core\BasePlugin
             }
 
             $name = $this->normalizeDirectoryName((string)($data['name'] ?? ''));
+            if ($name === self::VARIANTS_DIRECTORY) {
+                throw new \InvalidArgumentException('This folder name is reserved by Media.');
+            }
             if ($this->isYearSegment($name)) {
                 throw new \InvalidArgumentException('Four-digit year folder names are reserved for Media date directories.');
             }
@@ -191,6 +315,8 @@ final class Media extends \Core\BasePlugin
         return $this->jsonAction(function () use ($data): array {
             $path = $this->normalizeRelativePath((string)($data['path'] ?? ''));
             $root = $this->normalizeRelativePath((string)($data['root'] ?? ''));
+            $this->assertPublicPath($root);
+            $this->assertPublicPath($path);
             $this->assertWithinBrowserRoot($path, $root);
             if ($path === '' || $path === $root) {
                 throw new \InvalidArgumentException('The browser root cannot be renamed.');
@@ -207,6 +333,9 @@ final class Media extends \Core\BasePlugin
                 ? $this->normalizeDirectoryName((string)($data['name'] ?? ''))
                 : $this->normalizeFileName((string)($data['name'] ?? ''));
 
+            if ($isDirectory && $name === self::VARIANTS_DIRECTORY) {
+                throw new \InvalidArgumentException('This folder name is reserved by Media.');
+            }
             if ($isDirectory && $this->isYearSegment($name)) {
                 throw new \InvalidArgumentException('Four-digit year folder names are reserved for Media date directories.');
             }
@@ -226,6 +355,9 @@ final class Media extends \Core\BasePlugin
             if (!rename($absolute, $targetAbsolute)) {
                 throw new \RuntimeException('Failed to rename item.');
             }
+            if (!$isDirectory) {
+                $this->moveVariantFiles($path, $targetRelative);
+            }
 
             return ['status' => 'ok', 'item' => $this->entryPayload($targetRelative, $targetAbsolute)];
         });
@@ -237,6 +369,9 @@ final class Media extends \Core\BasePlugin
             $path = $this->normalizeRelativePath((string)($data['path'] ?? ''));
             $destination = $this->normalizeRelativePath((string)($data['destination'] ?? ''));
             $root = $this->normalizeRelativePath((string)($data['root'] ?? ''));
+            $this->assertPublicPath($root);
+            $this->assertPublicPath($path);
+            $this->assertPublicPath($destination);
             $this->assertWithinBrowserRoot($path, $root);
             $this->assertWithinBrowserRoot($destination, $root);
 
@@ -281,8 +416,12 @@ final class Media extends \Core\BasePlugin
             if (file_exists($targetAbsolute) || is_link($targetAbsolute)) {
                 throw new \RuntimeException('A file or folder with this name already exists at the destination.');
             }
+            $isDirectory = is_dir($absolute);
             if (!rename($absolute, $targetAbsolute)) {
                 throw new \RuntimeException('Failed to move item.');
+            }
+            if (!$isDirectory) {
+                $this->moveVariantFiles($path, $targetRelative);
             }
 
             return ['status' => 'ok', 'item' => $this->entryPayload($targetRelative, $targetAbsolute)];
@@ -294,6 +433,8 @@ final class Media extends \Core\BasePlugin
         return $this->jsonAction(function () use ($data): array {
             $path = $this->normalizeRelativePath((string)($data['path'] ?? ''));
             $root = $this->normalizeRelativePath((string)($data['root'] ?? ''));
+            $this->assertPublicPath($root);
+            $this->assertPublicPath($path);
             $this->assertWithinBrowserRoot($path, $root);
             if ($path === '' || $path === $root) {
                 throw new \InvalidArgumentException('The browser root cannot be deleted.');
@@ -316,6 +457,7 @@ final class Media extends \Core\BasePlugin
                 if (!unlink($absolute)) {
                     throw new \RuntimeException('Failed to delete file.');
                 }
+                $this->deleteVariantFiles($path);
             }
 
             return ['status' => 'ok'];
@@ -336,7 +478,7 @@ final class Media extends \Core\BasePlugin
 
         $entries = [];
         foreach ($items as $name) {
-            if ($name === '.' || $name === '..' || str_starts_with($name, '.')) {
+            if ($name === '.' || $name === '..' || $name === self::VARIANTS_DIRECTORY || str_starts_with($name, '.')) {
                 continue;
             }
 
@@ -392,6 +534,7 @@ final class Media extends \Core\BasePlugin
             $payload['extension'] = null;
             $payload['size'] = null;
             $payload['previewable'] = false;
+            $payload['preview_url'] = null;
             $payload['system_date_directory'] = $this->isDateDirectoryPath($relative);
             return $payload;
         }
@@ -403,6 +546,9 @@ final class Media extends \Core\BasePlugin
         $payload['extension'] = $extension;
         $payload['size'] = filesize($absolute) ?: 0;
         $payload['previewable'] = str_starts_with($mime, 'image/') && $mime !== 'image/svg+xml';
+        $payload['preview_url'] = $payload['previewable']
+            ? $this->variantUrl($payload['url'], 'thumbnail')
+            : null;
         $payload['system_date_directory'] = false;
         return $payload;
     }
@@ -441,7 +587,415 @@ final class Media extends \Core\BasePlugin
         @chmod($targetAbsolute, 0644);
 
         $finalRelative = $this->joinRelative($targetRelative, $finalName);
+        $this->generateImageVariants($targetAbsolute, $finalRelative, $mime);
+
         return $this->entryPayload($finalRelative, $targetAbsolute);
+    }
+
+    private function generateImageVariants(string $sourceAbsolute, string $sourceRelative, string $mime): void
+    {
+        $mime = strtolower($mime);
+        if (!in_array($mime, self::RESIZABLE_IMAGE_MIME, true)) {
+            return;
+        }
+
+        foreach ($this->enabledImageVariants() as $name => $settings) {
+            $targetRelative = $this->variantRelativePath($sourceRelative, $name);
+            $targetAbsolute = $this->resolvePath($targetRelative, true);
+
+            try {
+                $this->ensureDirectory(dirname($targetAbsolute));
+                if (is_file($targetAbsolute) && !unlink($targetAbsolute)) {
+                    throw new \RuntimeException('Unable to replace existing image variant.');
+                }
+
+                $written = false;
+                $imagickError = null;
+                if (class_exists(\Imagick::class)) {
+                    try {
+                        $this->resizeWithImagick(
+                            $sourceAbsolute,
+                            $targetAbsolute,
+                            (int)$settings['width'],
+                            (int)$settings['height']
+                        );
+                        $written = true;
+                    } catch (\Throwable $error) {
+                        $imagickError = $error;
+                    }
+                }
+
+                if (!$written && extension_loaded('gd')) {
+                    $this->resizeWithGd(
+                        $sourceAbsolute,
+                        $targetAbsolute,
+                        $mime,
+                        (int)$settings['width'],
+                        (int)$settings['height']
+                    );
+                    $written = true;
+                }
+
+                if (!$written) {
+                    throw new \RuntimeException(
+                        $imagickError?->getMessage() ?? 'No supported image processing backend is available.'
+                    );
+                }
+
+                @chmod($targetAbsolute, 0644);
+            } catch (\Throwable $error) {
+                if (is_file($targetAbsolute)) {
+                    @unlink($targetAbsolute);
+                }
+                $this->cleanupVariantDirectories($targetRelative);
+                $this->log(
+                    "Media variant {$name} was not generated for {$sourceRelative}: " . $error->getMessage(),
+                    'warning'
+                );
+            }
+        }
+    }
+
+    private function enabledImageVariants(): array
+    {
+        $variants = [];
+        foreach (self::IMAGE_VARIANTS as $name => $definition) {
+            if (!$this->settingEnabled((string)$definition['enabled_setting'])) {
+                continue;
+            }
+
+            $width = (int)($this->getSetting((string)$definition['width_setting'])
+                ?? $definition['default_width']);
+            $height = (int)($this->getSetting((string)$definition['height_setting'])
+                ?? $definition['default_height']);
+            if ($width < 1 || $height < 1) {
+                continue;
+            }
+
+            $variants[$name] = [
+                'width' => min($width, 10000),
+                'height' => min($height, 10000),
+            ];
+        }
+        return $variants;
+    }
+
+    private function settingEnabled(string $name): bool
+    {
+        $value = $this->getSetting($name);
+        if (is_bool($value)) {
+            return $value;
+        }
+        if (is_int($value) || is_float($value)) {
+            return (int)$value === 1;
+        }
+        return in_array(strtolower(trim((string)$value)), ['1', 'true', 'yes', 'on'], true);
+    }
+
+    private function resizeWithImagick(
+        string $source,
+        string $target,
+        int $maxWidth,
+        int $maxHeight
+    ): void {
+        $image = new \Imagick($source);
+        try {
+            if ($image->getNumberImages() > 1) {
+                throw new \RuntimeException('Animated images are not resized automatically.');
+            }
+            $image->setIteratorIndex(0);
+            if (method_exists($image, 'autoOrientImage')) {
+                $image->autoOrientImage();
+            }
+
+            $width = $image->getImageWidth();
+            $height = $image->getImageHeight();
+            if ($width < 1 || $height < 1) {
+                throw new \RuntimeException('Unable to read image dimensions.');
+            }
+
+            [$targetWidth, $targetHeight] = $this->fitDimensions($width, $height, $maxWidth, $maxHeight);
+            if ($targetWidth !== $width || $targetHeight !== $height) {
+                $image->resizeImage($targetWidth, $targetHeight, \Imagick::FILTER_LANCZOS, 1.0);
+                $image->setImagePage(0, 0, 0, 0);
+            }
+
+            $extension = strtolower((string)pathinfo($target, PATHINFO_EXTENSION));
+            $formats = [
+                'jpg' => 'JPEG',
+                'jpeg' => 'JPEG',
+                'png' => 'PNG',
+                'webp' => 'WEBP',
+                'avif' => 'AVIF',
+            ];
+            if (isset($formats[$extension])) {
+                $image->setImageFormat($formats[$extension]);
+            }
+            if (in_array($extension, ['jpg', 'jpeg', 'webp', 'avif'], true)) {
+                $image->setImageCompressionQuality(85);
+            }
+
+            if (!$image->writeImage($target)) {
+                throw new \RuntimeException('Imagick failed to write the image variant.');
+            }
+        } finally {
+            $image->clear();
+            $image->destroy();
+        }
+    }
+
+    private function resizeWithGd(
+        string $source,
+        string $target,
+        string $mime,
+        int $maxWidth,
+        int $maxHeight
+    ): void {
+        $image = match ($mime) {
+            'image/jpeg' => function_exists('imagecreatefromjpeg') ? @imagecreatefromjpeg($source) : false,
+            'image/png' => function_exists('imagecreatefrompng') ? @imagecreatefrompng($source) : false,
+            'image/webp' => function_exists('imagecreatefromwebp') ? @imagecreatefromwebp($source) : false,
+            'image/avif', 'image/heif' => function_exists('imagecreatefromavif') ? @imagecreatefromavif($source) : false,
+            default => false,
+        };
+        if (!$image instanceof \GdImage) {
+            throw new \RuntimeException('GD cannot decode this image format.');
+        }
+
+        try {
+            if ($mime === 'image/jpeg') {
+                $image = $this->orientGdJpeg($image, $source);
+            }
+
+            $width = imagesx($image);
+            $height = imagesy($image);
+            [$targetWidth, $targetHeight] = $this->fitDimensions($width, $height, $maxWidth, $maxHeight);
+
+            $targetImage = imagecreatetruecolor($targetWidth, $targetHeight);
+            if (!$targetImage instanceof \GdImage) {
+                throw new \RuntimeException('GD failed to create the image canvas.');
+            }
+
+            try {
+                if (in_array($mime, ['image/png', 'image/webp', 'image/avif', 'image/heif'], true)) {
+                    imagealphablending($targetImage, false);
+                    imagesavealpha($targetImage, true);
+                    $transparent = imagecolorallocatealpha($targetImage, 0, 0, 0, 127);
+                    imagefill($targetImage, 0, 0, $transparent);
+                }
+
+                if (!imagecopyresampled(
+                    $targetImage,
+                    $image,
+                    0,
+                    0,
+                    0,
+                    0,
+                    $targetWidth,
+                    $targetHeight,
+                    $width,
+                    $height
+                )) {
+                    throw new \RuntimeException('GD failed to resize the image.');
+                }
+
+                $written = match ($mime) {
+                    'image/jpeg' => imagejpeg($targetImage, $target, 85),
+                    'image/png' => imagepng($targetImage, $target, 6),
+                    'image/webp' => function_exists('imagewebp') && imagewebp($targetImage, $target, 85),
+                    'image/avif', 'image/heif' => function_exists('imageavif') && imageavif($targetImage, $target, 85),
+                    default => false,
+                };
+                if (!$written) {
+                    throw new \RuntimeException('GD failed to write the image variant.');
+                }
+            } finally {
+                imagedestroy($targetImage);
+            }
+        } finally {
+            imagedestroy($image);
+        }
+    }
+
+    private function orientGdJpeg(\GdImage $image, string $source): \GdImage
+    {
+        if (!function_exists('exif_read_data')) {
+            return $image;
+        }
+
+        $exif = @exif_read_data($source);
+        $orientation = (int)($exif['Orientation'] ?? 1);
+        $result = $image;
+
+        switch ($orientation) {
+            case 2:
+                imageflip($result, IMG_FLIP_HORIZONTAL);
+                break;
+            case 3:
+                $result = imagerotate($result, 180, 0);
+                break;
+            case 4:
+                imageflip($result, IMG_FLIP_VERTICAL);
+                break;
+            case 5:
+                imageflip($result, IMG_FLIP_HORIZONTAL);
+                $result = imagerotate($result, 90, 0);
+                break;
+            case 6:
+                $result = imagerotate($result, -90, 0);
+                break;
+            case 7:
+                imageflip($result, IMG_FLIP_HORIZONTAL);
+                $result = imagerotate($result, -90, 0);
+                break;
+            case 8:
+                $result = imagerotate($result, 90, 0);
+                break;
+        }
+
+        if (!$result instanceof \GdImage) {
+            return $image;
+        }
+        if ($result !== $image) {
+            imagedestroy($image);
+        }
+        return $result;
+    }
+
+    private function fitDimensions(int $width, int $height, int $maxWidth, int $maxHeight): array
+    {
+        $scale = min($maxWidth / $width, $maxHeight / $height, 1.0);
+        return [
+            max(1, (int)round($width * $scale)),
+            max(1, (int)round($height * $scale)),
+        ];
+    }
+
+    private function variantRelativePath(string $sourceRelative, string $variant): string
+    {
+        return $this->joinRelative(
+            $this->parentRelative($sourceRelative),
+            self::VARIANTS_DIRECTORY,
+            $variant,
+            basename($sourceRelative)
+        );
+    }
+
+    private function moveVariantFiles(string $sourceRelative, string $targetRelative): void
+    {
+        foreach (array_keys(self::IMAGE_VARIANTS) as $variant) {
+            $sourceVariant = $this->variantRelativePath($sourceRelative, $variant);
+            $sourceAbsolute = $this->resolvePath($sourceVariant, true);
+            if (!is_file($sourceAbsolute) || is_link($sourceAbsolute)) {
+                continue;
+            }
+
+            $targetVariant = $this->variantRelativePath($targetRelative, $variant);
+            $targetAbsolute = $this->resolvePath($targetVariant, true);
+            try {
+                $this->ensureDirectory(dirname($targetAbsolute));
+                if (is_file($targetAbsolute)) {
+                    @unlink($targetAbsolute);
+                }
+                if (!rename($sourceAbsolute, $targetAbsolute)) {
+                    throw new \RuntimeException('Unable to move generated image variant.');
+                }
+                @chmod($targetAbsolute, 0644);
+                $this->cleanupVariantDirectories($sourceVariant);
+            } catch (\Throwable $error) {
+                $this->log(
+                    "Media variant {$variant} was not moved with {$sourceRelative}: " . $error->getMessage(),
+                    'warning'
+                );
+            }
+        }
+    }
+
+    private function deleteVariantFiles(string $sourceRelative): void
+    {
+        foreach (array_keys(self::IMAGE_VARIANTS) as $variant) {
+            $variantRelative = $this->variantRelativePath($sourceRelative, $variant);
+            $variantAbsolute = $this->resolvePath($variantRelative, true);
+            if (!is_file($variantAbsolute) || is_link($variantAbsolute)) {
+                continue;
+            }
+
+            if (!@unlink($variantAbsolute)) {
+                $this->log("Unable to delete Media variant {$variantRelative}.", 'warning');
+                continue;
+            }
+            $this->cleanupVariantDirectories($variantRelative);
+        }
+    }
+
+    private function cleanupVariantDirectories(string $variantRelative): void
+    {
+        $variantDirectory = dirname($this->resolvePath($variantRelative, true));
+        $variantsRoot = dirname($variantDirectory);
+
+        foreach ([$variantDirectory, $variantsRoot] as $directory) {
+            if (!is_dir($directory) || is_link($directory)) {
+                continue;
+            }
+            $items = scandir($directory);
+            if ($items !== false && array_values(array_diff($items, ['.', '..'])) === []) {
+                @rmdir($directory);
+            }
+        }
+    }
+
+    private function relativePathFromUrl(string $url): ?string
+    {
+        $path = parse_url($url, PHP_URL_PATH);
+        if (!is_string($path) || !str_starts_with($path, self::MEDIA_URL)) {
+            return null;
+        }
+
+        $encoded = substr($path, strlen(self::MEDIA_URL));
+        if ($encoded === '') {
+            return null;
+        }
+
+        $relative = implode('/', array_map('rawurldecode', explode('/', $encoded)));
+        try {
+            return $this->normalizeRelativePath($relative);
+        } catch (\Throwable) {
+            return null;
+        }
+    }
+
+    private function isVariantPath(string $path): bool
+    {
+        return in_array(self::VARIANTS_DIRECTORY, explode('/', $path), true);
+    }
+
+    private function assertPublicPath(string $path): void
+    {
+        if ($this->isVariantPath($path)) {
+            throw new \InvalidArgumentException('Generated Media variants cannot be browsed or managed directly.');
+        }
+    }
+
+    private function prepareUploadTarget(string $currentPath, string $root = ''): array
+    {
+        $currentPath = $this->normalizeRelativePath($currentPath);
+        $root = $this->normalizeRelativePath($root);
+        $this->assertPublicPath($root);
+        $this->assertPublicPath($currentPath);
+        $this->assertWithinBrowserRoot($currentPath, $root);
+
+        $currentAbsolute = $this->resolvePath($currentPath, true);
+        if (!is_dir($currentAbsolute)) {
+            throw new \InvalidArgumentException('Upload path must be an existing Media folder.');
+        }
+        $this->assertValidManagedPath($currentPath);
+
+        $targetRelative = $this->getUploadDirectory($currentPath);
+        $this->assertWithinBrowserRoot($targetRelative, $root);
+        $targetDirectory = $this->resolvePath($targetRelative, true);
+        $this->ensureDirectory($targetDirectory);
+
+        return [$targetRelative, $targetDirectory];
     }
 
     private function normalizeUploadedFiles(?array $files): array

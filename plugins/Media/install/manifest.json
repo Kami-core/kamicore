@@ -12,7 +12,7 @@
       "author": "Kami team"
     },
     "prefix": "media",
-    "version": "0.2.1",
+    "version": "0.3.0",
     "category": "content",
     "dependencies": [],
     "config": {
@@ -34,6 +34,11 @@
           "actions": {
             "upload": {
               "title": "Upload media files"
+            },
+            "uploadFile": {
+              "title": "Upload media file",
+              "api": true,
+              "method": "POST"
             },
             "createFolder": {
               "title": "Create media folder"
@@ -67,6 +72,48 @@
         "description": "Maximum size of one uploaded file in MB. PHP/web-server limits still apply. If upload_max_filesize, post_max_size or another server limit is lower, ask the server administrator to change it; Media does not use chunked or streaming uploads.",
         "type": "integer",
         "default": 50,
+        "global": 1
+      },
+      "thumbnail_enabled": {
+        "title": "Generate thumbnail",
+        "description": "Generate a thumbnail image variant when a supported image is uploaded.",
+        "type": "checkbox",
+        "default": 0,
+        "global": 1
+      },
+      "thumbnail_width": {
+        "title": "Thumbnail maximum width",
+        "description": "Maximum thumbnail width in pixels. Images keep their aspect ratio and are never enlarged.",
+        "type": "integer",
+        "default": 400,
+        "global": 1
+      },
+      "thumbnail_height": {
+        "title": "Thumbnail maximum height",
+        "description": "Maximum thumbnail height in pixels. Images keep their aspect ratio and are never enlarged.",
+        "type": "integer",
+        "default": 300,
+        "global": 1
+      },
+      "midsize_enabled": {
+        "title": "Generate midsize",
+        "description": "Generate a midsize image variant when a supported image is uploaded.",
+        "type": "checkbox",
+        "default": 0,
+        "global": 1
+      },
+      "midsize_width": {
+        "title": "Midsize maximum width",
+        "description": "Maximum midsize width in pixels. Images keep their aspect ratio and are never enlarged.",
+        "type": "integer",
+        "default": 1200,
+        "global": 1
+      },
+      "midsize_height": {
+        "title": "Midsize maximum height",
+        "description": "Maximum midsize height in pixels. Images keep their aspect ratio and are never enlarged.",
+        "type": "integer",
+        "default": 900,
         "global": 1
       }
     },

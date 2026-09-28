@@ -12,7 +12,7 @@
       "author": "Kami team"
     },
     "prefix": "cm",
-    "version": "1.2.9",
+    "version": "1.2.10",
     "category": "content",
     "dependencies": [
       "Forms",
@@ -61,6 +61,12 @@
             },
             "typeDelete": {
               "title": "TODO"
+            },
+            "typeExport": {
+              "title": "Export content types"
+            },
+            "typeImport": {
+              "title": "Import content types"
             },
             "fieldEdit": {
               "title": "Edit content field"

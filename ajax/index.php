@@ -74,7 +74,7 @@ Core\Request::init();
 $data = Core\Request::all();
 debug_step("Request processed");
 
-Core\Session::init();
+Core\Session::load();
 
 if (!Core\Csrf::validate(Core\Request::header(Core\Csrf::HEADER))) {
     Core\Response::json([

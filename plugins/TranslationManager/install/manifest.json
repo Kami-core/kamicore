@@ -11,7 +11,7 @@
       "author": "Kami team"
     },
     "prefix": "trm",
-    "version": "1.0.1",
+    "version": "1.0.2",
     "category": "content",
     "dependencies": [
       "Forms",
@@ -65,6 +65,16 @@
             }
           },
           "default_action": "overview"
+        },
+        "view": {
+          "title": "View",
+          "actions": {
+            "getLanguages": {
+              "title": "Get language configuration",
+              "api": true,
+              "method": "GET"
+            }
+          }
         }
       },
       "default_handler": "manage",

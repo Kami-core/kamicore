@@ -1993,6 +1993,35 @@ final class TranslationManager extends \Core\BasePlugin
         return $html . '</select>';
     }
 
+
+    public function getLanguages(array $data = []): array
+    {
+        $languages = [];
+        $rows = \DB::query(
+            'SELECT lang_code, lang_name, is_active FROM languages ORDER BY lang_name, lang_code'
+        );
+        while ($row = \DB::fetchRow($rows)) {
+            $languages[] = [
+                'code' => (string)$row['lang_code'],
+                'title' => (string)$row['lang_name'],
+                'active' => (bool)$row['is_active'],
+            ];
+        }
+
+        $domainLanguages = defined('DOMAIN_CONFIG') && is_array(DOMAIN_CONFIG['languages'] ?? null)
+            ? array_values(array_map('strval', DOMAIN_CONFIG['languages']))
+            : [];
+        $defaultLanguage = trim((string)(DOMAIN_CONFIG['default_language'] ?? ''));
+
+        return [
+            'languages' => $languages,
+            'domain' => [
+                'active' => $domainLanguages,
+                'default' => $defaultLanguage !== '' ? $defaultLanguage : null,
+            ],
+        ];
+    }
+
     private function providerSelect(
         array $providerData,
         string $selected,

@@ -2,9 +2,9 @@
 
 This roadmap describes the current direction of KamiCore development. It is not a fixed release schedule: scope may move between releases as real projects expose better priorities.
 
-## 0.8 — Themes and administration
+## 0.9 — Themes and administration
 
-The main focus for 0.8 is making themes genuinely interchangeable rather than treating a theme switch as a simple directory change.
+The main focus for 0.9 is making themes genuinely interchangeable rather than treating a theme switch as a simple directory change.
 
 Planned work:
 
@@ -15,13 +15,13 @@ Planned work:
 
 The exact migration UI and compatibility rules will be driven by the real differences between the default theme and the second theme rather than designed purely in the abstract.
 
-## 0.9+ — Developer tools
+## Later — Developer tools
 
 A later release is expected to introduce a dedicated **DevTools** plugin.
 
 Its main direction is tooling for developers who need to clone, export/import, and migrate plugins and themes between installations or development environments. Additional validation, inspection, and development utilities may be added where they make those workflows safer and clearer.
 
-The exact DevTools scope is intentionally not fixed to 0.9 yet.
+The exact DevTools release target is intentionally not fixed yet.
 
 ## Longer-term directions
 

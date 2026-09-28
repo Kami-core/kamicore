@@ -264,6 +264,16 @@ class PageManager extends \Core\BasePlugin {
 		$data = \Core\Request::all();
 		$pageId = (int)$this->param('pageId', $data['page_id'] ?? 0);
 		$layout = \Core\Utils\JsonTool::decodeArray($data['layout_json'] ?? null);
+		$page = \DB::getRow(
+			'select uuid, domain_id, layout_id, page_settings, page_plugins from pages where page_id=$1',
+			[$pageId]
+		);
+		if (!$page) {
+			return '<div class="kc-notice kc-notice-error">Page not found.</div>';
+		}
+		$existingInstances = $this->pagePluginInstancesById(
+			\Core\Utils\JsonTool::decodeArray($page['page_plugins'] ?? null)
+		);
 		$pagePlugins = [];
 
 		foreach ($layout as $wrapper) {
@@ -312,21 +322,20 @@ class PageManager extends \Core\BasePlugin {
 				foreach ($instanceParams as $name => $structure) {
 					$value = $data['plugin_params'][$instanceId][$name]
 						?? (is_array($structure) ? ($structure['default'] ?? null) : null);
-					$params[$name] = $this->normalizeInstanceParamValue($value, $structure);
+					$value = $this->normalizeInstanceParamValue($value, $structure);
+					if (is_array($structure) && !empty($structure['translatable'])) {
+						$existing = $existingInstances[$instanceId]['params'][$name] ?? [];
+						$translations = is_array($existing) ? $existing : [];
+						$translations[LANG] = $value;
+						$value = $translations;
+					}
+					$params[$name] = $value;
 				}
 
 				$wrapperPlugins[] = [$pluginName => $params];
 			}
 
 			$pagePlugins[$wrapperName] = $wrapperPlugins;
-		}
-
-		$page = \DB::getRow(
-			'select uuid, domain_id, layout_id, page_settings from pages where page_id=$1',
-			[$pageId]
-		);
-		if (!$page) {
-			return '<div class="kc-notice kc-notice-error">Page not found.</div>';
 		}
 
 		try {
@@ -1623,12 +1632,38 @@ class PageManager extends \Core\BasePlugin {
 			}
 
 			$field['name'] = "plugin_params[{$instanceId}][{$fieldName}]";
-			$field['value'] = $instanceParams[$fieldName] ?? $field['default'] ?? null;
+			$value = $instanceParams[$fieldName] ?? $field['default'] ?? null;
+			if (!empty($field['translatable'])) {
+				$value = $this->localizedInstanceParamValue($value);
+			}
+			$field['value'] = $value;
 			$form .= $this->forms()->renderField($field);
 		}
 
 		$form .= '</div>';
 		return $form;
+	}
+
+	private function pagePluginInstancesById(array $pagePlugins): array {
+		$instances = [];
+		$instanceId = 1;
+		foreach ($pagePlugins as $wrapperPlugins) {
+			if (!is_array($wrapperPlugins)) continue;
+			foreach ($wrapperPlugins as $plugin) {
+				if (!is_array($plugin) || $plugin === []) continue;
+				$pluginName = (string)array_key_first($plugin);
+				$instances[$instanceId++] = [
+					'plugin' => $pluginName,
+					'params' => is_array($plugin[$pluginName] ?? null) ? $plugin[$pluginName] : [],
+				];
+			}
+		}
+		return $instances;
+	}
+
+	private function localizedInstanceParamValue(mixed $value): mixed {
+		if (!is_array($value)) return $value;
+		return $value[LANG] ?? '';
 	}
 
 	private function normalizeInstanceParamValue(mixed $value, mixed $structure): mixed {

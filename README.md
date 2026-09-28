@@ -6,13 +6,13 @@
 
 KamiCore is a modular content management system built with PHP and PostgreSQL. It is designed around structured content, plugins, themes, multilingual data, and a small transparent core that avoids hiding application behavior behind unnecessary abstraction.
 
-> **KamiCore 0.7 Alpha**
+> **KamiCore 0.8 Alpha**
 >
 > This is an early development release intended for testing, evaluation, and real-world development. APIs, database structures, plugin contracts, theme contracts, and other internal interfaces may still change before a stable release. Release upgrades are supported, but arbitrary development snapshots are not guaranteed to remain backward compatible.
 
 ## Highlights
 
-- Structured content types with reusable field definitions, compound fields, hierarchy, and PostgreSQL-backed indexing.
+- Structured content types with reusable field definitions, compound fields, hierarchy, configurable PostgreSQL-backed indexing, and portable structure import/export.
 - Plugin-based page composition and lifecycle extensions.
 - Dynamic renderer placeholders can be embedded in stored content and remain literal while that content is being edited.
 - Themes with overridable templates and layouts.
@@ -20,15 +20,16 @@ KamiCore is a modular content management system built with PHP and PostgreSQL. I
 - Multilingual content and system dictionaries with fallback support and assisted translation workflows.
 - User groups, plugin permissions, content permissions, and page-level access control.
 - Built-in administration for pages, content, navigation, media, users, translations, plugins, themes, and system settings.
+- Read/write content APIs and multipart Media uploads for external integrations.
 - Generic content viewing in single, list, and hierarchical tree modes.
 - Redis caching with a no-cache fallback.
 - Browser-based installer and checksummed core/plugin database migrations.
 
-KamiCore also ships several **bundled but optional** capabilities that are installed explicitly when needed, including API access, Markdown rendering, search, and SEO/sitemap support. The zero-config installation intentionally stays small and does not enable scenario-specific features automatically.
+KamiCore also ships several **bundled but optional** capabilities that are installed explicitly when needed, including API access, Markdown rendering, search, SEO/sitemap support, contact forms, and automated-client detection. The zero-config installation intentionally stays small and does not enable scenario-specific features automatically.
 
 ## Requirements
 
-KamiCore 0.7 Alpha currently requires:
+KamiCore 0.8 Alpha currently requires:
 
 - PHP **8.4 or newer**.
 - PostgreSQL **17 or newer**.
@@ -93,7 +94,7 @@ A clean installation creates a small bilingual sample site rather than a prebuil
 
 Everything in the sample site can be edited or removed from the administration area.
 
-Optional bundled plugins such as **ApiAccess**, **ViewMd**, **Search**, and **SimpleSEO** can be installed later through PluginManager when a project actually needs them.
+Optional bundled plugins such as **ApiAccess**, **ViewMd**, **Search**, **SimpleSEO**, **ContactForm**, and **BotDetector** can be installed later through PluginManager when a project actually needs them.
 
 ## Project status
 
@@ -128,7 +129,7 @@ KamiCore keeps its master encryption key outside the public document root and st
 
 API authentication is provided through the optional bundled ApiAccess plugin and uses bearer tokens whose stored values are hashed. Token permissions can only narrow the permissions already granted to the user by the normal ACL model.
 
-Browser state-changing requests are protected by session-bound CSRF tokens. The core browser runtime automatically attaches the current token to all internal `/ajax/` requests and to same-origin non-GET form submissions, including dynamically inserted forms. Custom browser requests outside the standard `/ajax/` transport must attach the CSRF token explicitly when they use unsafe frontend methods. API requests and plugin-owned virtual endpoints keep their own authentication or endpoint-specific trust model instead of inheriting browser CSRF handling.
+Browser state-changing requests are protected by signed stateless CSRF tokens carried in a secure same-origin cookie and validated without creating a server-side session. The core browser runtime automatically attaches the current token to all internal `/ajax/` requests and to same-origin non-GET form submissions, including dynamically inserted forms. Custom browser requests outside the standard `/ajax/` transport must attach the CSRF token explicitly when they use unsafe frontend methods. API requests and plugin-owned virtual endpoints keep their own authentication or endpoint-specific trust model instead of inheriting browser CSRF handling.
 
 As with any alpha software, review your deployment environment and configuration before exposing an installation to untrusted traffic.
 

@@ -33,4 +33,66 @@ final class Crypto
     {
         return hash('sha256', $token);
     }
+
+    /**
+     * Sign application data with the installation master key.
+     *
+     * The purpose string provides domain separation between independent token types.
+     */
+    public static function sign(string $purpose, string $value): string
+    {
+        $purpose = trim($purpose);
+        if ($purpose === '') {
+            throw new \InvalidArgumentException('Signature purpose cannot be empty.');
+        }
+
+        $key = self::loadInstallationKey();
+        try {
+            return hash_hmac('sha256', $purpose . "\0" . $value, $key);
+        } finally {
+            if (function_exists('sodium_memzero')) {
+                sodium_memzero($key);
+            }
+        }
+    }
+
+    public static function verifySignature(
+        string $purpose,
+        string $value,
+        string $signature
+    ): bool {
+        if (!preg_match('/^[a-f0-9]{64}$/D', $signature)) {
+            return false;
+        }
+
+        return hash_equals(self::sign($purpose, $value), $signature);
+    }
+
+    private static function loadInstallationKey(): string
+    {
+        if (!defined('KAMI_SECRET_KEY_FILE')) {
+            throw new \RuntimeException('KAMI_SECRET_KEY_FILE is not configured.');
+        }
+
+        $path = (string)constant('KAMI_SECRET_KEY_FILE');
+        if ($path === '' || !is_file($path) || !is_readable($path)) {
+            throw new \RuntimeException('Kami master key file is not readable.');
+        }
+
+        $raw = file_get_contents($path);
+        if ($raw === false) {
+            throw new \RuntimeException('Unable to read Kami master key file.');
+        }
+
+        $decoded = base64_decode(trim($raw), true);
+        if ($decoded !== false && strlen($decoded) === 32) {
+            return $decoded;
+        }
+
+        if (strlen($raw) === 32) {
+            return $raw;
+        }
+
+        throw new \RuntimeException('Kami master key has an invalid length or format.');
+    }
 }

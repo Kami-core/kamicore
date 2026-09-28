@@ -873,6 +873,7 @@ final class ContentStructure
                 'type' => $typeName,
                 'translatable' => $translatable,
                 'required' => !empty($definition['required']),
+                'indexed' => !array_key_exists('indexed', $definition) || !empty($definition['indexed']),
                 'displayorder' => ++$displayorder,
             ];
 
@@ -1060,6 +1061,8 @@ final class ContentStructure
         $oldIndexed = !empty($oldSettings['indexed']);
         $newIndexed = !empty($newSettings['indexed']);
         $uniqueEnabled = empty($oldSettings['unique']) && !empty($newSettings['unique']);
+        $compoundIndexChanged = self::compoundComponentIndexMap($oldSettings)
+            !== self::compoundComponentIndexMap($newSettings);
 
         if (!$newIndexed && $oldIndexed) {
             foreach (self::INDEX_TABLES as $table) {
@@ -1068,7 +1071,11 @@ final class ContentStructure
             return;
         }
 
-        if ((!$oldIndexed && $newIndexed) || $uniqueEnabled) {
+        if (
+            (!$oldIndexed && $newIndexed)
+            || $uniqueEnabled
+            || ($oldIndexed && $newIndexed && $compoundIndexChanged)
+        ) {
             // Content::reindex() must see the field definition just written above.
             self::invalidateField($fieldId);
             $items = \DB::query(
@@ -1080,6 +1087,20 @@ final class ContentStructure
                 Content::reindex((int)$item['item_id']);
             }
         }
+    }
+
+    private static function compoundComponentIndexMap(array $settings): array
+    {
+        $params = is_array($settings['params'] ?? null) ? $settings['params'] : [];
+        $components = is_array($params['components'] ?? null) ? $params['components'] : [];
+        $map = [];
+
+        foreach ($components as $name => $component) {
+            if (!is_string($name) || !is_array($component)) continue;
+            $map[$name] = !array_key_exists('indexed', $component) || !empty($component['indexed']);
+        }
+
+        return $map;
     }
 
     private static function fieldHasArrayValues(int $contentTypeId, string $fieldName): bool

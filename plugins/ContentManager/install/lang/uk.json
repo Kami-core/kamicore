@@ -54,6 +54,12 @@
         "typeDelete": {
           "title": "Видалити тип контенту"
         },
+        "typeExport": {
+          "title": "Експортувати типи контенту"
+        },
+        "typeImport": {
+          "title": "Імпортувати типи контенту"
+        },
         "typeManagerList": {
           "title": "Керувати менеджерами типів контенту"
         },
@@ -169,6 +175,18 @@
     "item_count": "{count} елементів",
     "create_content_type": "Створити тип контенту",
     "no_content_types": "Типів контенту не знайдено.",
+    "export_content_types": "Експорт",
+    "import_content_types": "Імпорт",
+    "select_all_content_types": "Вибрати всі видимі типи контенту",
+    "select_content_type": "Вибрати {title}",
+    "content_type_export_failed": "Не вдалося експортувати типи контенту.",
+    "content_type_import_failed": "Не вдалося імпортувати типи контенту.",
+    "content_type_import_completed": "Імпорт типів контенту завершено.",
+    "content_type_import_summary": "Імпортовано типів: {types}; створено нових полів: {fields}; використано наявних полів: {reused}.",
+    "content_type_import_file_required": "Виберіть JSON-файл для імпорту.",
+    "content_type_import_file_empty": "Файл імпорту порожній.",
+    "content_type_import_invalid_upload": "Некоректно завантажений файл.",
+    "content_type_import_read_failed": "Не вдалося прочитати файл імпорту.",
     "open_items": "Відкрити елементи",
     "edit_structure": "Редагувати структуру",
     "edit_item": "Редагувати елемент",

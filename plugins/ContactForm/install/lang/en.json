@@ -1,0 +1,25 @@
+{
+  "plugin": {
+    "title": "Contact form",
+    "description": "Public forms backed by content types and persistent submissions."
+  },
+  "phrases": {
+    "submit": "Send",
+    "success": "Thank you. Your message has been received.",
+    "invalid_form": "This form is not available.",
+    "invalid_submission": "Please check the form fields and try again.",
+    "rate_limited": "Too many submissions. Please try again later.",
+    "delivery_failed": "Your message was saved, but notification delivery failed.",
+    "processing_failed": "The form could not be processed. Please try again later."
+  },
+  "handlers": {
+    "view": {
+      "instance_params": {
+        "title": {
+          "title": "Form title",
+          "description": "Optional heading displayed above this form."
+        }
+      }
+    }
+  }
+}

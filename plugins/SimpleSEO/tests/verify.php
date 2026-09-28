@@ -39,7 +39,7 @@ $sessionId=null;
 DB::beginTransaction();
 try {
     Request::init();
-    Core\Session::init();
+    Core\Session::ensure();
     $sessionId=Core\Session::id();
     $registry=new Core\PluginRegistry();
     $seo=$registry->get('SimpleSEO');

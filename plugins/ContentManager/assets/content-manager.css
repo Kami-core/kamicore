@@ -459,3 +459,20 @@
   background: #fff4d6;
   color: #8a5b00;
 }
+
+
+.cm-select-heading,
+.cm-select-cell {
+  width: 44px;
+  text-align: center !important;
+}
+
+.cm-select-heading input,
+.cm-select-cell input {
+  margin: 0;
+  vertical-align: middle;
+}
+
+.cm-toolbar-actions {
+  flex-wrap: wrap;
+}
