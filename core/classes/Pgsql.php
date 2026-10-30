@@ -51,7 +51,7 @@ class DB
 			int $port = 5432,
 			bool $skipError = false
 		): bool {
-			if (!function_exists('pg_connect')) {
+			if (!function_exists('pg_pconnect')) {
 				die('<strong>The PHP PgSQL extension libraries are not installed on this server!</strong>');
 			}
 
@@ -72,12 +72,21 @@ class DB
 					self::$password
 				);
 
-				self::$conn = pg_connect($connStr);
+				self::$conn = pg_pconnect($connStr);
 				if (!self::$conn) {
 					if (!$skipError) {
 						self::error('Unable to establish a connection to the PostgreSQL server!');
 					}
 				} else {
+					// A persistent connection may be reused from a previous
+					// request that did not commit/rollback its transaction
+					// (e.g. a fatal error mid-transaction). Reset it so the
+					// new request never inherits stale transaction state.
+					if (pg_transaction_status(self::$conn) !== PGSQL_TRANSACTION_IDLE) {
+						@pg_query(self::$conn, 'ROLLBACK');
+					}
+					self::$transactionDepth = 0;
+
 					if ($database !== '') {
 						@pg_query(self::$conn, "SET NAMES '{$charset}'");
 					}

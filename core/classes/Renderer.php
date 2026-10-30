@@ -22,6 +22,9 @@ final class Renderer
     /** @var array<string, array<string, string>> */
     private static array $bundleCache = [];
 
+    /** @var array<string, array{type: 'file'|'bundle', path: string}|null> */
+    private static array $sourceCache = [];
+
     public static function render(
         string $template = '',
         ?string $pluginName = null,
@@ -322,6 +325,12 @@ final class Renderer
         string $template,
         ?string $pluginName
     ): ?array {
+        $cacheKey = ($pluginName ?? '') . '::' . $template;
+
+        if (array_key_exists($cacheKey, self::$sourceCache)) {
+            return self::$sourceCache[$cacheKey];
+        }
+
         $theme = (string) (DOMAIN_CONFIG['theme_path'] ?? 'default');
         $themeTemplates = ROOT_PATH . "themes/{$theme}/templates";
 
@@ -359,10 +368,10 @@ final class Renderer
                 }
             }
 
-            return ['type' => $type, 'path' => $path];
+            return self::$sourceCache[$cacheKey] = ['type' => $type, 'path' => $path];
         }
 
-        return null;
+        return self::$sourceCache[$cacheKey] = null;
     }
 
     /**
