@@ -26,6 +26,26 @@ if(!defined('IN_KAMI')) die();
 spl_autoload_register(function ($class) {
 	static $psr4 = null;
 	static $classMap = null;
+	static $apcuAvailable = null;
+
+	if ($apcuAvailable === null) {
+		$apcuAvailable = function_exists('apcu_fetch');
+	}
+
+	// Cross-request, cross-worker cache of resolved class => file path.
+	// Avoids an is_file() stat on every PSR-4 prefix for every class on
+	// every request; invalidated implicitly on fpm restart (same deploy
+	// discipline already required by opcache.validate_timestamps=0).
+	if ($apcuAvailable) {
+		$apcuKey = 'kami_autoload:' . $class;
+		$cachedPath = apcu_fetch($apcuKey, $apcuHit);
+		if ($apcuHit) {
+			if ($cachedPath !== false) {
+				require $cachedPath;
+			}
+			return;
+		}
+	}
 
     if ($psr4 === null) {
         // Base PSR-4 prefixes
@@ -65,7 +85,12 @@ spl_autoload_register(function ($class) {
     if (isset($classMap[$class]) && is_string($classMap[$class])) {
         $path = $classMap[$class];
         if (is_file($path)) {
+            if ($apcuAvailable) {
+                apcu_store($apcuKey, $path);
+            }
             require $path;
+        } elseif ($apcuAvailable) {
+            apcu_store($apcuKey, false);
         }
         return;
     }
@@ -79,10 +104,15 @@ spl_autoload_register(function ($class) {
         $relative = substr($class, $len);
         $path = $baseDir . str_replace('\\', DIRECTORY_SEPARATOR, $relative) . '.php';
         if (is_file($path)) {
+            if ($apcuAvailable) {
+                apcu_store($apcuKey, $path);
+            }
             require $path;
-        } else {
-	    // echo "NOT FOUND: $path";
+            return;
         }
+    }
 
+    if ($apcuAvailable) {
+        apcu_store($apcuKey, false);
     }
 	});

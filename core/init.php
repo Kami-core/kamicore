@@ -51,7 +51,7 @@ if (DEBUG_MODE && defined('KAMI_FRONT')) {
 require_once ROOT_PATH . 'core/functions.php';
 
 require_once ROOT_PATH . 'core/classes/Pgsql.php';
-DB::connect($db_config['host'], $db_config['user'], $db_config['password'], $db_config['name'], 'utf8', $db_config['port']);
+DB::connect($db_config['host'], $db_config['user'], $db_config['password'], $db_config['name'], 'utf8', $db_config['port'], persistent: $db_config['persistent'] ?? true);
 
 	require_once ROOT_PATH . 'core/classes/cache/Cache.php';
 	Cache::configure($redis_config);

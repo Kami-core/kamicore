@@ -49,9 +49,10 @@ class DB
 			string $database = '',
 			string $charset = 'utf8',
 			int $port = 5432,
-			bool $skipError = false
+			bool $skipError = false,
+			bool $persistent = true
 		): bool {
-			if (!function_exists('pg_connect')) {
+			if (!function_exists('pg_pconnect')) {
 				die('<strong>The PHP PgSQL extension libraries are not installed on this server!</strong>');
 			}
 
@@ -72,12 +73,37 @@ class DB
 					self::$password
 				);
 
-				self::$conn = pg_connect($connStr);
+				// Persistent connections (the default) are reused by the pgsql
+				// extension across requests within the same worker, keyed by
+				// $connStr. Set $persistent to false when $server points at a
+				// connection pooler such as PgBouncer in transaction-pooling
+				// mode: a persistent link there pins one pooler client slot per
+				// worker for its entire lifetime instead of benefiting from the
+				// pooler's own pool.
+				self::$conn = $persistent ? pg_pconnect($connStr) : pg_connect($connStr);
+
+				// A reused link's underlying socket may have been closed by the
+				// remote side (pooler/server idle timeout, restart, etc.)
+				// without PHP's knowledge. pg_ping() detects this and tries to
+				// re-establish the connection before we rely on it.
+				if (self::$conn && !pg_ping(self::$conn)) {
+					self::$conn = false;
+				}
+
 				if (!self::$conn) {
 					if (!$skipError) {
 						self::error('Unable to establish a connection to the PostgreSQL server!');
 					}
 				} else {
+					// A persistent connection may be reused from a previous
+					// request that did not commit/rollback its transaction
+					// (e.g. a fatal error mid-transaction). Reset it so the
+					// new request never inherits stale transaction state.
+					if (pg_transaction_status(self::$conn) !== PGSQL_TRANSACTION_IDLE) {
+						@pg_query(self::$conn, 'ROLLBACK');
+					}
+					self::$transactionDepth = 0;
+
 					if ($database !== '') {
 						@pg_query(self::$conn, "SET NAMES '{$charset}'");
 					}
