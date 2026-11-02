@@ -18,6 +18,13 @@ $db_config = [
     'user' => __DB_USER__,
     'password' => __DB_PASSWORD__,
     'name' => __DB_NAME__,
+    // Keep one persistent PostgreSQL connection open per PHP-FPM worker
+    // instead of reconnecting on every request. Set this to false if
+    // $db_config['host'] points at a connection pooler such as PgBouncer
+    // in transaction-pooling mode: a persistent link there pins one
+    // pooler client slot per worker for its entire lifetime instead of
+    // benefiting from the pooler's own pool.
+    'persistent' => true,
 ];
 
 define('USE_CACHE', __CACHE_ENABLED__);

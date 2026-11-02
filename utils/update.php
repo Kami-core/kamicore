@@ -39,7 +39,8 @@ if (!DB::connect(
     $db_config['password'],
     $db_config['name'],
     'utf8',
-    (int)$db_config['port']
+    (int)$db_config['port'],
+    persistent: (bool)($db_config['persistent'] ?? true)
 )) {
     fwrite(STDERR, "Unable to connect to PostgreSQL.\n");
     exit(1);
