@@ -17,9 +17,12 @@ if (!defined('IN_KAMI')) die();
 final class Crypto
 {
     /**
-     * Cached for the lifetime of the worker process. Trades the previous
-     * per-call sodium_memzero() wipe for avoiding a disk read + decode on
-     * every sign() call — see PR description for the rationale.
+     * Memoized for the current request (plain PHP-FPM re-declares classes,
+     * and so resets static properties, on every request — this does not
+     * persist across requests without opcache preloading). Still avoids a
+     * disk read + decode on every sign() call within a request that signs
+     * more than once. Trades the previous per-call sodium_memzero() wipe
+     * for that — see PR description for the rationale.
      */
     private static ?string $installationKey = null;
 

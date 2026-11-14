@@ -316,10 +316,15 @@ final class User
 
     public static function clearAclCache(?int $groupId = null): void
     {
-        $groupIds = $groupId !== null
-            ? [$groupId]
-            : array_map('intval', \DB::getArr('SELECT usergroup_id FROM usergroups'));
+        if ($groupId !== null) {
+            unset(self::$aclBagCache[$groupId]);
+            \Cache::del(self::aclCacheKey($groupId));
+            return;
+        }
 
+        self::$aclBagCache = [];
+
+        $groupIds = array_map('intval', \DB::getArr('SELECT usergroup_id FROM usergroups'));
         foreach ($groupIds as $id) {
             \Cache::del(self::aclCacheKey($id));
         }
