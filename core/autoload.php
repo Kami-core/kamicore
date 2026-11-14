@@ -26,6 +26,34 @@ if(!defined('IN_KAMI')) die();
 spl_autoload_register(function ($class) {
 	static $psr4 = null;
 	static $classMap = null;
+	static $apcuAvailable = null;
+	static $apcuPrefix = null;
+
+	if ($apcuAvailable === null) {
+		$apcuAvailable = function_exists('apcu_fetch');
+		// Scope the cache key to this installation's own directory, not
+		// ROOT_PATH: some entry points (api/index.php, ajax/index.php)
+		// define ROOT_PATH as a relative '../', which would collide across
+		// unrelated installs sharing the same APCu segment. __DIR__ is
+		// always this file's absolute, install-specific path.
+		$apcuPrefix = 'kami_autoload:' . __DIR__ . ':';
+	}
+
+	// Cross-request, cross-worker cache of resolved class => file path.
+	// Avoids an is_file() stat on every PSR-4 prefix for every class on
+	// every request. Only successful lookups are cached (never "not
+	// found") so a newly installed plugin's classes resolve immediately
+	// instead of staying invisible until the next cache clear; plugin
+	// install/update/uninstall also clears APCu explicitly, see
+	// ExtensionManager::transaction().
+	if ($apcuAvailable) {
+		$apcuKey = $apcuPrefix . $class;
+		$cachedPath = apcu_fetch($apcuKey, $apcuHit);
+		if ($apcuHit) {
+			require $cachedPath;
+			return;
+		}
+	}
 
     if ($psr4 === null) {
         // Base PSR-4 prefixes
@@ -65,6 +93,9 @@ spl_autoload_register(function ($class) {
     if (isset($classMap[$class]) && is_string($classMap[$class])) {
         $path = $classMap[$class];
         if (is_file($path)) {
+            if ($apcuAvailable) {
+                apcu_store($apcuKey, $path);
+            }
             require $path;
         }
         return;
@@ -79,10 +110,11 @@ spl_autoload_register(function ($class) {
         $relative = substr($class, $len);
         $path = $baseDir . str_replace('\\', DIRECTORY_SEPARATOR, $relative) . '.php';
         if (is_file($path)) {
+            if ($apcuAvailable) {
+                apcu_store($apcuKey, $path);
+            }
             require $path;
-        } else {
-	    // echo "NOT FOUND: $path";
+            return;
         }
-
     }
 	});
