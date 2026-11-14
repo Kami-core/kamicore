@@ -1302,6 +1302,14 @@ final class ExtensionManager
                 );
             }
 
+            // Plugin/theme install, update, and uninstall are the only
+            // in-process events that can make the autoloader's cached
+            // class => file mappings stale (new classes, moved files).
+            // Clear it here rather than relying on an FPM restart.
+            if (function_exists('apcu_clear_cache')) {
+                apcu_clear_cache();
+            }
+
             return true;
         } catch (\Throwable $e) {
             \DB::rollBack();
