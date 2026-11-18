@@ -80,9 +80,7 @@ spl_autoload_register(function ($class) {
         $path = $baseDir . str_replace('\\', DIRECTORY_SEPARATOR, $relative) . '.php';
         if (is_file($path)) {
             require $path;
-        } else {
-	    // echo "NOT FOUND: $path";
+            return;
         }
-
     }
 	});

@@ -41,6 +41,7 @@ KamiCore 0.8 Alpha currently requires:
 Optional:
 
 - Redis **5 or newer** and the PHP `redis` extension for application caching.
+- PHP `APCu` extension for class-autoload path caching. Falls back to the built-in PSR-4 lookup when unavailable.
 - SMTP credentials if email delivery should be configured during installation. Mail settings can also be configured later.
 
 The PostgreSQL user used for installation must be able to create tables, indexes, triggers, functions, and the required PostgreSQL extensions in the selected database.
@@ -121,7 +122,15 @@ The core stack is intentionally small:
 - Redis 5+ when caching is enabled;
 - lightweight frontend code built primarily with project CSS and JavaScript.
 
-Database access in the core uses PHP's native `pgsql` extension.
+Database access in the core uses PHP's native `pgsql` extension. By default it opens a
+fresh connection on every request. Set `$db_config['persistent'] = true` in
+`config/config.php` to keep one persistent connection open per PHP-FPM worker instead,
+avoiding a fresh TCP + auth handshake on every request. Only enable this against bare
+PostgreSQL (or a pooler in session-pooling mode) — leave it `false` if PostgreSQL is
+reached through a connection pooler such as PgBouncer in transaction-pooling mode, since
+a persistent link there pins one pooler client slot per worker for its entire lifetime
+instead of benefiting from the pooler's own pool, and can resurface sockets the pooler
+already closed on an idle timeout.
 
 ## Security notes
 

@@ -16,6 +16,16 @@ if (!defined('IN_KAMI')) die();
 
 final class Crypto
 {
+    /**
+     * Memoized for the current request (plain PHP-FPM re-declares classes,
+     * and so resets static properties, on every request — this does not
+     * persist across requests without opcache preloading). Still avoids a
+     * disk read + decode on every sign() call within a request that signs
+     * more than once. Trades the previous per-call sodium_memzero() wipe
+     * for that — see PR description for the rationale.
+     */
+    private static ?string $installationKey = null;
+
     public static function randomHex(int $bytes = 32): string
     {
         return bin2hex(random_bytes($bytes));
@@ -46,14 +56,7 @@ final class Crypto
             throw new \InvalidArgumentException('Signature purpose cannot be empty.');
         }
 
-        $key = self::loadInstallationKey();
-        try {
-            return hash_hmac('sha256', $purpose . "\0" . $value, $key);
-        } finally {
-            if (function_exists('sodium_memzero')) {
-                sodium_memzero($key);
-            }
-        }
+        return hash_hmac('sha256', $purpose . "\0" . $value, self::loadInstallationKey());
     }
 
     public static function verifySignature(
@@ -70,6 +73,10 @@ final class Crypto
 
     private static function loadInstallationKey(): string
     {
+        if (self::$installationKey !== null) {
+            return self::$installationKey;
+        }
+
         if (!defined('KAMI_SECRET_KEY_FILE')) {
             throw new \RuntimeException('KAMI_SECRET_KEY_FILE is not configured.');
         }
@@ -86,11 +93,11 @@ final class Crypto
 
         $decoded = base64_decode(trim($raw), true);
         if ($decoded !== false && strlen($decoded) === 32) {
-            return $decoded;
+            return self::$installationKey = $decoded;
         }
 
         if (strlen($raw) === 32) {
-            return $raw;
+            return self::$installationKey = $raw;
         }
 
         throw new \RuntimeException('Kami master key has an invalid length or format.');
