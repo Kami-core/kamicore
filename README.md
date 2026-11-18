@@ -41,7 +41,6 @@ KamiCore 0.8 Alpha currently requires:
 Optional:
 
 - Redis **5 or newer** and the PHP `redis` extension for application caching.
-- PHP `APCu` extension for class-autoload path caching. Falls back to the built-in PSR-4 lookup when unavailable.
 - SMTP credentials if email delivery should be configured during installation. Mail settings can also be configured later.
 
 The PostgreSQL user used for installation must be able to create tables, indexes, triggers, functions, and the required PostgreSQL extensions in the selected database.
@@ -122,15 +121,33 @@ The core stack is intentionally small:
 - Redis 5+ when caching is enabled;
 - lightweight frontend code built primarily with project CSS and JavaScript.
 
-Database access in the core uses PHP's native `pgsql` extension. By default it opens a
-fresh connection on every request. Set `$db_config['persistent'] = true` in
-`config/config.php` to keep one persistent connection open per PHP-FPM worker instead,
-avoiding a fresh TCP + auth handshake on every request. Only enable this against bare
-PostgreSQL (or a pooler in session-pooling mode) — leave it `false` if PostgreSQL is
-reached through a connection pooler such as PgBouncer in transaction-pooling mode, since
-a persistent link there pins one pooler client slot per worker for its entire lifetime
-instead of benefiting from the pooler's own pool, and can resurface sockets the pooler
-already closed on an idle timeout.
+Database access in the core uses PHP's native `pgsql` extension. Each request
+uses a regular `pg_connect()` connection by default. Persistent PostgreSQL
+connections are **opt-in**: set `$db_config['persistent'] = true` in
+`config/config.php` to use `pg_pconnect()` instead. The setting is `false` by
+default in the distribution template and for installations whose configuration
+predates this option. This is an optional deployment choice, not an installer
+question.
+
+Only consider persistent connections when connecting directly to PostgreSQL or
+to a compatible session-pooling setup. Leave them disabled with PgBouncer in
+transaction-pooling mode: a persistent PHP-FPM worker keeps a client connection
+to the pooler open between requests, reducing the benefit of sharing pooler
+client slots. In persistent mode, KamiCore checks the connection with
+`pg_ping()` and rolls back any non-idle transaction when connecting. This is
+**not** a full PostgreSQL session reset; session-level settings, temporary
+objects, and session advisory locks require separate care.
+
+### Request-level performance
+
+The renderer caches resolved template sources within each request, and user
+permission checks reuse ACL data already loaded for the same group within the
+request. `Crypto::sign()` also reuses the decoded installation signing key for
+subsequent signatures in that request. This removes repeated file reads and
+cache lookups without retaining these PHP static caches across normal PHP-FPM
+requests. The class autoloader stops searching namespace paths after a
+successful `require`; it does **not** use APCu or another cross-request class
+path cache.
 
 ## Security notes
 

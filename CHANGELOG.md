@@ -2,6 +2,19 @@
 
 All notable changes to KamiCore will be documented in this file.
 
+## [Unreleased]
+
+### Performance
+
+- Cached resolved renderer template sources within the current request to avoid redundant file and bundle checks.
+- Reused each user group's ACL bag within a request while invalidating both request-local and shared cached permissions when ACL entries change.
+- Reused the decoded installation signing key for repeated `Crypto::sign()` calls within a request, avoiding repeated file reads and decoding. This replaces the previous per-signature `sodium_memzero()` cleanup; the key is not cached across normal PHP-FPM requests.
+
+### Changed
+
+- Added opt-in persistent PostgreSQL connections (`$db_config['persistent']`, default `false`), with liveness and transaction-state checks only in persistent mode. The transaction rollback is not a complete PostgreSQL session reset.
+- Stopped class autoload resolution after the first matching file is required. No APCu class-path cache was introduced.
+
 ## [0.8.0] - 2026-09-28
 
 ### Added
