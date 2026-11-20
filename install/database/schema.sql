@@ -418,6 +418,19 @@ CREATE TABLE public.core_migrations (
 
 
 --
+-- Name: client_contexts; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.client_contexts (
+    context_id text NOT NULL,
+    domain_id integer NOT NULL,
+    lang_code text NOT NULL,
+    created_at timestamp without time zone DEFAULT now() NOT NULL,
+    updated_at timestamp without time zone DEFAULT now() NOT NULL
+);
+
+
+--
 -- Name: domain_aliases; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -1630,6 +1643,27 @@ ALTER TABLE ONLY public.users ALTER COLUMN user_id SET DEFAULT nextval('public.u
 
 
 --
+-- Name: content_canonical_pages; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.content_canonical_pages (
+    domain_id integer NOT NULL,
+    item_id bigint NOT NULL,
+    page_id integer,
+    dependency_item_id bigint,
+    CONSTRAINT content_canonical_pages_pkey PRIMARY KEY (domain_id, item_id)
+);
+
+CREATE INDEX content_canonical_pages_item_id_idx
+    ON public.content_canonical_pages USING btree (item_id);
+
+CREATE INDEX content_canonical_pages_page_id_idx
+    ON public.content_canonical_pages USING btree (page_id);
+
+CREATE INDEX content_canonical_pages_dependency_item_id_idx
+    ON public.content_canonical_pages USING btree (dependency_item_id);
+
+--
 -- PostgreSQL database dump complete
 --
 
@@ -1746,6 +1780,14 @@ ALTER TABLE ONLY public.content_types
 
 ALTER TABLE ONLY public.core_migrations
     ADD CONSTRAINT core_migrations_pkey PRIMARY KEY (migration_name);
+
+
+--
+-- Name: client_contexts client_contexts_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.client_contexts
+    ADD CONSTRAINT client_contexts_pkey PRIMARY KEY (context_id, domain_id);
 
 
 --
@@ -2349,6 +2391,13 @@ CREATE INDEX idx_content_types_plugin_id ON public.content_types USING btree (pl
 
 
 --
+-- Name: client_contexts_domain_id_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX client_contexts_domain_id_idx ON public.client_contexts USING btree (domain_id);
+
+
+--
 -- Name: idx_domain_aliases_alias_name; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -2793,6 +2842,22 @@ ALTER TABLE ONLY public.plugin_acl
 
 
 --
+-- Name: client_contexts client_contexts_domain_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.client_contexts
+    ADD CONSTRAINT client_contexts_domain_id_fkey FOREIGN KEY (domain_id) REFERENCES public.domains(domain_id) ON DELETE CASCADE;
+
+
+--
+-- Name: client_contexts client_contexts_lang_code_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.client_contexts
+    ADD CONSTRAINT client_contexts_lang_code_fkey FOREIGN KEY (lang_code) REFERENCES public.languages(lang_code) ON UPDATE CASCADE ON DELETE CASCADE;
+
+
+--
 -- Name: plugin_domains plugin_domains_domain_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -2909,5 +2974,22 @@ ALTER TABLE ONLY public.vc_content_types
 --
 
 \unrestrict rxCJb4KCefjBXbY1JSKKy4EJx6Feb5FxE042AoypcQzPKmVgSCTldu7SaEPkltC
+
+ALTER TABLE ONLY public.content_canonical_pages
+    ADD CONSTRAINT content_canonical_pages_domain_id_fkey
+    FOREIGN KEY (domain_id) REFERENCES public.domains(domain_id) ON DELETE CASCADE;
+
+ALTER TABLE ONLY public.content_canonical_pages
+    ADD CONSTRAINT content_canonical_pages_item_id_fkey
+    FOREIGN KEY (item_id) REFERENCES public.content_items(item_id) ON DELETE CASCADE;
+
+ALTER TABLE ONLY public.content_canonical_pages
+    ADD CONSTRAINT content_canonical_pages_page_id_fkey
+    FOREIGN KEY (page_id) REFERENCES public.pages(page_id) ON DELETE CASCADE;
+
+ALTER TABLE ONLY public.content_canonical_pages
+    ADD CONSTRAINT content_canonical_pages_dependency_item_id_fkey
+    FOREIGN KEY (dependency_item_id) REFERENCES public.content_items(item_id) ON DELETE CASCADE;
+
 
 -- KAMICORE_INSTALL_POST_DATA_END
