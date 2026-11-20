@@ -18,7 +18,10 @@ interface CacheDriverInterface
     public function disconnect(): void;
     public function set(string $key, $value, int $ttl = 0): bool;
     public function get(string $key);
+    public function setMany(array $values, int $ttl = 0): bool;
+    public function getMany(array $keys): array;
     public function del(string $key): bool;
+    public function delMany(array $keys): bool;
     public function exists(string $key): bool;
     public function flush(): void;
     public function info(): array;

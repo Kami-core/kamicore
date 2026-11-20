@@ -34,6 +34,30 @@ final class Crypto
         return hash('sha256', $token);
     }
 
+    public static function arrayHash(array $data): string
+    {
+        $normalize = static function (array $value) use (&$normalize): array {
+            if (!array_is_list($value)) {
+                ksort($value);
+            }
+
+            foreach ($value as &$item) {
+                if (is_array($item)) {
+                    $item = $normalize($item);
+                }
+            }
+
+            return $value;
+        };
+
+        $data = $normalize($data);
+
+        return hash(
+            'xxh3',
+            json_encode($data, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)
+        );
+    }
+
     /**
      * Sign application data with the installation master key.
      *

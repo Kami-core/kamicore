@@ -151,6 +151,49 @@ class RedisDriver implements CacheDriverInterface
         return $this->decode($raw);
     }
 
+    public function setMany(array $values, int $ttl = 0): bool
+    {
+        if (!$this->redis) {
+            return false;
+        }
+        if ($values === []) {
+            return true;
+        }
+
+        $ttl = $ttl ?: (defined('CACHE_DEFAULT_TTL') ? CACHE_DEFAULT_TTL : 3600);
+        $pipeline = $this->redis->multi(Redis::PIPELINE);
+        foreach ($values as $key => $value) {
+            $pipeline->setex((string)$key, $ttl, $this->encode($value));
+        }
+        $result = $pipeline->exec();
+
+        return is_array($result) && !in_array(false, $result, true);
+    }
+
+    public function getMany(array $keys): array
+    {
+        if (!$this->redis || $keys === []) {
+            return [];
+        }
+
+        $keys = array_values($keys);
+        $rawValues = $this->redis->mGet($keys);
+        if (!is_array($rawValues)) {
+            return [];
+        }
+
+        $values = [];
+        foreach ($keys as $index => $key) {
+            $raw = $rawValues[$index] ?? false;
+            if ($raw === false || $raw === null) {
+                continue;
+            }
+            $values[$key] = $this->decode($raw);
+        }
+
+        return $values;
+    }
+
     /**
      * Delete key
      */
@@ -161,6 +204,18 @@ class RedisDriver implements CacheDriverInterface
         }
 
         return (bool)$this->redis->del($key);
+    }
+
+    public function delMany(array $keys): bool
+    {
+        if (!$this->redis) {
+            return false;
+        }
+        if ($keys === []) {
+            return true;
+        }
+
+        return (bool)$this->redis->del(array_values($keys));
     }
 
     /**

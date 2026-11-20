@@ -34,7 +34,22 @@ class NocacheDriver implements CacheDriverInterface
         return null;
     }
 
+    public function setMany(array $values, int $ttl = 0): bool
+    {
+        return true;
+    }
+
+    public function getMany(array $keys): array
+    {
+        return [];
+    }
+
     public function del(string $key): bool
+    {
+        return true;
+    }
+
+    public function delMany(array $keys): bool
     {
         return true;
     }
