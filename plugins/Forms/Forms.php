@@ -419,6 +419,11 @@ final class Forms extends \Core\BasePlugin
             }
         }
 
+        if ($selectLike && !$multiple && empty($attributes['required'])) {
+            $emptyOption = '        <option value=""></option>';
+            $options = $options !== '' ? $emptyOption . "\n" . $options : $emptyOption;
+        }
+
         if (in_array($template, ['field-tomselect', 'field-autocomplete'], true)) {
             $this->registerTomSelectAssets();
         }

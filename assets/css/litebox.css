@@ -125,3 +125,24 @@
         transition: none;
     }
 }
+
+/* Video players use the same overlay and navigation as images. */
+.litebox-video-player,
+.litebox-iframe {
+    display: block;
+    width: min(100%, 960px);
+    max-height: 100%;
+    aspect-ratio: 16 / 9;
+    border: 0;
+    background: #000;
+}
+
+.litebox-video-player {
+    object-fit: contain;
+}
+
+.litebox-overlay.litebox-vertical .litebox-video-player,
+.litebox-overlay.litebox-vertical .litebox-iframe {
+    width: min(100%, 400px, 50vh);
+    aspect-ratio: 9 / 16;
+}
