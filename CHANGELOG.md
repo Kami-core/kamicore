@@ -2,6 +2,26 @@
 
 All notable changes to KamiCore will be documented in this file.
 
+## [Unreleased]
+
+### Added
+
+- Added per-domain language preferences backed by client contexts, language-switching routes, and normalized language-aware URLs.
+- Added centralized canonical content URL resolution, persistent canonical-page mappings, dependency invalidation, and batched lookups for content viewers and sitemaps.
+- Expanded TranslationManager with quick translation workflows, translation synchronization, and utilities for identifying and removing orphan translations.
+- Added bulk cache operations (`getMany`, `setMany`, and `delMany`) for the supported cache drivers and normalized array hashing in Crypto.
+- Extended Litebox with video and YouTube playback, including support for common YouTube Shorts URL formats.
+
+### Changed
+
+- Improved content viewers and sitemap generation to reuse canonical URLs and enforce guest access checks.
+- Updated the clean-install database snapshot and added core migrations for language contexts and canonical-page mappings.
+
+### Fixed
+
+- Made field placeholders translatable through ContentManager and translation workflows.
+- Added an empty option for optional single-select fields rendered by Forms.
+
 ## [0.8.1] - 2026-11-20
 
 ### Performance
