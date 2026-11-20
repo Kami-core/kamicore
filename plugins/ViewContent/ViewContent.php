@@ -20,6 +20,7 @@ class ViewContent extends \Core\BasePlugin
     private const DEFAULT_LIST_TEMPLATE = 'default-list-item';
     private const DEFAULT_TREE_TEMPLATE = 'default-tree-item';
     private ?string $itemBaseUrl = null;
+    private array $canonicalPageByDomainType = [];
 
 
     public function view(array $instance_params = []): string
@@ -303,6 +304,14 @@ class ViewContent extends \Core\BasePlugin
                 ]) === false) {
                     throw new \RuntimeException('Failed to save ViewContent configuration.');
                 }
+            }
+
+            $canonicalTypes = \DB::getArr(
+                'SELECT ct_id FROM content_types WHERE canonical_viewer_plugin_id=$1',
+                [(int)$this->id]
+            );
+            foreach ($canonicalTypes as $contentTypeId) {
+                \Core\CanonicalUrl::invalidateType((int)$contentTypeId);
             }
 
             \DB::commit();
@@ -683,84 +692,136 @@ class ViewContent extends \Core\BasePlugin
 
     public function canonicalUrl(array $item, string $langCode, int $domainId, int $groupId): ?string
     {
-        $contentTypeId = (int)($item['ct_id'] ?? 0);
-        $slug = trim((string)($item['item_slug'] ?? ''));
-        if ($contentTypeId < 1 || $slug === '' || !$this->id) return null;
-        if (!\Core\User::canContent($contentTypeId, 'view', $groupId)
-            || !\Core\User::canPlugin((int)$this->id, 'view', $groupId)) return null;
-        if (!\DB::getOne('select 1 from vc_content_types where ct_id=$1', [$contentTypeId])) return null;
-
-        $domain = \DB::getRow('select domain_config from domains where domain_id=$1', [$domainId]);
-        if (!$domain) return null;
-        $config = \Core\Utils\JsonTool::decodeArray($domain['domain_config'] ?? null);
-        $languages = is_array($config['languages'] ?? null) ? $config['languages'] : [];
-        if (!in_array($langCode, $languages, true)) return null;
-
-        $pages = $this->canonicalPages($domainId, $groupId, $contentTypeId, $langCode);
-        if ($pages === []) return null;
-        $defaultLanguage = (string)($config['default_language'] ?? $langCode);
-        $base = $this->canonicalPagePath((string)$pages[0]['page_slug'], $langCode, $defaultLanguage);
-        return rtrim($base, '/') . '/' . rawurlencode($slug);
+        return \Core\CanonicalUrl::itemPath($item, $langCode, $domainId, $this);
     }
 
-    private function canonicalPages(int $domainId, int $groupId, int $contentTypeId, string $langCode): array
+    public function resolveCanonicalPageIds(array $items, int $domainId): array
     {
-        $pages = [];
-        $result = \DB::query('select page_id, page_slug, page_plugins from pages where domain_id=$1 order by page_id', [$domainId]);
-        while ($page = \DB::fetchRow($result)) {
-            $pageId = (int)$page['page_id'];
-            if (!\Core\User::canPage($pageId, $groupId)) continue;
-            $priority = $this->canonicalPagePriority($page, $contentTypeId, $langCode);
-            if ($priority === null) continue;
-            $pages[] = ['priority'=>$priority, 'page_id'=>$pageId, 'page_slug'=>(string)$page['page_slug']];
+        $itemsByType = [];
+        $result = [];
+
+        foreach ($items as $item) {
+            $itemId = (int)($item['item_id'] ?? 0);
+            $contentTypeId = (int)($item['ct_id'] ?? 0);
+            if ($itemId < 1 || $contentTypeId < 1) {
+                continue;
+            }
+            $itemsByType[$contentTypeId][] = $itemId;
         }
-        usort($pages, static fn(array $a, array $b): int => $a['priority'] <=> $b['priority'] ?: $a['page_id'] <=> $b['page_id']);
-        return $pages;
-    }
 
-    private function canonicalPagePriority(array $page, int $contentTypeId, string $langCode): ?int
-    {
-        $pagePlugins = \Core\Utils\JsonTool::decodeArray($page['page_plugins'] ?? null);
-        $best = null;
-        foreach ($pagePlugins as $instances) {
-            if (!is_array($instances)) continue;
-            foreach ($instances as $instance) {
-                if (!is_array($instance) || !isset($instance['ViewContent']) || !is_array($instance['ViewContent'])) continue;
-                $params = $instance['ViewContent'];
-                if ((string)($params['handler'] ?? '') !== 'view') continue;
-                $selected = $this->canonicalContentTypeIds($params['content_types'] ?? null, $langCode);
-                if ($selected !== [] && !in_array($contentTypeId, $selected, true)) continue;
-                $priority = $selected === [] ? 1 : 0;
-                $best = $best === null ? $priority : min($best, $priority);
+        if ($itemsByType === []) {
+            return $result;
+        }
+
+        $unknownTypes = [];
+        foreach ($itemsByType as $contentTypeId => $_ids) {
+            if (!array_key_exists($contentTypeId, $this->canonicalPageByDomainType[$domainId] ?? [])) {
+                $unknownTypes[$contentTypeId] = $contentTypeId;
             }
         }
-        return $best;
+
+        if ($unknownTypes !== []) {
+            $enabled = array_fill_keys(array_map(
+                'intval',
+                \DB::getArr(
+                    'SELECT ct_id
+                     FROM vc_content_types
+                     WHERE ct_id=ANY($1::int[])',
+                    [\DB::prepareIdArray(array_values($unknownTypes))]
+                )
+            ), true);
+
+            $specific = [];
+            $general = null;
+            $pages = \DB::query(
+                'SELECT page_id, page_plugins
+                 FROM pages
+                 WHERE domain_id=$1
+                 ORDER BY page_id',
+                [$domainId]
+            );
+
+            while ($page = \DB::fetchRow($pages)) {
+                $pageId = (int)$page['page_id'];
+                $pagePlugins = \Core\Utils\JsonTool::decodeArray($page['page_plugins'] ?? null);
+
+                foreach ($pagePlugins as $instances) {
+                    if (!is_array($instances)) continue;
+
+                    foreach ($instances as $instance) {
+                        if (
+                            !is_array($instance)
+                            || !isset($instance['ViewContent'])
+                            || !is_array($instance['ViewContent'])
+                        ) {
+                            continue;
+                        }
+
+                        $params = $instance['ViewContent'];
+                        if ((string)($params['handler'] ?? '') !== 'view') continue;
+
+                        $selected = $this->canonicalContentTypeIds($params['content_types'] ?? null);
+                        if ($selected === []) {
+                            $general ??= $pageId;
+                            continue;
+                        }
+
+                        foreach ($selected as $contentTypeId) {
+                            if (
+                                isset($unknownTypes[$contentTypeId])
+                                && isset($enabled[$contentTypeId])
+                                && !isset($specific[$contentTypeId])
+                            ) {
+                                $specific[$contentTypeId] = $pageId;
+                            }
+                        }
+                    }
+                }
+            }
+
+            foreach ($unknownTypes as $contentTypeId) {
+                $this->canonicalPageByDomainType[$domainId][$contentTypeId]
+                    = isset($enabled[$contentTypeId])
+                        ? ($specific[$contentTypeId] ?? $general ?? 0)
+                        : 0;
+            }
+        }
+
+        foreach ($itemsByType as $contentTypeId => $itemIds) {
+            $pageId = (int)($this->canonicalPageByDomainType[$domainId][$contentTypeId] ?? 0);
+            foreach ($itemIds as $itemId) {
+                $result[$itemId] = $pageId > 0 ? $pageId : null;
+            }
+        }
+
+        return $result;
     }
 
-    private function canonicalContentTypeIds(mixed $value, string $langCode): array
+    public function invalidateCanonicals(int $itemId, int $contentTypeId): void
+    {
+        \Core\CanonicalUrl::deleteItemAndDependents($itemId);
+    }
+
+    private function canonicalContentTypeIds(mixed $value): array
     {
         if (is_string($value) && str_contains($value, ',')) $value = explode(',', $value);
         $values = is_array($value) ? $value : [$value];
         $ids = [];
+
         foreach ($values as $contentType) {
             if ($contentType === null || $contentType === '') continue;
             try {
-                $type = \Core\Content::getContentType(is_numeric($contentType) ? (int)$contentType : (string)$contentType, $langCode);
+                $type = \Core\Content::getContentType(
+                    is_numeric($contentType) ? (int)$contentType : (string)$contentType
+                );
             } catch (\Throwable) {
                 continue;
             }
             $id = (int)($type['ct_id'] ?? 0);
             if ($id > 0) $ids[$id] = $id;
         }
-        return array_values($ids);
-    }
 
-    private function canonicalPagePath(string $pageSlug, string $langCode, string $defaultLanguage): string
-    {
-        $prefix = $langCode === $defaultLanguage ? '' : '/' . rawurlencode($langCode);
-        $segments = array_values(array_filter(explode('/', trim($pageSlug, '/')), static fn(string $segment): bool => $segment !== ''));
-        $path = implode('/', array_map('rawurlencode', $segments));
-        return $prefix . ($path !== '' ? '/' . $path : '');
+        return array_values($ids);
     }
 
     private function itemUrl(array $item): string

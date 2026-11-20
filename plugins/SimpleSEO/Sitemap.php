@@ -209,6 +209,10 @@ trait Sitemap
             if ($this->sitemapNoindex($type['options'] ?? null)) continue;
 
             $viewerName = (string)$type['viewer_name'];
+            if (!\Core\User::canPlugin($viewerName, 'view', $guestGroupId)) {
+                continue;
+            }
+
             $viewer = $this->plugins->getForDomain($viewerName, $domainId);
             if (!$viewer || !method_exists($viewer, 'canonicalUrl')) {
                 $warnings[] = "Content type {$type['system_name']} skipped: canonical viewer {$viewerName} is unavailable.";
@@ -260,10 +264,40 @@ trait Sitemap
             );
 
             $count = 0;
+            $batch = [];
             while ($row = \DB::fetchRow($result)) {
                 $count++;
                 $lastId = (int)$row['item_id'];
-                $item = \Core\Content::prepareItem($row, $language);
+                $batch[] = [
+                    'row' => $row,
+                    'item' => \Core\Content::prepareItem($row, $language),
+                ];
+            }
+
+            $pageAccess = [];
+            if ($viewer instanceof \Core\BasePlugin && $batch !== []) {
+                \Core\CanonicalUrl::prime(
+                    array_column($batch, 'item'),
+                    $domainId,
+                    $viewer
+                );
+
+                foreach ($batch as &$entry) {
+                    $pageId = \Core\CanonicalUrl::pageId($entry['item'], $domainId, $viewer);
+                    $entry['canonical_page_id'] = $pageId;
+                    if ($pageId !== null && !array_key_exists($pageId, $pageAccess)) {
+                        $pageAccess[$pageId] = \Core\User::canPage($pageId, $guestGroupId);
+                    }
+                }
+                unset($entry);
+            }
+
+            foreach ($batch as $entry) {
+                $item = $entry['item'];
+                $row = $entry['row'];
+                $pageId = $entry['canonical_page_id'] ?? null;
+                if ($pageId === null || empty($pageAccess[$pageId])) continue;
+
                 $path = $viewer->canonicalUrl($item, $language, $domainId, $guestGroupId);
                 if (!is_string($path) || trim($path) === '') continue;
                 $url = $this->sitemapAbsoluteUrl($path, $origin);

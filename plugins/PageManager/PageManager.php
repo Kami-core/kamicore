@@ -413,6 +413,7 @@ class PageManager extends \Core\BasePlugin {
 		\Cache::del("globals:{$page['uuid']}_" . LANG);
 		\Cache::del('d_' . (int)$page['domain_id'] . ':page_' . $pageId);
 		\Cache::del('d_' . (int)$page['domain_id'] . ':pages');
+		\Core\CanonicalUrl::invalidateDomain((int)$page['domain_id']);
 
 		if ($notifications = $this->plugins->get('Notifications')) {
 			$notifications->store(
@@ -560,7 +561,7 @@ class PageManager extends \Core\BasePlugin {
 		array $instanceParams = []
 	): int {
 		$page = \DB::getRow(
-			'select p.page_plugins, l.wrappers
+			'select p.domain_id, p.page_plugins, l.wrappers
 			from pages p
 			join theme_layouts l using(layout_id)
 			where p.page_id=$1',
@@ -606,6 +607,7 @@ class PageManager extends \Core\BasePlugin {
 			throw new \RuntimeException("Failed to add plugin instance to page {$pageId}.");
 		}
 
+		\Core\CanonicalUrl::invalidateDomain((int)$page['domain_id']);
 		return $instanceIndex;
 	}
 
@@ -1124,6 +1126,9 @@ class PageManager extends \Core\BasePlugin {
 			$pageId = \DB::insert('pages', $pageData, 'page_id');
 		}
 
+		if (!empty($pageData['domain_id'])) {
+			\Core\CanonicalUrl::invalidateDomain((int)$pageData['domain_id']);
+		}
 		return $pageId;
 
 	}
@@ -1868,11 +1873,12 @@ class PageManager extends \Core\BasePlugin {
 			throw new \InvalidArgumentException('Invalid page id.');
 		}
 
-		$pg = \DB::getRow('select uuid from pages where page_id=$1', [$pageId]);
+		$pg = \DB::getRow('select uuid, domain_id from pages where page_id=$1', [$pageId]);
 		if (!$pg) {
 			throw new \OutOfBoundsException('Page not found.');
 		}
 
+		\Core\CanonicalUrl::invalidateDomain((int)$pg['domain_id']);
 		\DB::query('delete from pages where page_id=$1', [$pageId]);
 		\DB::query('delete from translations where entity_uuid=$1', [(string)$pg['uuid']]);
 
