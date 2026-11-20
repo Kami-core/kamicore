@@ -2,7 +2,7 @@
 
 All notable changes to KamiCore will be documented in this file.
 
-## [Unreleased]
+## [0.9.0] - 2026-11-20
 
 ### Added
 
