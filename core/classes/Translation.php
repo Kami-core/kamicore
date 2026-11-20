@@ -23,6 +23,28 @@ final class Translation
 {
     public const SYSTEM_ENTITY_UUID = '00000000-0000-0000-0000-000000000000';
 
+    /**
+     * Top-level entities that may own rows in translations.
+     *
+     * Nested translatable data does not need a separate owner here. For
+     * example, plugin instance parameter metadata belongs to plugins, page
+     * instance values belong to pages, compound field values belong to content
+     * items, and local field metadata belongs to content types.
+     *
+     * @var list<array{table:string, column:string}>
+     */
+    private const ENTITY_SOURCES = [
+        ['table' => 'plugins', 'column' => 'uuid'],
+        ['table' => 'themes', 'column' => 'uuid'],
+        ['table' => 'content_types', 'column' => 'uuid'],
+        ['table' => 'field_types', 'column' => 'uuid'],
+        ['table' => 'fields', 'column' => 'uuid'],
+        ['table' => 'pages', 'column' => 'uuid'],
+        ['table' => 'theme_layouts', 'column' => 'uuid'],
+        ['table' => 'usergroups', 'column' => 'uuid'],
+        ['table' => 'content_items', 'column' => 'item_uuid'],
+    ];
+
     /** @var array<string, array<string, array<string, mixed>|null>> */
     private static array $exact = [];
 
@@ -139,6 +161,73 @@ final class Translation
         }
 
         return strnatcasecmp($left, $right) <=> 0;
+    }
+
+    /**
+     * Delete translations whose entity no longer exists.
+     *
+     * The system dictionary UUID is a virtual entity and is always preserved.
+     * Pass true to inspect how many rows would be removed without changing the
+     * database.
+     *
+     * @return array{entities:int, translations:int, deleted:int}
+     */
+    public static function cleanupOrphans(bool $dryRun = false): array
+    {
+        $conditions = [
+            't.entity_uuid <> $1::uuid',
+        ];
+
+        foreach (self::ENTITY_SOURCES as $index => $source) {
+            $alias = 'owner_' . $index;
+            $conditions[] = sprintf(
+                'NOT EXISTS (SELECT 1 FROM %s %s WHERE %s.%s=t.entity_uuid)',
+                $source['table'],
+                $alias,
+                $alias,
+                $source['column']
+            );
+        }
+
+        $where = implode("\n  AND ", $conditions);
+        $sql = $dryRun
+            ? "SELECT t.entity_uuid::text AS entity_uuid, t.lang_code\n"
+                . "FROM translations t\nWHERE {$where}"
+            : "DELETE FROM translations t\nWHERE {$where}\n"
+                . 'RETURNING t.entity_uuid::text AS entity_uuid, t.lang_code';
+
+        if ($dryRun) {
+            $result = \DB::query($sql, [self::SYSTEM_ENTITY_UUID]);
+            if ($result === false) {
+                throw new \RuntimeException('Failed to inspect orphan translations.');
+            }
+            return self::orphanCleanupResult($result, false);
+        }
+
+
+        if (!\DB::beginTransaction()) {
+            throw new \RuntimeException('Failed to start translation cleanup transaction.');
+        }
+
+        try {
+            $result = \DB::query($sql, [self::SYSTEM_ENTITY_UUID]);
+            if ($result === false) {
+                throw new \RuntimeException('Failed to delete orphan translations.');
+            }
+            $rows = self::normalizeChangedRows($result);
+            foreach ($rows as $row) {
+                self::forget((string)$row['entity_uuid'], (string)$row['lang_code']);
+            }
+
+            if (!\DB::commit()) {
+                throw new \RuntimeException('Failed to commit translation cleanup transaction.');
+            }
+
+            return self::orphanCleanupResult($rows, true);
+        } catch (\Throwable $error) {
+            \DB::rollBack();
+            throw $error;
+        }
     }
 
     /**
@@ -325,6 +414,60 @@ final class Translation
 
         $language = trim((string) (DOMAIN_CONFIG['default_language'] ?? ''));
         return $language !== '' ? $language : null;
+    }
+
+    /**
+     * Normalize DB::query() output from SELECT and DELETE ... RETURNING.
+     *
+     * @return list<array{entity_uuid:string, lang_code:string}>
+     */
+    private static function normalizeChangedRows(mixed $result): array
+    {
+        if ($result instanceof \PgSql\Result) {
+            return array_values(array_map(
+                static fn(array $row): array => [
+                    'entity_uuid' => (string)$row['entity_uuid'],
+                    'lang_code' => (string)$row['lang_code'],
+                ],
+                \DB::fetchAll($result)
+            ));
+        }
+
+        if (!is_array($result) || $result === []) {
+            return [];
+        }
+
+        $rows = array_is_list($result) ? $result : [$result];
+        $normalized = [];
+        foreach ($rows as $row) {
+            if (!is_array($row) || !isset($row['entity_uuid'], $row['lang_code'])) {
+                continue;
+            }
+            $normalized[] = [
+                'entity_uuid' => (string)$row['entity_uuid'],
+                'lang_code' => (string)$row['lang_code'],
+            ];
+        }
+        return $normalized;
+    }
+
+    /**
+     * @param mixed $rows DB::query() output or normalized changed rows.
+     * @return array{entities:int, translations:int, deleted:int}
+     */
+    private static function orphanCleanupResult(mixed $rows, bool $deleted): array
+    {
+        $rows = self::normalizeChangedRows($rows);
+        $entities = [];
+        foreach ($rows as $row) {
+            $entities[$row['entity_uuid']] = true;
+        }
+
+        return [
+            'entities' => count($entities),
+            'translations' => count($rows),
+            'deleted' => $deleted ? count($rows) : 0,
+        ];
     }
 
     private static function cacheKey(string $uuid, string $lang): string

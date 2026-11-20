@@ -10,6 +10,9 @@
         "overview": {
           "title": "Overview"
         },
+        "quickTranslate": {
+          "title": "Quick translation"
+        },
         "dictionaryEdit": {
           "title": "Edit system dictionary"
         },
@@ -102,6 +105,12 @@
     "dictionary_saved": "System dictionary saved.",
     "dictionary_key_exists": "This phrase key already exists.",
     "dictionary_source_required": "Source text is required for a new phrase.",
-    "dictionary_key_invalid": "Phrase keys must use lowercase Latin letters, digits and underscores."
+    "dictionary_key_invalid": "Phrase keys must use lowercase Latin letters, digits and underscores.",
+    "quick_translation": "Quick translation",
+    "quick_translation_description": "Translate an arbitrary HTML fragment.",
+    "quick_translation_ready": "Translation is ready.",
+    "quick_translation_source_required": "Source HTML is required.",
+    "html_source": "Source HTML",
+    "html_translation": "Translation HTML"
   }
 }

@@ -397,3 +397,29 @@
     white-space: normal;
   }
 }
+
+
+.tm-source-html,
+.tm-html-textarea {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: .88rem;
+}
+
+.tm-html-textarea {
+  width: 100%;
+  min-height: 12rem;
+  resize: vertical;
+}
+
+.tm-quick-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 1rem;
+  margin: 0 20px;
+}
+
+@media (max-width: 760px) {
+  .tm-quick-grid {
+    grid-template-columns: 1fr;
+  }
+}

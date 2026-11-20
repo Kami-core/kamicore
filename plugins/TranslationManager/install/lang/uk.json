@@ -10,6 +10,9 @@
         "overview": {
           "title": "Огляд"
         },
+        "quickTranslate": {
+          "title": "Швидкий переклад"
+        },
         "dictionaryEdit": {
           "title": "Редагування системного словника"
         },
@@ -102,6 +105,12 @@
     "dictionary_saved": "Системний словник збережено.",
     "dictionary_key_exists": "Такий ключ фрази вже існує.",
     "dictionary_source_required": "Для нової фрази потрібен текст мовою оригіналу.",
-    "dictionary_key_invalid": "Ключі фраз мають містити лише малі латинські літери, цифри та підкреслення."
+    "dictionary_key_invalid": "Ключі фраз мають містити лише малі латинські літери, цифри та підкреслення.",
+    "quick_translation": "Швидкий переклад",
+    "quick_translation_description": "Переклад довільного HTML-фрагмента.",
+    "quick_translation_ready": "Переклад готовий.",
+    "quick_translation_source_required": "Потрібен HTML оригіналу.",
+    "html_source": "HTML оригіналу",
+    "html_translation": "HTML перекладу"
   }
 }

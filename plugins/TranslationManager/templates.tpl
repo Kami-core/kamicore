@@ -332,7 +332,56 @@
 
 <!-- kami:template content-translation-row -->
 <div class="tm-row tm-translation-row">
-  <div><div class="tm-path">{{label}}</div><div class="tm-source">{{source_value}}</div></div>
+  <div><div class="tm-path">{{label}}</div><div class="tm-source{{source_class}}">{{source_value}}</div></div>
   <div class="admin-form-fields tm-form-editor">{{editor}}</div>
+</div>
+<!-- /kami:template -->
+
+
+<!-- kami:template quick-translate -->
+<div class="tm-shell">
+  <form class="tm-editor" method="post" action="{{action_url}}">
+    <section class="admin-panel">
+      <header class="admin-page-header">
+        <div>
+          <a class="admin-back-link" href="{{back_url}}">
+            <svg class="icon icon-chevron-left icon-sm" aria-hidden="true"></svg>
+            <span>{{back_label}}</span>
+          </a>
+          <h2>{{phrase.quick_translation}}</h2>
+        </div>
+      </header>
+
+      {{notice}}
+
+      <section class="simple admin-pad tm-config">
+        <div class="tm-field"><label>{{phrase.source_language}}</label>{{source_select}}</div>
+        <div class="tm-field"><label>{{phrase.target_language}}</label>{{target_select}}</div>
+        <div class="tm-field"><label>{{phrase.provider}}</label>{{provider_select}}</div>
+        <div class="tm-field"><label>&nbsp;</label><button class="admin-button admin-button-action" type="submit">{{phrase.translate}}</button></div>
+      </section>
+
+      <section class="simple admin-pad tm-prompt">
+        <div class="tm-field"><label>{{phrase.context}}</label><textarea class="admin-input admin-textarea" name="trm-context">{{context}}</textarea></div>
+        <div class="tm-field"><label>{{phrase.instructions}}</label><textarea class="admin-input admin-textarea" name="trm-instructions">{{instructions}}</textarea></div>
+      </section>
+    </section>
+
+    <div class="tm-translation-head">
+      <div>{{phrase.html_source}}</div>
+      <div>{{phrase.html_translation}}</div>
+    </div>
+
+    <div class="tm-quick-grid">
+      <textarea class="admin-input admin-textarea tm-html-textarea"
+                name="trm-source-text"
+                rows="18"
+                spellcheck="false">{{source_text}}</textarea>
+      <textarea class="admin-input admin-textarea tm-html-textarea"
+                name="trm-target-text"
+                rows="18"
+                spellcheck="false">{{target_text}}</textarea>
+    </div>
+  </form>
 </div>
 <!-- /kami:template -->

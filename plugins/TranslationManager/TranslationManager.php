@@ -77,6 +77,14 @@ final class TranslationManager extends \Core\BasePlugin
     {
         $this->addCss('/plugins/TranslationManager/assets/translation-manager.css');
         $systemCards = $this->render('system-card', [
+            'title' => $this->phrase('quick_translation', 'Quick translation'),
+            'count' => $this->phrase(
+                'quick_translation_description',
+                'Translate an arbitrary HTML fragment.'
+            ),
+            'url' => $this->actionUrl('quickTranslate'),
+        ]);
+        $systemCards .= $this->render('system-card', [
             'title' => $this->phrase('system_dictionary', 'System dictionary'),
             'count' => $this->dictionaryPhraseCounts(),
             'url' => $this->actionUrl('dictionaryEdit'),
@@ -112,6 +120,102 @@ final class TranslationManager extends \Core\BasePlugin
         return $this->render('overview', [
             'system_cards' => $systemCards,
             'content_cards' => $contentCards,
+        ]);
+    }
+
+    public function quickTranslate(array $instanceParams = []): string
+    {
+        $this->addCss('/plugins/TranslationManager/assets/translation-manager.css');
+        $data = $this->params(
+            [
+                'source',
+                'target',
+                'provider',
+                'context',
+                'instructions',
+                'source-text',
+                'target-text',
+            ],
+            Request::getPrefixedParams($this->prefix)
+        );
+
+        $sourceLanguage = $this->language(
+            (string)($data['source'] ?? $this->defaultSourceLanguage())
+        );
+        $targetLanguage = $this->language(
+            (string)($data['target'] ?? $this->defaultTargetLanguage($sourceLanguage))
+        );
+        $providerData = $this->processor()->getProviders('translate');
+        $provider = trim((string)($data['provider'] ?? ''));
+        if ($provider === '') {
+            $provider = (string)($providerData['default'] ?? '');
+        }
+
+        $context = trim((string)($data['context'] ?? ''));
+        $instructions = trim((string)($data['instructions'] ?? ''));
+        $sourceText = (string)($data['source-text'] ?? '');
+        $targetText = (string)($data['target-text'] ?? '');
+        $notice = '';
+
+        if (Request::method() === 'POST') {
+            try {
+                $this->assertDifferentLanguages($sourceLanguage, $targetLanguage);
+                if (trim($sourceText) === '') {
+                    throw new \InvalidArgumentException(
+                        $this->phrase(
+                            'quick_translation_source_required',
+                            'Source HTML is required.'
+                        )
+                    );
+                }
+
+                $options = [
+                    'source_language' => $sourceLanguage,
+                    'target_language' => $targetLanguage,
+                    'profile' => 'translation_manager_quick',
+                    'context' => $context,
+                    'instructions' => $instructions,
+                ];
+                if ($provider !== '') {
+                    $options['provider'] = $provider;
+                }
+
+                $processed = $this->processor()->process(
+                    [
+                        'fragment' => [
+                            'text' => $sourceText,
+                            'format' => 'html',
+                        ],
+                    ],
+                    'translate',
+                    $options
+                );
+                $targetText = (string)($processed['fragment'] ?? '');
+                $notice = $this->notice(
+                    $this->phrase(
+                        'quick_translation_ready',
+                        'Translation is ready.'
+                    )
+                );
+            } catch (\Throwable $e) {
+                $notice = $this->notice($e->getMessage(), 'error');
+            }
+        }
+
+        return $this->render('quick-translate', [
+            'notice' => $notice,
+            'source_select' => $this->languageSelect('source', $sourceLanguage),
+            'target_select' => $this->languageSelect('target', $targetLanguage),
+            'provider_select' => $this->providerSelect($providerData, $provider),
+            'context' => \Core\Html::escape($context),
+            'instructions' => \Core\Html::escape($instructions),
+            'source_text' => \Core\Html::escape($sourceText),
+            'target_text' => \Core\Html::escape($targetText),
+            'action_url' => $this->actionUrl('quickTranslate'),
+            'back_url' => $this->actionUrl('overview'),
+            'back_label' => \Core\Html::escape(
+                $this->phrase('back_to_translations', 'Back to translations')
+            ),
         ]);
     }
 
@@ -596,44 +700,62 @@ final class TranslationManager extends \Core\BasePlugin
 
     public function contentTranslate(array $instanceParams = []): string
     {
-        $data = $this->params(['type', 'id', 'source', 'target', 'provider', 'context', 'instructions'], Request::getPrefixedParams($this->prefix));
-        $typeId = (int) ($data['type'] ?? 0);
-        $itemId = (int) ($data['id'] ?? 0);
-        $sourceLanguage = $this->language((string) ($data['source'] ?? ''));
-        $targetLanguage = $this->language((string) ($data['target'] ?? ''));
+        $data = $this->params(
+            ['type', 'id', 'source', 'target', 'provider', 'context', 'instructions'],
+            Request::getPrefixedParams($this->prefix)
+        );
+        $typeId = (int)($data['type'] ?? 0);
+        $itemId = (int)($data['id'] ?? 0);
+        $sourceLanguage = $this->language((string)($data['source'] ?? ''));
+        $targetLanguage = $this->language((string)($data['target'] ?? ''));
         $this->assertDifferentLanguages($sourceLanguage, $targetLanguage);
+
         $type = $this->translatableContentType($typeId);
         $item = $this->contentItem($itemId, $typeId);
-        $source = $this->loadExactTranslation((string) $item['item_uuid'], $sourceLanguage);
+        $common = \Core\Utils\JsonTool::decodeArray($item['common_data'] ?? null);
+        $source = $this->loadExactTranslation(
+            (string)$item['item_uuid'],
+            $sourceLanguage
+        );
+        $target = $this->loadExactTranslation(
+            (string)$item['item_uuid'],
+            $targetLanguage
+        );
         $fields = $this->translatableFields($type);
-        $items = [];
+        $translation = $this->contentTranslationFragments(
+            $fields,
+            $common,
+            $source
+        );
 
-        foreach ($fields as $name => $field) {
-            $value = $source[$name] ?? null;
-            if (!is_scalar($value) || (string) $value === '') {
-                continue;
-            }
-            $items[$name] = [
-                'text' => (string) $value,
-                'format' => $field['type'] === 'richtext' ? 'html' : 'text',
-            ];
-        }
-
-        $provider = trim((string) ($data['provider'] ?? ''));
+        $provider = trim((string)($data['provider'] ?? ''));
         $options = [
             'source_language' => $sourceLanguage,
             'target_language' => $targetLanguage,
             'profile' => 'translation_manager',
-            'context' => trim((string) ($data['context'] ?? '')),
-            'instructions' => trim((string) ($data['instructions'] ?? '')),
+            'context' => trim((string)($data['context'] ?? '')),
+            'instructions' => trim((string)($data['instructions'] ?? '')),
         ];
         if ($provider !== '') {
             $options['provider'] = $provider;
         }
 
-        $draft = $items === []
+        $processed = $translation['fragments'] === []
             ? []
-            : $this->processor()->process($items, 'translate', $options);
+            : $this->processor()->process(
+                $translation['fragments'],
+                'translate',
+                $options
+            );
+
+        $draft = $target;
+        foreach ($processed as $token => $value) {
+            $meta = $translation['metadata'][$token] ?? null;
+            if (!is_array($meta) || !is_string($value)) {
+                continue;
+            }
+            $this->setPath($draft, $meta['path'], $value);
+        }
 
         return $this->renderContentEditor(
             $typeId,
@@ -650,12 +772,16 @@ final class TranslationManager extends \Core\BasePlugin
 
     public function contentSave(array $instanceParams = []): string
     {
-        $data = $this->params(['type', 'id', 'source', 'target', 'provider', 'context', 'instructions'], Request::getPrefixedParams($this->prefix));
-        $typeId = (int) ($data['type'] ?? 0);
-        $itemId = (int) ($data['id'] ?? 0);
-        $sourceLanguage = $this->language((string) ($data['source'] ?? ''));
-        $targetLanguage = $this->language((string) ($data['target'] ?? ''));
+        $data = $this->params(
+            ['type', 'id', 'source', 'target', 'provider', 'context', 'instructions'],
+            Request::getPrefixedParams($this->prefix)
+        );
+        $typeId = (int)($data['type'] ?? 0);
+        $itemId = (int)($data['id'] ?? 0);
+        $sourceLanguage = $this->language((string)($data['source'] ?? ''));
+        $targetLanguage = $this->language((string)($data['target'] ?? ''));
         $this->assertDifferentLanguages($sourceLanguage, $targetLanguage);
+
         $type = $this->translatableContentType($typeId);
         $this->contentItem($itemId, $typeId);
         $fields = $this->translatableFields($type);
@@ -670,7 +796,12 @@ final class TranslationManager extends \Core\BasePlugin
             $values[$name] = is_string($value) && $value === '' ? null : $value;
         }
 
-        Content::update($itemId, $values, $targetLanguage, [$sourceLanguage]);
+        Content::syncTranslation(
+            $itemId,
+            $values,
+            $targetLanguage,
+            [$sourceLanguage]
+        );
 
         if ($notifications = $this->plugins->get('Notifications')) {
             $notifications->store(
@@ -686,7 +817,7 @@ final class TranslationManager extends \Core\BasePlugin
             'source' => $sourceLanguage,
             'target' => $targetLanguage,
         ];
-        $provider = trim((string) ($data['provider'] ?? ''));
+        $provider = trim((string)($data['provider'] ?? ''));
         if ($provider !== '') {
             $redirectParams['provider'] = $provider;
         }
@@ -861,52 +992,53 @@ final class TranslationManager extends \Core\BasePlugin
         string $provider = '',
         string $notice = ''
     ): string {
-        $data = $this->params(['type', 'id', 'source', 'target', 'provider', 'context', 'instructions'], Request::getPrefixedParams($this->prefix));
-        $typeId ??= (int) ($data['type'] ?? 0);
-        $itemId ??= (int) ($data['id'] ?? 0);
-        $sourceLanguage ??= $this->language((string) ($data['source'] ?? $this->defaultSourceLanguage()));
-        $targetLanguage ??= $this->language((string) ($data['target'] ?? $this->defaultTargetLanguage($sourceLanguage)));
+        $data = $this->params(
+            ['type', 'id', 'source', 'target', 'provider', 'context', 'instructions'],
+            Request::getPrefixedParams($this->prefix)
+        );
+        $typeId ??= (int)($data['type'] ?? 0);
+        $itemId ??= (int)($data['id'] ?? 0);
+        $sourceLanguage ??= $this->language(
+            (string)($data['source'] ?? $this->defaultSourceLanguage())
+        );
+        $targetLanguage ??= $this->language(
+            (string)($data['target'] ?? $this->defaultTargetLanguage($sourceLanguage))
+        );
+
         $type = $this->translatableContentType($typeId);
         $item = $this->contentItem($itemId, $typeId);
-        $source = $this->loadExactTranslation((string) $item['item_uuid'], $sourceLanguage);
-        $target = $this->loadExactTranslation((string) $item['item_uuid'], $targetLanguage);
+        $common = \Core\Utils\JsonTool::decodeArray($item['common_data'] ?? null);
+        $source = $this->loadExactTranslation(
+            (string)$item['item_uuid'],
+            $sourceLanguage
+        );
+        $target = $this->loadExactTranslation(
+            (string)$item['item_uuid'],
+            $targetLanguage
+        );
         $fields = $this->translatableFields($type);
-        $rows = '';
-
-        foreach ($fields as $name => $field) {
-            $sourceValue = $source[$name] ?? '';
-            $targetValue = $draft !== null && array_key_exists($name, $draft)
-                ? $draft[$name]
-                : ($target[$name] ?? '');
-            $editor = $this->forms()->renderField([
-                'name' => $this->prefix . '-value-' . $name,
-                'type' => (string) ($field['type'] ?? 'string'),
-                'label' => '',
-                'value' => $targetValue,
-                'settings' => ['required' => false],
-                'params' => is_array($field['params'] ?? null) ? $field['params'] : [],
-            ]);
-            $rows .= $this->render('content-translation-row', [
-                'label' => \Core\Html::escape((string) ($field['title'] ?? $name)),
-                'source_value' => \Core\Html::escape(is_scalar($sourceValue) ? (string) $sourceValue : ''),
-                'editor' => $editor,
-            ]);
-        }
+        $rows = $this->renderContentTranslationRows(
+            $fields,
+            $common,
+            $source,
+            $target,
+            $draft
+        );
 
         $schema = \Core\Utils\JsonTool::decodeArray($type['schema'] ?? null);
         $titleField = $schema['title_field'] ?? null;
-        $sourceData = array_replace(
-            \Core\Utils\JsonTool::decodeArray($item['common_data'] ?? null),
-            $source
-        );
+        $sourceData = array_replace($common, $source);
         $itemTitle = is_string($titleField)
             && isset($sourceData[$titleField])
             && is_scalar($sourceData[$titleField])
-            && trim(strip_tags((string) $sourceData[$titleField])) !== ''
-                ? strip_tags((string) $sourceData[$titleField])
+            && trim(strip_tags((string)$sourceData[$titleField])) !== ''
+                ? strip_tags((string)$sourceData[$titleField])
                 : '#' . $itemId;
+
         $providerData = $this->processor()->getProviders('translate');
-        $provider = $provider !== '' ? $provider : (string) ($providerData['default'] ?? '');
+        $provider = $provider !== ''
+            ? $provider
+            : (string)($providerData['default'] ?? '');
 
         return $this->render('content-edit', [
             'notice' => $notice,
@@ -930,7 +1062,9 @@ final class TranslationManager extends \Core\BasePlugin
                 'id' => $itemId,
             ]),
             'back_url' => $this->actionUrl('contentList', ['type' => $typeId]),
-            'back_label' => \Core\Html::escape($this->phrase('back_to_content_items', 'Back to content items')),
+            'back_label' => \Core\Html::escape(
+                $this->phrase('back_to_content_items', 'Back to content items')
+            ),
         ]);
     }
 
@@ -998,15 +1132,371 @@ final class TranslationManager extends \Core\BasePlugin
             ? $contentType['schema']['fields']
             : [];
         $result = [];
-        uasort($fields, static fn(array $a, array $b): int =>
-            ((int) ($a['displayorder'] ?? 0)) <=> ((int) ($b['displayorder'] ?? 0))
+
+        uasort(
+            $fields,
+            static fn(array $a, array $b): int =>
+                ((int)($a['displayorder'] ?? 0)) <=> ((int)($b['displayorder'] ?? 0))
         );
+
         foreach ($fields as $name => $field) {
-            if (is_array($field) && !empty($field['settings']['translatable'])) {
-                $result[(string)$name] = $field;
+            if (!is_string($name) || !is_array($field)) {
+                continue;
+            }
+
+            $definition = Content::getField($name);
+            $settings = array_replace(
+                is_array($definition['type_settings'] ?? null)
+                    ? $definition['type_settings']
+                    : [],
+                is_array($definition['field_settings'] ?? null)
+                    ? $definition['field_settings']
+                    : [],
+                is_array($field['settings'] ?? null)
+                    ? $field['settings']
+                    : []
+            );
+
+            if ((string)($definition['root_type_name'] ?? '') === 'compound') {
+                $components = $this->translatableCompoundComponents($definition);
+                if ($components === []) {
+                    continue;
+                }
+
+                $field['_translation_kind'] = 'compound';
+                $field['_components'] = $components;
+                $field['_multiple'] = !empty($settings['multiple']);
+                $field['_definition'] = $definition;
+                $result[$name] = $field;
+                continue;
+            }
+
+            if (empty($settings['translatable'])) {
+                continue;
+            }
+
+            $field['_translation_kind'] = 'scalar';
+            $field['_multiple'] = !empty($settings['multiple']);
+            $field['_definition'] = $definition;
+            $result[$name] = $field;
+        }
+
+        return $result;
+    }
+
+    private function translatableCompoundComponents(array $field): array
+    {
+        $settings = is_array($field['field_settings'] ?? null)
+            ? $field['field_settings']
+            : [];
+        $params = is_array($settings['params'] ?? null) ? $settings['params'] : [];
+        $components = is_array($params['components'] ?? null)
+            ? $params['components']
+            : [];
+
+        return array_filter(
+            $components,
+            static fn(mixed $component): bool =>
+                is_array($component) && !empty($component['translatable'])
+        );
+    }
+
+    /**
+     * Build provider fragments and exact translated_data paths for one content item.
+     *
+     * @return array{
+     *     fragments:array<string,array{text:string,format:string}>,
+     *     metadata:array<string,array{path:array<int|string>,format:string}>
+     * }
+     */
+    private function contentTranslationFragments(
+        array $fields,
+        array $common,
+        array $source,
+        array $target = [],
+        bool $missingOnly = false,
+        string $keyPrefix = ''
+    ): array {
+        $fragments = [];
+        $metadata = [];
+
+        $add = function (array $path, mixed $value, string $type) use (
+            &$fragments,
+            &$metadata,
+            $target,
+            $missingOnly,
+            $keyPrefix
+        ): void {
+            if (!is_scalar($value) || trim((string)$value) === '') {
+                return;
+            }
+
+            if ($missingOnly) {
+                $targetValue = $this->getPath($target, $path);
+                if (is_scalar($targetValue) && trim((string)$targetValue) !== '') {
+                    return;
+                }
+            }
+
+            $token = $keyPrefix . $this->pathToken($path);
+            $format = $this->translationFormatForType($type);
+            $fragments[$token] = [
+                'text' => (string)$value,
+                'format' => $format,
+            ];
+            $metadata[$token] = [
+                'path' => $path,
+                'format' => $format,
+            ];
+        };
+
+        foreach ($fields as $fieldName => $field) {
+            if (($field['_translation_kind'] ?? 'scalar') !== 'compound') {
+                $add(
+                    [$fieldName],
+                    $source[$fieldName] ?? null,
+                    (string)($field['type'] ?? 'string')
+                );
+                continue;
+            }
+
+            $components = is_array($field['_components'] ?? null)
+                ? $field['_components']
+                : [];
+
+            if (empty($field['_multiple'])) {
+                foreach ($components as $componentName => $component) {
+                    if (!is_string($componentName) || !is_array($component)) {
+                        continue;
+                    }
+                    $add(
+                        [$fieldName, $componentName],
+                        $source[$fieldName][$componentName] ?? null,
+                        (string)($component['type'] ?? 'string')
+                    );
+                }
+                continue;
+            }
+
+            $commonRows = is_array($common[$fieldName] ?? null)
+                ? array_values($common[$fieldName])
+                : [];
+
+            foreach ($commonRows as $commonRow) {
+                if (!is_array($commonRow)) {
+                    continue;
+                }
+                $rowKey = trim((string)($commonRow['_key'] ?? ''));
+                if ($rowKey === '') {
+                    continue;
+                }
+
+                foreach ($components as $componentName => $component) {
+                    if (!is_string($componentName) || !is_array($component)) {
+                        continue;
+                    }
+                    $add(
+                        [$fieldName, $rowKey, $componentName],
+                        $source[$fieldName][$rowKey][$componentName] ?? null,
+                        (string)($component['type'] ?? 'string')
+                    );
+                }
             }
         }
-        return $result;
+
+        return [
+            'fragments' => $fragments,
+            'metadata' => $metadata,
+        ];
+    }
+
+    private function renderContentTranslationRows(
+        array $fields,
+        array $common,
+        array $source,
+        array $target,
+        ?array $draft
+    ): string {
+        $rows = '';
+
+        foreach ($fields as $fieldName => $field) {
+            $fieldTitle = (string)($field['title'] ?? $fieldName);
+
+            if (($field['_translation_kind'] ?? 'scalar') !== 'compound') {
+                $sourceValue = $source[$fieldName] ?? '';
+                $targetValue = $draft !== null && array_key_exists($fieldName, $draft)
+                    ? $draft[$fieldName]
+                    : ($target[$fieldName] ?? '');
+                $type = (string)($field['type'] ?? 'string');
+
+                $rows .= $this->contentTranslationRow(
+                    $fieldTitle,
+                    $sourceValue,
+                    $this->prefix . '-value-' . $fieldName,
+                    $type,
+                    $targetValue,
+                    is_array($field['params'] ?? null) ? $field['params'] : []
+                );
+                continue;
+            }
+
+            $components = is_array($field['_components'] ?? null)
+                ? $field['_components']
+                : [];
+            $draftField = $draft !== null && is_array($draft[$fieldName] ?? null)
+                ? $draft[$fieldName]
+                : null;
+            $targetField = is_array($target[$fieldName] ?? null)
+                ? $target[$fieldName]
+                : [];
+
+            if (empty($field['_multiple'])) {
+                foreach ($components as $componentName => $component) {
+                    if (!is_string($componentName) || !is_array($component)) {
+                        continue;
+                    }
+
+                    $sourceValue = $source[$fieldName][$componentName] ?? '';
+                    $targetValue = $draftField !== null
+                        && array_key_exists($componentName, $draftField)
+                            ? $draftField[$componentName]
+                            : ($targetField[$componentName] ?? '');
+
+                    $rows .= $this->contentTranslationRow(
+                        $fieldTitle . ' › ' . $this->humanizeName($componentName),
+                        $sourceValue,
+                        $this->prefix . '-value-' . $fieldName . '[' . $componentName . ']',
+                        (string)($component['type'] ?? 'string'),
+                        $targetValue,
+                        is_array($component['params'] ?? null) ? $component['params'] : []
+                    );
+                }
+                continue;
+            }
+
+            $commonRows = is_array($common[$fieldName] ?? null)
+                ? array_values($common[$fieldName])
+                : [];
+
+            foreach ($commonRows as $index => $commonRow) {
+                if (!is_array($commonRow)) {
+                    continue;
+                }
+                $rowKey = trim((string)($commonRow['_key'] ?? ''));
+                if ($rowKey === '') {
+                    continue;
+                }
+
+                $sourceRow = is_array($source[$fieldName][$rowKey] ?? null)
+                    ? $source[$fieldName][$rowKey]
+                    : [];
+                $targetRow = is_array($targetField[$rowKey] ?? null)
+                    ? $targetField[$rowKey]
+                    : [];
+                $draftRow = $draftField !== null && is_array($draftField[$rowKey] ?? null)
+                    ? $draftField[$rowKey]
+                    : null;
+
+                foreach ($components as $componentName => $component) {
+                    if (!is_string($componentName) || !is_array($component)) {
+                        continue;
+                    }
+
+                    $targetValue = $draftRow !== null
+                        && array_key_exists($componentName, $draftRow)
+                            ? $draftRow[$componentName]
+                            : ($targetRow[$componentName] ?? '');
+
+                    $rows .= $this->contentTranslationRow(
+                        $fieldTitle . ' #' . ($index + 1) . ' › '
+                            . $this->humanizeName($componentName),
+                        $sourceRow[$componentName] ?? '',
+                        $this->prefix . '-value-' . $fieldName
+                            . '[' . $rowKey . '][' . $componentName . ']',
+                        (string)($component['type'] ?? 'string'),
+                        $targetValue,
+                        is_array($component['params'] ?? null) ? $component['params'] : []
+                    );
+                }
+            }
+        }
+
+        return $rows;
+    }
+
+    private function contentTranslationRow(
+        string $label,
+        mixed $sourceValue,
+        string $inputName,
+        string $type,
+        mixed $targetValue,
+        array $params = []
+    ): string {
+        $format = $this->translationFormatForType($type);
+        $editor = $this->translationEditor(
+            $inputName,
+            $type,
+            $targetValue,
+            $params
+        );
+
+        return $this->render('content-translation-row', [
+            'label' => \Core\Html::escape($label),
+            'source_value' => \Core\Html::escape(
+                is_scalar($sourceValue) ? (string)$sourceValue : ''
+            ),
+            'source_class' => $format === 'html' ? ' tm-source-html' : '',
+            'editor' => $editor,
+        ]);
+    }
+
+    private function translationEditor(
+        string $name,
+        string $type,
+        mixed $value,
+        array $params = []
+    ): string {
+        if ($this->translationFormatForType($type) === 'html' && !is_array($value)) {
+            return '<textarea class="admin-input admin-textarea tm-html-textarea" '
+                . 'name="' . \Core\Html::escape($name) . '" rows="12" spellcheck="false">'
+                . \Core\Html::escape(is_scalar($value) ? (string)$value : '')
+                . '</textarea>';
+        }
+
+        return $this->forms()->renderField([
+            'name' => $name,
+            'type' => $type,
+            'label' => '',
+            'value' => $value,
+            'settings' => ['required' => false],
+            'params' => $params,
+        ]);
+    }
+
+    private function translationFormatForType(string $type): string
+    {
+        try {
+            $fieldType = Content::getFieldType($type);
+            while (true) {
+                if ((string)($fieldType['system_name'] ?? '') === 'richtext') {
+                    return 'html';
+                }
+                $parentId = (int)($fieldType['parent_id'] ?? 0);
+                if ($parentId < 1) {
+                    break;
+                }
+                $fieldType = Content::getFieldType($parentId);
+            }
+        } catch (\Throwable) {
+            // Unknown custom types fall back to plain text.
+        }
+
+        return 'text';
+    }
+
+    private function humanizeName(string $name): string
+    {
+        return ucwords(str_replace(['_', '-'], ' ', $name));
     }
 
     private function contentItem(int $itemId, int $typeId): array
@@ -1197,6 +1687,7 @@ final class TranslationManager extends \Core\BasePlugin
         int $cursor
     ): array {
         $type = $this->translatableContentType($typeId);
+        $fields = $this->translatableFields($type);
 
         if ($scope === 'all') {
             $itemIds = $this->contentMissingCandidateIds(
@@ -1214,7 +1705,7 @@ final class TranslationManager extends \Core\BasePlugin
                 'translated' => 0,
                 'skipped' => 0,
                 'errors' => 0,
-                'cursor' => (string) $cursor,
+                'cursor' => (string)$cursor,
                 'done' => true,
             ];
         }
@@ -1224,6 +1715,7 @@ final class TranslationManager extends \Core\BasePlugin
             SELECT
                 i.item_id,
                 i.item_uuid,
+                i.common_data,
                 source.translated_data AS source_data,
                 target.translated_data AS target_data
             FROM content_items i
@@ -1246,43 +1738,36 @@ final class TranslationManager extends \Core\BasePlugin
         );
 
         $contentRows = \DB::fetchAll($rows);
-        $fields = $this->translatableFields($type);
         $fragments = [];
         $metadata = [];
         $skipped = count($itemIds) - count($contentRows);
 
         foreach ($contentRows as $row) {
-            $itemId = (int) $row['item_id'];
+            $itemId = (int)$row['item_id'];
+            $common = \Core\Utils\JsonTool::decodeArray($row['common_data'] ?? null);
             $source = \Core\Utils\JsonTool::decodeArray($row['source_data'] ?? null);
             $target = \Core\Utils\JsonTool::decodeArray($row['target_data'] ?? null);
-            $hasMissing = false;
+            $translation = $this->contentTranslationFragments(
+                $fields,
+                $common,
+                $source,
+                $target,
+                true,
+                'c' . $itemId . ':'
+            );
 
-            foreach ($fields as $name => $field) {
-                $sourceValue = $source[$name] ?? null;
-                if (!is_scalar($sourceValue) || trim((string) $sourceValue) === '') {
-                    continue;
-                }
-
-                $targetValue = $target[$name] ?? null;
-                if (is_scalar($targetValue) && trim((string) $targetValue) !== '') {
-                    continue;
-                }
-
-                $key = 'c' . $itemId . ':' . $name;
-                $fragments[$key] = [
-                    'text' => (string) $sourceValue,
-                    'format' => ($field['type'] ?? null) === 'richtext' ? 'html' : 'text',
-                ];
-                $metadata[$key] = [
-                    'item_id' => $itemId,
-                    'item_uuid' => (string) $row['item_uuid'],
-                    'field' => $name,
-                ];
-                $hasMissing = true;
+            if ($translation['fragments'] === []) {
+                $skipped++;
+                continue;
             }
 
-            if (!$hasMissing) {
-                $skipped++;
+            foreach ($translation['fragments'] as $key => $fragment) {
+                $fragments[$key] = $fragment;
+                $metadata[$key] = [
+                    'item_id' => $itemId,
+                    'item_uuid' => (string)$row['item_uuid'],
+                    'path' => $translation['metadata'][$key]['path'],
+                ];
             }
         }
 
@@ -1304,34 +1789,59 @@ final class TranslationManager extends \Core\BasePlugin
             $processed = $this->processor()->process($fragments, 'translate', $options);
             $patches = [];
             $uuids = [];
+            $paths = [];
 
             foreach ($processed as $key => $value) {
                 $meta = $metadata[$key] ?? null;
-                if (!is_array($meta)) {
+                if (!is_array($meta) || !is_string($value)) {
                     continue;
                 }
-                $itemId = (int) $meta['item_id'];
-                $patches[$itemId][(string) $meta['field']] = $value;
-                $uuids[$itemId] = (string) $meta['item_uuid'];
+
+                $itemId = (int)$meta['item_id'];
+                $path = $meta['path'];
+                if (!isset($patches[$itemId])) {
+                    $patches[$itemId] = [];
+                }
+                $this->setPath($patches[$itemId], $path, $value);
+                $uuids[$itemId] = (string)$meta['item_uuid'];
+                $paths[$itemId][] = $path;
             }
 
             foreach ($patches as $itemId => $patch) {
                 try {
-                    $currentTarget = $this->loadExactTranslation($uuids[$itemId], $targetLanguage);
-                    foreach (array_keys($patch) as $fieldName) {
-                        $currentValue = $currentTarget[$fieldName] ?? null;
-                        if (is_scalar($currentValue) && trim((string) $currentValue) !== '') {
-                            unset($patch[$fieldName]);
+                    $currentTarget = $this->loadExactTranslation(
+                        $uuids[$itemId],
+                        $targetLanguage
+                    );
+                    $filteredPatch = [];
+                    $changed = 0;
+
+                    foreach ($paths[$itemId] ?? [] as $path) {
+                        $currentValue = $this->getPath($currentTarget, $path);
+                        if (is_scalar($currentValue) && trim((string)$currentValue) !== '') {
+                            continue;
                         }
+
+                        $value = $this->getPath($patch, $path);
+                        if (!is_string($value)) {
+                            continue;
+                        }
+
+                        $this->setPath($filteredPatch, $path, $value);
+                        $changed++;
                     }
 
-                    if ($patch === []) {
+                    if ($changed === 0) {
                         $skipped++;
                         continue;
                     }
 
-                    Content::patchTranslation($itemId, $patch, $targetLanguage);
-                    $translated += count($patch);
+                    Content::patchTranslation(
+                        $itemId,
+                        $filteredPatch,
+                        $targetLanguage
+                    );
+                    $translated += $changed;
                 } catch (\Throwable) {
                     $errors++;
                 }
@@ -1344,7 +1854,7 @@ final class TranslationManager extends \Core\BasePlugin
             'translated' => $translated,
             'skipped' => $skipped,
             'errors' => $errors,
-            'cursor' => (string) $nextCursor,
+            'cursor' => (string)$nextCursor,
             'done' => $scope !== 'all' || count($itemIds) < self::BATCH_SIZE,
         ];
     }
@@ -1494,50 +2004,102 @@ final class TranslationManager extends \Core\BasePlugin
         string $targetLanguage,
         int $cursor
     ): array {
+        $type = $this->translatableContentType($typeId);
+        $fields = $this->translatableFields($type);
+        $params = [$typeId, $sourceLanguage, $targetLanguage, $cursor];
+        $conditions = [];
+
+        $param = static function (mixed $value) use (&$params): string {
+            $params[] = $value;
+            return '$' . count($params);
+        };
+
+        foreach ($fields as $fieldName => $field) {
+            $fieldParam = $param($fieldName);
+
+            if (($field['_translation_kind'] ?? 'scalar') !== 'compound') {
+                $conditions[] = '('
+                    . "NULLIF(btrim(source.translated_data ->> {$fieldParam}), '') IS NOT NULL"
+                    . " AND NULLIF(btrim(target.translated_data ->> {$fieldParam}), '') IS NULL"
+                    . ')';
+                continue;
+            }
+
+            foreach ($field['_components'] ?? [] as $componentName => $component) {
+                if (!is_string($componentName) || !is_array($component)) {
+                    continue;
+                }
+                $componentParam = $param($componentName);
+
+                if (empty($field['_multiple'])) {
+                    $conditions[] = '('
+                        . "NULLIF(btrim(source.translated_data #>> ARRAY[{$fieldParam}, {$componentParam}]), '') IS NOT NULL"
+                        . " AND NULLIF(btrim(target.translated_data #>> ARRAY[{$fieldParam}, {$componentParam}]), '') IS NULL"
+                        . ')';
+                    continue;
+                }
+
+                $conditions[] = <<<SQL
+                EXISTS (
+                    SELECT 1
+                    FROM jsonb_each(
+                        CASE
+                            WHEN jsonb_typeof(source.translated_data -> {$fieldParam})='object'
+                            THEN source.translated_data -> {$fieldParam}
+                            ELSE '{}'::jsonb
+                        END
+                    ) AS source_row(row_key, row_data)
+                    WHERE NULLIF(btrim(source_row.row_data ->> {$componentParam}), '') IS NOT NULL
+                      AND NULLIF(
+                            btrim(
+                                target.translated_data #>> ARRAY[
+                                    {$fieldParam},
+                                    source_row.row_key,
+                                    {$componentParam}
+                                ]
+                            ),
+                            ''
+                          ) IS NULL
+                      AND EXISTS (
+                            SELECT 1
+                            FROM jsonb_array_elements(
+                                CASE
+                                    WHEN jsonb_typeof(i.common_data -> {$fieldParam})='array'
+                                    THEN i.common_data -> {$fieldParam}
+                                    ELSE '[]'::jsonb
+                                END
+                            ) AS common_row(row_data)
+                            WHERE common_row.row_data ->> '_key'=source_row.row_key
+                      )
+                )
+                SQL;
+            }
+        }
+
+        if ($conditions === []) {
+            return [];
+        }
+
         $rows = \DB::query(
-            <<<'SQL'
-            SELECT i.item_id
-            FROM content_items i
-            JOIN content_types ct ON ct.ct_id=i.ct_id
-            JOIN translations source
-              ON source.entity_uuid=i.item_uuid
-             AND source.lang_code=$2
-            LEFT JOIN translations target
-              ON target.entity_uuid=i.item_uuid
-             AND target.lang_code=$3
-            WHERE i.ct_id=$1
-              AND i.item_id>$4
-              AND EXISTS (
-                  SELECT 1
-                  FROM jsonb_each(COALESCE(source.translated_data, '{}'::jsonb)) field(field_name, field_value)
-                  WHERE COALESCE(ct.schema->'fields', '{}'::jsonb) ? field.field_name
-                    AND EXISTS (
-                        SELECT 1
-                        FROM fields definition
-                        WHERE definition.system_name=field.field_name
-                          AND COALESCE(
-                              (definition.field_settings->>'translatable')::boolean,
-                              false
-                          )
-                    )
-                    AND jsonb_typeof(field.field_value)='string'
-                    AND btrim(field.field_value #>> '{}') <> ''
-                    AND (
-                        target.translated_data IS NULL
-                        OR NOT (target.translated_data ? field.field_name)
-                        OR jsonb_typeof(target.translated_data -> field.field_name) <> 'string'
-                        OR btrim(target.translated_data ->> field.field_name) = ''
-                    )
-              )
-            ORDER BY i.item_id
-            LIMIT 10
-            SQL,
-            [$typeId, $sourceLanguage, $targetLanguage, $cursor]
+            'SELECT i.item_id
+             FROM content_items i
+             JOIN translations source
+               ON source.entity_uuid=i.item_uuid
+              AND source.lang_code=$2
+             LEFT JOIN translations target
+               ON target.entity_uuid=i.item_uuid
+              AND target.lang_code=$3
+             WHERE i.ct_id=$1
+               AND i.item_id>$4
+               AND (' . implode(' OR ', $conditions) . ')
+             ORDER BY i.item_id
+             LIMIT ' . self::BATCH_SIZE,
+            $params
         );
 
         $result = [];
         while ($row = \DB::fetchRow($rows)) {
-            $result[] = (int) $row['item_id'];
+            $result[] = (int)$row['item_id'];
         }
         return $result;
     }
@@ -1571,7 +2133,7 @@ final class TranslationManager extends \Core\BasePlugin
         $itemIds = [];
 
         foreach ($items as $item) {
-            $itemId = (int) ($item['item_id'] ?? 0);
+            $itemId = (int)($item['item_id'] ?? 0);
             if ($itemId < 1) {
                 continue;
             }
@@ -1597,19 +2159,9 @@ final class TranslationManager extends \Core\BasePlugin
                 t.lang_code,
                 t.updated_at,
                 (t.updated_at < i.updated_at) AS outdated,
-                count(field.field_name) FILTER (
+                count(leaf.value) FILTER (
                     WHERE COALESCE(ct.schema->'fields', '{}'::jsonb) ? field.field_name
-                    AND EXISTS (
-                        SELECT 1
-                        FROM fields definition
-                        WHERE definition.system_name=field.field_name
-                          AND COALESCE(
-                              (definition.field_settings->>'translatable')::boolean,
-                              false
-                          )
-                    )
-                    AND jsonb_typeof(field.field_value)='string'
-                    AND btrim(field.field_value #>> '{}') <> ''
+                      AND btrim(leaf.value #>> '{}') <> ''
                 ) AS phrase_count
             FROM content_items i
             JOIN content_types ct ON ct.ct_id=i.ct_id
@@ -1620,6 +2172,10 @@ final class TranslationManager extends \Core\BasePlugin
             LEFT JOIN LATERAL jsonb_each(
                 COALESCE(t.translated_data, '{}'::jsonb)
             ) AS field(field_name, field_value) ON true
+            LEFT JOIN LATERAL jsonb_path_query(
+                field.field_value,
+                'strict $.** ? (@.type() == "string")'
+            ) AS leaf(value) ON true
             WHERE i.item_id=ANY($1::bigint[])
             GROUP BY i.item_id, t.lang_code, t.updated_at, i.updated_at
             SQL,
@@ -1627,16 +2183,18 @@ final class TranslationManager extends \Core\BasePlugin
         );
 
         while ($row = \DB::fetchRow($rows)) {
-            $itemId = (int) $row['item_id'];
-            $language = (string) $row['lang_code'];
+            $itemId = (int)$row['item_id'];
+            $language = (string)$row['lang_code'];
             if (!isset($stats[$itemId][$language])) {
                 continue;
             }
 
-            $translationUpdatedAt = (string) ($row['updated_at'] ?? '');
+            $translationUpdatedAt = (string)($row['updated_at'] ?? '');
             $stats[$itemId][$language] = [
-                'count' => (int) $row['phrase_count'],
-                'updated_at' => $translationUpdatedAt !== '' ? $translationUpdatedAt : null,
+                'count' => (int)$row['phrase_count'],
+                'updated_at' => $translationUpdatedAt !== ''
+                    ? $translationUpdatedAt
+                    : null,
                 'outdated' => $row['outdated'] === true || $row['outdated'] === 't',
             ];
         }
@@ -1645,7 +2203,7 @@ final class TranslationManager extends \Core\BasePlugin
         foreach ($stats as $itemId => $languageStats) {
             $parts = [];
             foreach ($languages as $language) {
-                $code = (string) $language['lang_code'];
+                $code = (string)$language['lang_code'];
                 $entry = $languageStats[$code];
                 $label = strtoupper($code) . '-' . $entry['count'];
                 $title = $entry['updated_at'] === null
@@ -1659,13 +2217,18 @@ final class TranslationManager extends \Core\BasePlugin
                         'Translation may be outdated.'
                     ) . ' ' . $title;
                     $parts[] = '<span class="tm-language-count is-outdated" title="'
-                        . \Core\Html::escape($title) . '">⚠ ' . \Core\Html::escape($label) . '</span>';
+                        . \Core\Html::escape($title) . '">⚠ '
+                        . \Core\Html::escape($label) . '</span>';
                 } else {
                     $parts[] = '<span class="tm-language-count" title="'
-                        . \Core\Html::escape($title) . '">' . \Core\Html::escape($label) . '</span>';
+                        . \Core\Html::escape($title) . '">'
+                        . \Core\Html::escape($label) . '</span>';
                 }
             }
-            $result[$itemId] = implode(' <span class="tm-language-separator">|</span> ', $parts);
+            $result[$itemId] = implode(
+                ' <span class="tm-language-separator">|</span> ',
+                $parts
+            );
         }
 
         return $result;
@@ -1682,7 +2245,7 @@ final class TranslationManager extends \Core\BasePlugin
         $stats = [];
 
         foreach ($contentTypes as $type) {
-            $typeId = (int) $type['ct_id'];
+            $typeId = (int)$type['ct_id'];
             $stats[$typeId] = [
                 'items' => 0,
                 'counts' => array_fill_keys($languageCodes, 0),
@@ -1700,7 +2263,10 @@ final class TranslationManager extends \Core\BasePlugin
                 SELECT
                     i.ct_id,
                     t.lang_code,
-                    count(*) AS phrase_count
+                    count(leaf.value) FILTER (
+                        WHERE COALESCE(ct.schema->'fields', '{}'::jsonb) ? field.field_name
+                          AND btrim(leaf.value #>> '{}') <> ''
+                    ) AS phrase_count
                 FROM content_items i
                 JOIN content_types ct ON ct.ct_id=i.ct_id
                 JOIN translations t ON t.entity_uuid=i.item_uuid
@@ -1710,18 +2276,10 @@ final class TranslationManager extends \Core\BasePlugin
                 CROSS JOIN LATERAL jsonb_each(
                     COALESCE(t.translated_data, '{}'::jsonb)
                 ) AS field(field_name, field_value)
-                WHERE COALESCE(ct.schema->'fields', '{}'::jsonb) ? field.field_name
-                  AND EXISTS (
-                      SELECT 1
-                      FROM fields definition
-                      WHERE definition.system_name=field.field_name
-                        AND COALESCE(
-                            (definition.field_settings->>'translatable')::boolean,
-                            false
-                        )
-                  )
-                  AND jsonb_typeof(field.field_value)='string'
-                  AND btrim(field.field_value #>> '{}') <> ''
+                LEFT JOIN LATERAL jsonb_path_query(
+                    field.field_value,
+                    'strict $.** ? (@.type() == "string")'
+                ) AS leaf(value) ON true
                 GROUP BY i.ct_id, t.lang_code
             )
             SELECT
@@ -1735,15 +2293,15 @@ final class TranslationManager extends \Core\BasePlugin
         );
 
         while ($row = \DB::fetchRow($rows)) {
-            $typeId = (int) $row['ct_id'];
+            $typeId = (int)$row['ct_id'];
             if (!isset($stats[$typeId])) {
                 continue;
             }
 
-            $stats[$typeId]['items'] = (int) $row['item_count'];
+            $stats[$typeId]['items'] = (int)$row['item_count'];
             $language = $row['lang_code'];
             if (is_string($language) && isset($stats[$typeId]['counts'][$language])) {
-                $stats[$typeId]['counts'][$language] = (int) $row['phrase_count'];
+                $stats[$typeId]['counts'][$language] = (int)$row['phrase_count'];
             }
         }
 
@@ -1751,8 +2309,9 @@ final class TranslationManager extends \Core\BasePlugin
         foreach ($stats as $typeId => $typeStats) {
             $parts = [];
             foreach ($languages as $language) {
-                $code = (string) $language['lang_code'];
-                $parts[] = strtoupper($code) . '-' . ($typeStats['counts'][$code] ?? 0);
+                $code = (string)$language['lang_code'];
+                $parts[] = strtoupper($code) . '-'
+                    . ($typeStats['counts'][$code] ?? 0);
             }
             $result[$typeId] = [
                 'items' => $typeStats['items'],

@@ -26,6 +26,10 @@ class ContentManager extends \Core\BasePlugin {
 	private const API_ITEMS_DEFAULT_LIMIT = 20;
 	private const API_ITEMS_MAX_LIMIT = 100;
 
+	public function invalidateCanonicals(int $itemId, int $contentTypeId): void {
+		\Core\CanonicalUrl::deleteItemAndDependents($itemId);
+	}
+
 	public function typeList($context_vars) {
 		$this->addCss('/plugins/ContentManager/assets/content-manager.css');
 
@@ -629,6 +633,7 @@ class ContentManager extends \Core\BasePlugin {
 			\Core\ContentStructure::saveContentType($typeId, [
 				'canonical_viewer_plugin_id' => $viewerId,
 			]);
+			\Core\CanonicalUrl::invalidateType($typeId);
 		} catch (\Throwable $error) {
 			return \Core\Utils\JsonTool::encode([
 				'status' => 'error',
@@ -941,6 +946,9 @@ class ContentManager extends \Core\BasePlugin {
 
 		$selectedFieldType = \Core\Content::getFieldType((int)$field['type_id']);
 		$params = $this->effectiveFieldParams($selectedFieldType, $globalParams, []);
+		if (array_key_exists('placeholder', $translation)) {
+			$params['placeholder'] = (string)$translation['placeholder'];
+		}
 		$parameterGroups = $this->renderFieldParameterGroups(
 			$fieldTypes,
 			(int)$field['type_id'],
@@ -1011,6 +1019,11 @@ class ContentManager extends \Core\BasePlugin {
 			return $this->notice($error->getMessage(), 'error');
 		}
 
+		$placeholder = array_key_exists('placeholder', $params)
+			? trim((string)$params['placeholder'])
+			: null;
+		unset($params['placeholder']);
+
 		$settings = [
 			'indexed' => !empty($data['indexed']),
 			'unique' => !empty($data['unique']),
@@ -1041,8 +1054,9 @@ class ContentManager extends \Core\BasePlugin {
 			$this->upsertTranslation((string)$field['uuid'], [
 				'title' => $title,
 				'description' => trim((string)($data['description'] ?? '')),
-			]);
+			] + ($placeholder !== null ? ['placeholder' => $placeholder] : []));
 			\DB::commit();
+			\Core\ContentStructure::invalidateFieldCache((int)$field['field_id']);
 		} catch (\Throwable $error) {
 			\DB::rollBack();
 			return $this->notice($error->getMessage(), 'error');
@@ -1288,6 +1302,11 @@ class ContentManager extends \Core\BasePlugin {
 			return $this->notice($error->getMessage(), 'error');
 		}
 
+		$placeholder = array_key_exists('placeholder', $params)
+			? trim((string)$params['placeholder'])
+			: null;
+		unset($params['placeholder']);
+
 		$globalSettings = [
 			'indexed' => !empty($data['indexed']),
 			'unique' => !empty($data['unique']),
@@ -1342,9 +1361,10 @@ class ContentManager extends \Core\BasePlugin {
 			$this->upsertTranslation((string)$field['uuid'], [
 				'title' => $title,
 				'description' => trim((string)($data['description'] ?? '')),
-			]);
+			] + ($placeholder !== null ? ['placeholder' => $placeholder] : []));
 			\Core\ContentStructure::attachField($typeId, (int)$field['field_id'], $local);
 			\DB::commit();
+			\Core\ContentStructure::invalidateFieldCache((int)$field['field_id']);
 		} catch (\Throwable $error) {
 			\DB::rollBack();
 			return $this->notice($error->getMessage(), 'error');
@@ -2552,6 +2572,7 @@ private function notice(string $message, string $kind = 'success'): string {
 			do update set translated_data=excluded.translated_data',
 			[$uuid, $language, \Core\Utils\JsonTool::encode($translation, false)]
 		);
+		\Core\Translation::forget($uuid, $language);
 		\Cache::del("globals:{$uuid}_{$language}");
 	}
 

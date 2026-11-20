@@ -11,7 +11,7 @@
       "author": "Kami team"
     },
     "prefix": "trm",
-    "version": "1.0.2",
+    "version": "1.0.3",
     "category": "content",
     "dependencies": [
       "Forms",
@@ -26,6 +26,9 @@
           "actions": {
             "overview": {
               "title": "Overview"
+            },
+            "quickTranslate": {
+              "title": "Quick translation"
             },
             "dictionaryEdit": {
               "title": "Edit system dictionary"

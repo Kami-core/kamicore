@@ -277,6 +277,7 @@ class Content
                 );
             }
 
+            CanonicalUrl::invalidateItem($id, (int)$item['ct_id']);
             \DB::commit();
             self::invalidateItemCache($id, $item['item_uuid'], $lang, $syncLanguages);
 
@@ -298,11 +299,49 @@ class Content
         array $data,
         string $lang
     ): bool {
+        return self::writeTranslationOnly($id, $data, $lang, false);
+    }
+
+    /**
+     * Save a reviewed translation without touching common content data.
+     *
+     * The content item, target translation and explicitly synchronized source
+     * languages receive the same transaction timestamp.
+     */
+    public static function syncTranslation(
+        int $id,
+        array $data,
+        string $lang,
+        array $syncLanguages = []
+    ): bool {
+        return self::writeTranslationOnly(
+            $id,
+            $data,
+            $lang,
+            true,
+            $syncLanguages
+        );
+    }
+
+    private static function writeTranslationOnly(
+        int $id,
+        array $data,
+        string $lang,
+        bool $synchronize,
+        array $syncLanguages = []
+    ): bool {
         $lang = trim($lang);
         if ($lang === '') {
             throw new \InvalidArgumentException('Translation language is required.');
         }
 
+        $syncLanguages = array_values(array_unique(array_filter(
+            array_map(
+                static fn(mixed $value): string => trim((string)$value),
+                $syncLanguages
+            ),
+            static fn(string $value): bool => $value !== '' && $value !== $lang
+        )));
         $data = self::normalizeFieldKeys($data);
 
         \DB::beginTransaction();
@@ -317,7 +356,7 @@ class Content
                 throw new \OutOfBoundsException("Unknown content item: {$id}");
             }
 
-            $contentType = self::getContentType((int) $item['ct_id'], $lang);
+            $contentType = self::getContentType((int)$item['ct_id'], $lang);
             $structure = $contentType['schema']['fields'] ?? [];
             $commonData = \Core\Utils\JsonTool::decodeArray($item['common_data'] ?? null);
             $translatedData = self::loadExactTranslation($item['item_uuid'], $lang);
@@ -411,7 +450,7 @@ class Content
                 self::clearFieldIndex(
                     $table,
                     $id,
-                    (int) $field['field_id'],
+                    (int)$field['field_id'],
                     $lang
                 );
 
@@ -419,7 +458,7 @@ class Content
                     $row = self::makeIndexRow(
                         $table,
                         $id,
-                        (int) $field['field_id'],
+                        (int)$field['field_id'],
                         $indexValue,
                         $lang
                     );
@@ -430,24 +469,65 @@ class Content
                 }
             }
 
-            if (!$changed) {
+            if (!$changed && !$synchronize) {
                 \DB::commit();
                 return true;
             }
 
-            self::savePatchedTranslation(
-                $item['item_uuid'],
-                $lang,
-                $translatedData,
-                (string) $item['updated_at']
-            );
+            if ($changed) {
+                if ($synchronize) {
+                    self::saveExactTranslation(
+                        (string)$item['item_uuid'],
+                        $lang,
+                        $translatedData
+                    );
+                } else {
+                    self::savePatchedTranslation(
+                        (string)$item['item_uuid'],
+                        $lang,
+                        $translatedData,
+                        (string)$item['updated_at']
+                    );
+                }
+            } elseif ($synchronize) {
+                \DB::query(
+                    'UPDATE translations
+                     SET updated_at=NOW()
+                     WHERE entity_uuid=$1 AND lang_code=$2',
+                    [$item['item_uuid'], $lang]
+                );
+            }
 
             if ($indexRows !== []) {
                 \DB::bulk_insert('item_texts', $indexRows);
             }
 
+            if ($synchronize) {
+                \DB::query(
+                    'UPDATE content_items SET updated_at=NOW() WHERE item_id=$1',
+                    [$id]
+                );
+
+                if ($syncLanguages !== []) {
+                    \DB::query(
+                        'UPDATE translations
+                         SET updated_at=NOW()
+                         WHERE entity_uuid=$1 AND lang_code=ANY($2::text[])',
+                        [
+                            $item['item_uuid'],
+                            \DB::prepareTextArray($syncLanguages),
+                        ]
+                    );
+                }
+            }
+
             \DB::commit();
-            self::invalidateItemCache($id, $item['item_uuid'], $lang);
+            self::invalidateItemCache(
+                $id,
+                (string)$item['item_uuid'],
+                $lang,
+                $syncLanguages
+            );
 
             return true;
         } catch (\Throwable $e) {
@@ -591,7 +671,7 @@ class Content
 
         try {
             $item = \DB::getRow(
-                'SELECT item_uuid FROM content_items WHERE item_id=$1 FOR UPDATE',
+                'SELECT item_uuid, ct_id FROM content_items WHERE item_id=$1 FOR UPDATE',
                 [$id]
             );
 
@@ -603,6 +683,8 @@ class Content
                 'SELECT lang_code FROM translations WHERE entity_uuid=$1',
                 [$item['item_uuid']]
             );
+
+            CanonicalUrl::invalidateItem($id, (int)$item['ct_id']);
 
             foreach (['item_texts', 'item_nums', 'item_bools', 'item_dates'] as $table) {
                 \DB::delete($table, 'item_id=$1', [$id]);
@@ -1870,6 +1952,10 @@ class Content
                 }
             }
             $params = array_replace($params, $globalParams);
+            unset($params['placeholder']);
+            if (array_key_exists('placeholder', $globalTranslation)) {
+                $params['placeholder'] = (string)$globalTranslation['placeholder'];
+            }
 
             if (is_array($params['options'] ?? null)) {
                 $params['options'] = self::translateFieldOptions(
