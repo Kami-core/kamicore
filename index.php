@@ -163,58 +163,95 @@ debug_step("Request processed");
 Core\Session::load();
 debug_step('Session load');
 
-// Detecting language: 1 - from cookies (if available), 2 - search available from browser, 3 - domain default.
+Core\ClientContext::init();
+debug_step('Client context init');
 
-if($uri_lang) {
-	$lang = $uri_lang;
+if (array_key_exists('lang', Core\Request::cookie())) {
+	Core\Response::addCookie('lang', '', TIME_NOW - 3600);
+}
+
+$availableLanguages = array_values(array_filter(
+	array_map(
+		static fn(mixed $value): string => strtolower(trim((string)$value)),
+		is_array(DOMAIN_CONFIG['languages'] ?? null) ? DOMAIN_CONFIG['languages'] : []
+	),
+	static fn(string $value): bool => $value !== ''
+));
+$defaultLanguage = strtolower(trim((string)(DOMAIN_CONFIG['default_language'] ?? '')));
+if ($defaultLanguage === '') {
+	$defaultLanguage = $availableLanguages[0] ?? 'en';
+}
+if ($availableLanguages === []) {
+	$availableLanguages = [$defaultLanguage];
+}
+
+$redirectForLanguage = static function (string $url, int $status): never {
+	Core\Response::addHeader('Cache-Control: private, no-store');
+	Core\Response::redirect($url, $status);
+	Core\Response::send('');
+	exit;
+};
+
+if ($uri_lang !== null) {
+	$lang = strtolower($uri_lang);
+	Core\ClientContext::setLanguage(DOMAIN_ID, $lang);
+
+	if ($lang === $defaultLanguage) {
+		$redirectStatus = in_array(
+			Core\Request::method(),
+			['POST', 'PUT', 'PATCH', 'DELETE'],
+			true
+		) ? 308 : 301;
+		$redirectForLanguage(
+			Core\Url::withLanguage((string)($_SERVER['REQUEST_URI'] ?? '/'), $defaultLanguage),
+			$redirectStatus
+		);
+	}
 } else {
-	$user_lang = Core\Request::cookie()['lang'] ?? null;
+	$userLanguage = Core\ClientContext::language(DOMAIN_ID);
+	if (!in_array($userLanguage, $availableLanguages, true)) {
+		$userLanguage = null;
 
-	if(!in_array($user_lang, DOMAIN_CONFIG['languages']) && !empty($_SERVER['HTTP_ACCEPT_LANGUAGE'])) {
-		$user_lang = null;
-		// Fall back to the browser language list when the cookie is missing or unsupported.
-		$browser_langs = [];
-		foreach (explode(',', $_SERVER['HTTP_ACCEPT_LANGUAGE']) as $part) {
-			if (preg_match('/^\s*([a-zA-Z-]+)\s*(?:;\s*q\s*=\s*(\d*(?:\.\d+)?))?/', $part, $m)) {
-				$code = strtolower($m[1]);
-				$q    = isset($m[2]) && $m[2] !== '' ? (float)$m[2] : 1.0;
-				$browser_langs[$code] = $q;
+		$browserLanguages = [];
+		foreach (explode(',', (string)($_SERVER['HTTP_ACCEPT_LANGUAGE'] ?? '')) as $part) {
+			if (preg_match('/^\s*([a-zA-Z-]+)\s*(?:;\s*q\s*=\s*(\d*(?:\.\d+)?))?/', $part, $match)) {
+				$code = strtolower($match[1]);
+				$quality = isset($match[2]) && $match[2] !== '' ? (float)$match[2] : 1.0;
+				if ($quality > 0) {
+					$browserLanguages[$code] = $quality;
+				}
 			}
 		}
+		arsort($browserLanguages, SORT_NUMERIC);
 
-		arsort($browser_langs, SORT_NUMERIC);
-
-		foreach ($browser_langs as $code => $q) {
-			$base = explode('-', $code, 2)[0]; // drop country
-			if (in_array($base, DOMAIN_CONFIG['languages'], true)) {
-				$user_lang = $base;
+		foreach ($browserLanguages as $code => $quality) {
+			$base = explode('-', $code, 2)[0];
+			if (in_array($base, $availableLanguages, true)) {
+				$userLanguage = $base;
 				break;
 			}
 		}
+
+		$userLanguage ??= $defaultLanguage;
+		Core\ClientContext::setLanguage(DOMAIN_ID, $userLanguage);
 	}
 
-	if(!$user_lang) {
-		$user_lang = DOMAIN_CONFIG['default_language'];
-	}
-
-	if($user_lang != DOMAIN_CONFIG['default_language'] && in_array($user_lang, DOMAIN_CONFIG['languages'], true)) {
-		// Preserve request method and body for write requests. A 302 may turn
-		// POST into GET in the client and silently discard submitted form data.
+	if ($userLanguage !== $defaultLanguage) {
 		$redirectStatus = in_array(
 			Core\Request::method(),
 			['POST', 'PUT', 'PATCH', 'DELETE'],
 			true
 		) ? 307 : 302;
-
-		header("Location: /{$user_lang}{$_SERVER['REQUEST_URI']}", true, $redirectStatus);
-		die();
-	} else {
-		$lang = DOMAIN_CONFIG['default_language'];
+		$redirectForLanguage(
+			Core\Url::withLanguage((string)($_SERVER['REQUEST_URI'] ?? '/'), $userLanguage),
+			$redirectStatus
+		);
 	}
+
+	$lang = $defaultLanguage;
 }
 
 define('LANG', $lang);
-Core\Response::addCookie('lang', $lang);
 
 $system_lang = \Core\Translation::get(\Core\Translation::SYSTEM_ENTITY_UUID) ?? [];
 define('SYSTEM_DICTIONARY', $system_lang);
@@ -230,9 +267,6 @@ if (
     Core\Response::send(Core\Renderer::finalize(Core\Renderer::renderError(403)));
     exit;
 }
-
-Core\ClientContext::init();
-debug_step('Client context init');
 
 // User identity is initialized only after the language context exists.
 Core\User::init();

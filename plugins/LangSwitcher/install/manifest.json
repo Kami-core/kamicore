@@ -11,7 +11,7 @@
       "author": "Kami team"
     },
     "prefix": "ls",
-    "version": "1.0.1",
+    "version": "1.0.2",
     "category": "display",
     "dependencies": [],
     "config": {
@@ -51,6 +51,9 @@
       "default_handler": "view",
       "default_language": "en"
     },
-    "settings": {}
+    "settings": {},
+    "endpoints": {
+      "lang": "routeLanguage"
+    }
   }
 }

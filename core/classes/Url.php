@@ -53,6 +53,70 @@ final class Url
         return $url !== '' ? $url : '/';
     }
 
+    /**
+     * Add or replace the language prefix of a root-relative frontend URL.
+     * External, protocol-relative and relative URLs are returned unchanged.
+     */
+    public static function withLanguage(string $url, ?string $language = null): string
+    {
+        if ($url === '' || !str_starts_with($url, '/') || str_starts_with($url, '//')) {
+            return $url;
+        }
+
+        $languages = array_values(array_filter(
+            array_map(
+                static fn(mixed $value): string => strtolower(trim((string)$value)),
+                is_array(DOMAIN_CONFIG['languages'] ?? null) ? DOMAIN_CONFIG['languages'] : []
+            ),
+            static fn(string $value): bool => $value !== ''
+        ));
+        $defaultLanguage = strtolower(trim((string)(DOMAIN_CONFIG['default_language'] ?? '')));
+        if ($defaultLanguage === '') {
+            return $url;
+        }
+        if ($languages === []) {
+            $languages = [$defaultLanguage];
+        }
+
+        $language = strtolower(trim((string)(
+            $language ?? (defined('LANG') ? LANG : $defaultLanguage)
+        )));
+        if (!in_array($language, $languages, true)) {
+            throw new \InvalidArgumentException("Language '{$language}' is not enabled for this domain.");
+        }
+
+        $fragment = '';
+        $fragmentPos = strpos($url, '#');
+        if ($fragmentPos !== false) {
+            $fragment = substr($url, $fragmentPos);
+            $url = substr($url, 0, $fragmentPos);
+        }
+
+        $query = '';
+        $queryPos = strpos($url, '?');
+        if ($queryPos !== false) {
+            $query = substr($url, $queryPos);
+            $url = substr($url, 0, $queryPos);
+        }
+
+        $hadTrailingSlash = str_ends_with($url, '/');
+        $segments = trim($url, '/') === '' ? [] : explode('/', trim($url, '/'));
+        if ($segments !== [] && in_array(strtolower($segments[0]), $languages, true)) {
+            array_shift($segments);
+        }
+
+        $path = '/' . implode('/', $segments);
+        if ($path !== '/' && $hadTrailingSlash) {
+            $path .= '/';
+        }
+
+        if ($language !== $defaultLanguage) {
+            $path = '/' . rawurlencode($language) . ($path === '/' ? '/' : $path);
+        }
+
+        return $path . $query . $fragment;
+    }
+
     public static function pluginAction(
         string $page,
         string $prefix,
