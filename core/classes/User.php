@@ -25,6 +25,9 @@ final class User
     private const ACL_CACHE_TTL = 300;
     private const ACL_CACHE_NS = 'acl_bag_v3:';
 
+    /** @var array<int, array> */
+    private static array $aclBagCache = [];
+
     public static function init(): void
     {
         Session::load();
@@ -313,10 +316,15 @@ final class User
 
     public static function clearAclCache(?int $groupId = null): void
     {
-        $groupIds = $groupId !== null
-            ? [$groupId]
-            : array_map('intval', \DB::getArr('SELECT usergroup_id FROM usergroups'));
+        if ($groupId !== null) {
+            unset(self::$aclBagCache[$groupId]);
+            \Cache::del(self::aclCacheKey($groupId));
+            return;
+        }
 
+        self::$aclBagCache = [];
+
+        $groupIds = array_map('intval', \DB::getArr('SELECT usergroup_id FROM usergroups'));
         foreach ($groupIds as $id) {
             \Cache::del(self::aclCacheKey($id));
         }
@@ -484,15 +492,19 @@ final class User
 
     private static function getAclBag(int $groupId): array
     {
+        if (isset(self::$aclBagCache[$groupId])) {
+            return self::$aclBagCache[$groupId];
+        }
+
         $key = self::aclCacheKey($groupId);
         $cached = \Cache::get($key);
         if (is_array($cached)) {
-            return $cached;
+            return self::$aclBagCache[$groupId] = $cached;
         }
 
         $bag = self::compileAclBag($groupId);
         \Cache::set($key, $bag, self::ACL_CACHE_TTL);
-        return $bag;
+        return self::$aclBagCache[$groupId] = $bag;
     }
 
 }

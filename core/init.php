@@ -13,7 +13,7 @@ if(!IN_KAMI) die();
 require_once ROOT_PATH . 'core/autoload.php';
 
 // Use a deterministic timezone until installation-wide settings are loaded.
-define('CORE_VERSION', '0.8.0');
+define('CORE_VERSION', '0.8.1');
 
 date_default_timezone_set('UTC');
 define('TIME_NOW', time());
@@ -51,7 +51,7 @@ if (DEBUG_MODE && defined('KAMI_FRONT')) {
 require_once ROOT_PATH . 'core/functions.php';
 
 require_once ROOT_PATH . 'core/classes/Pgsql.php';
-DB::connect($db_config['host'], $db_config['user'], $db_config['password'], $db_config['name'], 'utf8', $db_config['port']);
+DB::connect($db_config['host'], $db_config['user'], $db_config['password'], $db_config['name'], 'utf8', $db_config['port'], persistent: $db_config['persistent'] ?? false);
 
 	require_once ROOT_PATH . 'core/classes/cache/Cache.php';
 	Cache::configure($redis_config);

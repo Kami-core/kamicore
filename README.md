@@ -6,7 +6,7 @@
 
 KamiCore is a modular content management system built with PHP and PostgreSQL. It is designed around structured content, plugins, themes, multilingual data, and a small transparent core that avoids hiding application behavior behind unnecessary abstraction.
 
-> **KamiCore 0.8 Alpha**
+> **KamiCore 0.8.1 Alpha**
 >
 > This is an early development release intended for testing, evaluation, and real-world development. APIs, database structures, plugin contracts, theme contracts, and other internal interfaces may still change before a stable release. Release upgrades are supported, but arbitrary development snapshots are not guaranteed to remain backward compatible.
 
@@ -29,7 +29,7 @@ KamiCore also ships several **bundled but optional** capabilities that are insta
 
 ## Requirements
 
-KamiCore 0.8 Alpha currently requires:
+KamiCore 0.8.1 Alpha currently requires:
 
 - PHP **8.4 or newer**.
 - PostgreSQL **17 or newer**.
@@ -121,7 +121,33 @@ The core stack is intentionally small:
 - Redis 5+ when caching is enabled;
 - lightweight frontend code built primarily with project CSS and JavaScript.
 
-Database access in the core uses PHP's native `pgsql` extension.
+Database access in the core uses PHP's native `pgsql` extension. Each request
+uses a regular `pg_connect()` connection by default. Persistent PostgreSQL
+connections are **opt-in**: set `$db_config['persistent'] = true` in
+`config/config.php` to use `pg_pconnect()` instead. The setting is `false` by
+default in the distribution template and for installations whose configuration
+predates this option. This is an optional deployment choice, not an installer
+question.
+
+Only consider persistent connections when connecting directly to PostgreSQL or
+to a compatible session-pooling setup. Leave them disabled with PgBouncer in
+transaction-pooling mode: a persistent PHP-FPM worker keeps a client connection
+to the pooler open between requests, reducing the benefit of sharing pooler
+client slots. In persistent mode, KamiCore checks the connection with
+`pg_ping()` and rolls back any non-idle transaction when connecting. This is
+**not** a full PostgreSQL session reset; session-level settings, temporary
+objects, and session advisory locks require separate care.
+
+### Request-level performance
+
+The renderer caches resolved template sources within each request, and user
+permission checks reuse ACL data already loaded for the same group within the
+request. `Crypto::sign()` also reuses the decoded installation signing key for
+subsequent signatures in that request. This removes repeated file reads and
+cache lookups without retaining these PHP static caches across normal PHP-FPM
+requests. The class autoloader stops searching namespace paths after a
+successful `require`; it does **not** use APCu or another cross-request class
+path cache.
 
 ## Security notes
 
